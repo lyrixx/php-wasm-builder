@@ -9,9 +9,11 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Filesystem\Path;
 
+use function Castor\context;
 use function Castor\import;
 use function Castor\io;
 use function Castor\notify;
+use function Castor\run;
 
 // The wasm:* tasks, that build the stacks of stacks.php, and of
 // stacks.override.php when there is one (it is not versioned: the stacks of
@@ -31,7 +33,7 @@ function build_task(
     bool $all = false,
     #[AsOption(description: 'Override the PHP version, for example 8.5.11')]
     ?string $php = null,
-    #[AsOption(description: 'Add an extension, can be repeated', mode: InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, autocomplete: 'PhpWasm\complete_extensions')]
+    #[AsOption(description: 'Add an extension, can be repeated', mode: InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, autocomplete: Stack::EXTENSIONS)]
     array $with = [],
     #[AsOption(description: 'Only build this target (web or node), can be repeated', mode: InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, autocomplete: ['web', 'node'])]
     array $target = [],
@@ -39,19 +41,18 @@ function build_task(
     ?string $memory = null,
     #[AsOption(description: 'Override the directory to embed')]
     ?string $embed = null,
-    #[AsOption(description: 'Override the ICU data of intl: all or none', autocomplete: Build::ICU_DATA)]
+    #[AsOption(description: 'Override the ICU data of intl: all or none', autocomplete: Stack::ICU_DATA)]
     ?string $icuData = null,
     #[AsOption(description: 'Print the bake file instead of building')]
     bool $print = false,
-): int {
-    if ($all) {
-        if (null !== $stack || null !== $php || [] !== $with || [] !== $target || null !== $memory || null !== $embed || null !== $icuData) {
-            throw new \InvalidArgumentException('--all builds every stack as declared, it can not be combined with a stack or with overrides.');
-        }
+): void {
+    if ($all && null !== $stack) {
+        throw new \InvalidArgumentException('--all builds every stack, it can not be combined with a stack.');
+    }
 
-        $builds = array_map(resolve(...), stacks()->all());
-    } else {
-        $selected = stacks()->get($stack ?? Stacks::DEFAULT)->extensions(...$with);
+    $stacks = $all ? array_values(stacks()) : [stack($stack ?? DEFAULT_STACK)];
+    foreach ($stacks as $i => $selected) {
+        $selected = $selected->extensions(...$with);
         if (null !== $php) {
             $selected = $selected->php($php);
         }
@@ -68,29 +69,26 @@ function build_task(
         if (null !== $icuData) {
             $selected = $selected->icuData($icuData);
         }
-
-        $builds = [resolve($selected)];
+        $stacks[$i] = $selected;
     }
 
     if ($print) {
-        io()->writeln(bake_definition($builds), OutputInterface::OUTPUT_RAW);
+        io()->writeln(bake_definition($stacks), OutputInterface::OUTPUT_RAW);
 
-        return 0;
+        return;
     }
 
-    foreach ($builds as $build) {
-        io()->writeln(\sprintf(' // Stack "%s": PHP %s · %s', $build->name, $build->php ?? 'default', [] === $build->extensions ? 'no extension' : implode(' ', $build->extensions)));
+    foreach ($stacks as $selected) {
+        io()->writeln(\sprintf(' // Stack "%s": %s', $selected->name, describe($selected)));
     }
 
-    bake($builds);
+    build($stacks);
 
-    foreach ($builds as $build) {
-        io()->success(array_map(relative(...), $build->artifacts()));
+    foreach ($stacks as $selected) {
+        io()->success(array_map(relative(...), $selected->artifacts()));
     }
 
-    notify(1 === \count($builds) ? \sprintf('Stack "%s" is built', $builds[0]->name) : \sprintf('%d stacks are built', \count($builds)));
-
-    return 0;
+    notify(1 === \count($stacks) ? \sprintf('Stack "%s" is built', $stacks[0]->name) : \sprintf('%d stacks are built', \count($stacks)));
 }
 
 #[AsTask(name: 'stacks', namespace: 'wasm', description: 'Lists the stacks')]
@@ -99,20 +97,20 @@ function stacks_task(
     bool $json = false,
 ): void {
     if ($json) {
-        io()->writeln(json_encode(stacks()->names(), \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
+        io()->writeln(json_encode(array_keys(stacks()), \JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
 
         return;
     }
 
     $rows = [];
-    foreach (array_map(resolve(...), stacks()->all()) as $build) {
+    foreach (stacks() as $stack) {
         $rows[] = [
-            $build->name,
-            $build->php ?? '-',
-            wordwrap(implode(' ', $build->extensions), 44) ?: '-',
-            $build->memory ?? dockerfile_default('MEMORY') ?? '-',
-            \in_array('intl', $build->extensions, true) ? $build->icuData ?? dockerfile_default('ICU_DATA') ?? '-' : '-',
-            implode(' ', $build->targets),
+            $stack->name,
+            $stack->php ?? dockerfile_default('PHP_VERSION'),
+            wordwrap(implode(' ', $stack->extensions), 44) ?: '-',
+            $stack->memory ?? dockerfile_default('MEMORY'),
+            \in_array('intl', $stack->extensions, true) ? $stack->icuData ?? dockerfile_default('ICU_DATA') : '-',
+            implode(' ', $stack->targets),
         ];
     }
 
@@ -122,27 +120,27 @@ function stacks_task(
 #[AsTask(name: 'sizes', namespace: 'wasm', description: 'Compares the size of what is built with the default stack')]
 function sizes_task(): void
 {
-    $size = static fn (Build $build, string $target): ?int => is_file($path = $build->artifact($target, 'wasm')) ? (int) filesize($path) : null;
-    $default = resolve(stacks()->get(Stacks::DEFAULT));
+    $size = static fn (Stack $stack, string $target): ?int => is_file($path = $stack->artifact($target, 'wasm')) ? filesize($path) : null;
 
     $rows = [];
-    foreach (array_map(resolve(...), stacks()->all()) as $build) {
+    foreach (stacks() as $stack) {
         // The web build is the one that matters, and the one everybody has
-        foreach (['web', 'node'] as $target) {
-            if (null === $bytes = $size($build, $target)) {
-                continue;
-            }
-
-            $reference = $size($default, $target);
-            $rows[] = [
-                $build->name,
-                basename($build->artifact($target, 'wasm')),
-                \sprintf('%.1f MB', $bytes / 1024 / 1024),
-                Stacks::DEFAULT === $build->name ? '-' : (null === $reference ? 'n/a' : \sprintf('%+.1f %%', ($bytes / $reference - 1) * 100)),
-            ];
-
-            break;
+        $target = null !== $size($stack, 'web') ? 'web' : 'node';
+        if (null === $bytes = $size($stack, $target)) {
+            continue;
         }
+
+        $reference = $size(stack(DEFAULT_STACK), $target);
+        $rows[] = [
+            $stack->name,
+            basename($stack->artifact($target, 'wasm')),
+            \sprintf('%.1f MB', $bytes / 1024 / 1024),
+            match (true) {
+                DEFAULT_STACK === $stack->name => '-',
+                null === $reference => 'n/a',
+                default => \sprintf('%+.1f %%', ($bytes / $reference - 1) * 100),
+            },
+        ];
     }
 
     if ([] === $rows) {
@@ -151,7 +149,7 @@ function sizes_task(): void
         return;
     }
 
-    io()->table(['Stack', 'File', 'Size', 'vs ' . Stacks::DEFAULT], $rows);
+    io()->table(['Stack', 'File', 'Size', 'vs ' . DEFAULT_STACK], $rows);
 }
 
 #[AsTask(name: 'run', namespace: 'wasm', description: 'Runs a PHP file, or some code with -r, in a built stack (node target)')]
@@ -161,15 +159,20 @@ function run_task(
     #[AsOption(shortcut: 'r', description: 'The PHP code to run, without <?php ?>')]
     ?string $code = null,
     #[AsOption(description: 'The stack to run', autocomplete: 'PhpWasm\complete_stacks')]
-    string $stack = Stacks::DEFAULT,
+    string $stack = DEFAULT_STACK,
 ): int {
     if ((null === $file) === (null === $code)) {
         throw new \InvalidArgumentException('Give the PHP file to run, or the code to run with -r.');
     }
 
-    $arguments = null !== $code ? ['-r', $code] : [is_file($file) ? realpath($file) : throw new \InvalidArgumentException(\sprintf('The file "%s" does not exist.', $file))];
+    // castor does not run it from where the command is run
+    $arguments = null === $code ? [Path::makeAbsolute($file, getcwd() ?: project_root())] : ['-r', $code];
 
-    return node(resolve(stacks()->get($stack)), $arguments)->getExitCode() ?? 1;
+    // No pty: the output of PHP must not be altered, it may go through a pipe
+    return run(
+        ['node', builder_root() . '/run.mjs', '--build', stack($stack)->artifact('node', 'mjs'), ...$arguments],
+        context: context()->withPty(false)->withAllowFailure(),
+    )->getExitCode();
 }
 
 #[AsTask(name: 'test', namespace: 'wasm', description: 'Builds the stacks, then checks from node that each has the right PHP version and its extensions')]
@@ -181,34 +184,34 @@ function test_task(
     #[AsOption(description: 'Override a value of the bake file, as "docker buildx bake --set" does (the CI gives the cache this way), can be repeated', mode: InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY)]
     array $set = [],
 ): int {
-    $builds = array_map(resolve(...), [] !== $stacks ? array_map(stacks()->get(...), $stacks) : stacks()->all());
+    $stacks = [] === $stacks ? array_values(stacks()) : array_map(stack(...), $stacks);
 
     if (!$noBuild) {
         // The checks run on node, so every stack needs that target
-        bake(array_map(static fn (Build $build): Build => $build->withTarget('node'), $builds), $set);
+        build(array_map(static fn (Stack $stack): Stack => $stack->targets(...[...$stack->targets, 'node']), $stacks), $set);
     }
 
     $failed = 0;
-    foreach ($builds as $build) {
-        $problems = check($build);
+    foreach ($stacks as $stack) {
+        $problems = check($stack);
 
         if ([] === $problems) {
-            io()->writeln(\sprintf(' <info>✔</info> %s: PHP %s, %s', $build->name, $build->php ?? 'default', [] === $build->extensions ? 'no extension' : implode(' ', $build->extensions)));
+            io()->writeln(\sprintf(' <info>✔</info> %s: %s', $stack->name, describe($stack)));
             continue;
         }
 
         ++$failed;
-        io()->writeln(\sprintf(' <error>✘</error> %s', $build->name));
+        io()->writeln(\sprintf(' <error>✘</error> %s', $stack->name));
         io()->listing($problems);
     }
 
     if ($failed > 0) {
-        io()->error(\sprintf('%d of %d stacks are broken.', $failed, \count($builds)));
+        io()->error(\sprintf('%d of %d stacks are broken.', $failed, \count($stacks)));
 
         return 1;
     }
 
-    io()->success(\sprintf('%d stacks work.', \count($builds)));
+    io()->success(\sprintf('%d stacks work.', \count($stacks)));
 
     return 0;
 }
@@ -218,16 +221,13 @@ function test_task(
  */
 function complete_stacks(): array
 {
-    return stacks()->names();
+    return array_keys(stacks());
 }
 
 /**
- * @return list<string>
+ * The PHP version and the extensions of a stack.
  */
-function complete_extensions(): array
+function describe(Stack $stack): string
 {
-    // What the Dockerfile knows: ext <name> ...
-    preg_match_all('/^ext (\w+)\s/m', (string) file_get_contents(builder_root() . '/Dockerfile'), $matches);
-
-    return $matches[1];
+    return \sprintf('PHP %s, %s', $stack->php ?? dockerfile_default('PHP_VERSION'), [] === $stack->extensions ? 'no extension' : implode(' ', $stack->extensions));
 }

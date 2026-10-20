@@ -44,7 +44,8 @@ has() {
 #
 # The order of the lines is the order of the flags on the ./configure command
 # line, which phpinfo() shows: it is kept as it always was, so that the default
-# extensions still give the exact same command line.
+# extensions still give the exact same command line. Keep in sync with
+# Stack::EXTENSIONS, in src/Stack.php.
 ext() {
     known="$known $1"
     has "$EXTENSIONS" "$1" || return 0
@@ -74,7 +75,7 @@ for extension in $EXTENSIONS; do
     has "$known" "$extension" || { echo "Unknown extension '$extension', supported extensions:$known" >&2; exit 1; }
 done
 
-# Keep in sync with Build::ICU_DATA, in src/Build.php
+# Keep in sync with Stack::ICU_DATA, in src/Stack.php
 case $ICU_DATA in
     all|none) ;;
     *) echo "Unknown ICU data '$ICU_DATA', supported values: all none" >&2; exit 1 ;;

@@ -4,131 +4,112 @@ namespace PhpWasm;
 
 use Castor\Helper\PathHelper;
 use Symfony\Component\Filesystem\Path;
-use Symfony\Component\Process\Process;
 
-use function Castor\capture;
 use function Castor\context;
-use function Castor\fs;
-use function Castor\io;
 use function Castor\run;
 
 // What build() and the tasks of castor.php are made of. Castor never knows how
-// to compile PHP: the Dockerfile does. These functions only know how to name a
-// combination (a stack, see Stack.php) and ask the Dockerfile for it, through
-// `docker buildx bake`.
+// to compile PHP: the Dockerfile does. These functions only ask the Dockerfile
+// for stacks (see Stack.php), through `docker buildx bake`.
 
 /**
- * The stacks of this repository, that the tasks of castor.php build.
+ * The stack that is built when none is given, as docker buildx bake does.
  *
  * @internal
  */
-function stacks(): Stacks
+const DEFAULT_STACK = 'default';
+
+/**
+ * The stacks of this repository, that the tasks of castor.php build: the ones
+ * of stacks.php, and of stacks.override.php when there is one, that replace
+ * the ones that have the same name.
+ *
+ * @return array<string, Stack> by name
+ *
+ * @internal
+ */
+function stacks(): array
 {
     static $stacks;
+    if (null !== $stacks) {
+        return $stacks;
+    }
 
-    return $stacks ??= Stacks::load(builder_root());
-}
-
-/**
- * Turns a stack into what the Dockerfile builds, in the build/<stack>/
- * directory of the project unless the stack has its own.
- *
- * @internal
- */
-function resolve(Stack $stack): Build
-{
-    $embed = $stack->getEmbed();
-    if (null !== $embed) {
-        $embed = Path::makeAbsolute($embed, project_root());
-        if (!is_dir($embed)) {
-            throw new \InvalidArgumentException(\sprintf('Cannot embed "%s" in the stack "%s": it is not a directory.', $embed, $stack->getName()));
+    $stacks = [];
+    foreach (['stacks.php', 'stacks.override.php'] as $file) {
+        if (!is_file($path = builder_root() . '/' . $file)) {
+            continue;
         }
-    }
 
-    $outputDir = $stack->getOutputDir();
-
-    return new Build(
-        $stack->getName(),
-        $stack->getPhp() ?? dockerfile_default('PHP_VERSION'),
-        $stack->getExtensions(),
-        $embed,
-        null === $embed ? null : $stack->getEmbedPath() ?? basename($embed),
-        $stack->getTargets() ?? array_keys(Build::TARGETS),
-        $stack->getMemory(),
-        $stack->getIcuData(),
-        null === $outputDir ? build_dir() . '/' . $stack->getName() : Path::makeAbsolute($outputDir, project_root()),
-    );
-}
-
-/**
- * Builds what is resolved, in a single buildx invocation.
- *
- * @param list<Build>  $builds
- * @param list<string> $set    overrides, given to "docker buildx bake --set"
- *
- * @internal
- */
-function bake(array $builds, array $set = []): void
-{
-    // Not next to what is built: that may be a public directory
-    $bakeFile = build_dir() . '/bake.json';
-    fs()->dumpFile($bakeFile, bake_definition($builds) . "\n");
-
-    $command = ['docker', 'buildx', 'bake', '-f', $bakeFile];
-    $printed = ' // docker buildx bake -f ' . relative($bakeFile);
-    foreach ($set as $override) {
-        array_push($command, '--set', $override);
-        $printed .= ' --set ' . escapeshellarg($override);
-    }
-
-    // buildx asks before it reads or writes outside of the current directory,
-    // which the builder (when the project requires it) and the stacks may be
-    foreach ([builder_root(), ...array_filter(array_map(static fn (Build $build): ?string => $build->embed, $builds))] as $read) {
-        $command[] = '--allow=fs.read=' . $read;
-    }
-    foreach ($builds as $build) {
-        // Or buildx asks to write to its parent
-        fs()->mkdir($build->outputDir);
-        $command[] = '--allow=fs.write=' . $build->outputDir;
-    }
-
-    io()->writeln($printed);
-    run($command);
-
-    foreach ($builds as $build) {
-        // buildx gives it 0700, a web server or GitHub Pages could not read it
-        fs()->chmod($build->outputDir, 0o777, umask());
-
-        // The output directory is only ever added to: forget about the targets that are not built anymore
-        foreach (Build::TARGETS as $name => $file) {
-            if (!\in_array($name, $build->targets, true)) {
-                fs()->remove([$build->artifact($name, 'mjs'), $build->artifact($name, 'wasm')]);
+        $declared = [];
+        // In a closure, so that the file only sees its own variables
+        foreach ((static fn (): array => require $path)() as $stack) {
+            if (!$stack instanceof Stack) {
+                throw new \UnexpectedValueException(\sprintf('"%s" must return a list of "%s".', $path, Stack::class));
             }
+            // A stack derived from another one, and not renamed
+            if (isset($declared[$stack->name])) {
+                throw new \UnexpectedValueException(\sprintf('"%s" declares the stack "%s" twice.', $path, $stack->name));
+            }
+
+            $declared[$stack->name] = true;
+            $stacks[$stack->name] = $stack;
         }
     }
+
+    return $stacks;
 }
 
 /**
- * @param list<Build> $builds
+ * @internal
+ */
+function stack(string $name): Stack
+{
+    return stacks()[$name] ?? throw new \InvalidArgumentException(\sprintf('Unknown stack "%s", the stacks are: %s.', $name, implode(', ', array_keys(stacks()))));
+}
+
+/**
+ * @param list<Stack> $stacks
  *
  * @internal
  */
-function bake_definition(array $builds): string
+function bake_definition(array $stacks): string
 {
     $targets = [];
     $outputDirs = [];
-    foreach ($builds as $build) {
-        if (isset($targets[$build->bakeName()])) {
-            throw new \LogicException(\sprintf('The stack "%s" has the same name as another one, once cleaned up for buildx ("%s").', $build->name, $build->bakeName()));
+    foreach ($stacks as $stack) {
+        // What a bake target name accepts
+        $target = preg_replace('/[^a-zA-Z0-9_-]/', '-', $stack->name);
+        if (isset($targets[$target])) {
+            throw new \InvalidArgumentException(\sprintf('The stack "%s" has the same name as another one, once cleaned up for buildx ("%s").', $stack->name, $target));
         }
         // They would write the same files
-        if (isset($outputDirs[$build->outputDir])) {
-            throw new \InvalidArgumentException(\sprintf('The stacks "%s" and "%s" are built in the same directory, "%s".', $outputDirs[$build->outputDir], $build->name, relative($build->outputDir)));
+        if (isset($outputDirs[$stack->outputDir])) {
+            throw new \InvalidArgumentException(\sprintf('The stacks "%s" and "%s" are built in the same directory, "%s".', $outputDirs[$stack->outputDir], $stack->name, relative($stack->outputDir)));
+        }
+        if (null !== $stack->embed && !is_dir($stack->embed)) {
+            throw new \InvalidArgumentException(\sprintf('Cannot embed "%s" in the stack "%s": it is not a directory.', relative($stack->embed), $stack->name));
         }
 
-        $outputDirs[$build->outputDir] = $build->name;
-
-        $targets[$build->bakeName()] = $build->bakeTarget(builder_root());
+        $outputDirs[$stack->outputDir] = $stack->name;
+        $targets[$target] = [
+            'dockerfile' => builder_root() . '/Dockerfile',
+            'context' => builder_root(),
+            // What is not set is the default of the Dockerfile
+            'args' => array_filter([
+                'PHP_VERSION' => $stack->php,
+                'EXTENSIONS' => implode(' ', $stack->extensions),
+                'TARGETS' => implode(' ', $stack->targets),
+                'MEMORY' => $stack->memory,
+                'ICU_DATA' => $stack->icuData,
+                // None if nothing is embedded
+                'EMBED_PATH' => $stack->embedPath ?? '',
+            ], static fn (?string $value): bool => null !== $value),
+            'output' => ['type=local,dest=' . $stack->outputDir],
+        ];
+        if (null !== $stack->embed) {
+            $targets[$target]['contexts'] = ['embed' => $stack->embed];
+        }
     }
 
     return json_encode([
@@ -138,100 +119,46 @@ function bake_definition(array $builds): string
 }
 
 /**
- * Runs the node runner on a built stack.
- *
- * @param list<string> $arguments the PHP file, or -r and some code
- *
- * @internal
- */
-function node(Build $build, array $arguments): Process
-{
-    if (!is_file($runner = $build->artifact('node', 'mjs'))) {
-        throw new \RuntimeException(\sprintf('"%s" does not exist: build the stack with the node target first ("castor wasm:build %s").', relative($runner), $build->name));
-    }
-
-    // No pty: the output of PHP must not be altered, it may go through a pipe
-    return run(
-        ['node', builder_root() . '/run.mjs', '--build', $runner, ...$arguments],
-        context: context()->withPty(false)->withAllowFailure(),
-    );
-}
-
-/**
- * What has to be true for the extensions of a stack to work, when
- * extension_loaded() is not enough: intl loads without ICU's data, then it only
- * knows locale codes.
- *
- * @return array<string, string> PHP expressions, by extension
- *
- * @internal
- */
-function checks(Build $build): array
-{
-    $checks = [];
-    if (\in_array('intl', $build->extensions, true)) {
-        $checks['intl'] = 'none' === $build->icuData
-            // What does not need the data works, and the data is not there
-            ? 'Normalizer::normalize("e\u{301}") === "\u{e9}" && Locale::getDisplayLanguage("fr", "en") === "fr"'
-            : 'Locale::getDisplayLanguage("fr", "en") === "French"';
-    }
-
-    return $checks;
-}
-
-/**
- * Checks from node that a built stack has the PHP version and the extensions
- * it was asked for.
+ * Checks from node that a built stack has its PHP version and its extensions.
  *
  * @return list<string> what is wrong with the stack, nothing when it works
  *
  * @internal
  */
-function check(Build $build): array
+function check(Stack $stack): array
 {
-    if (!is_file($runner = $build->artifact('node', 'mjs'))) {
+    $runner = $stack->artifact('node', 'mjs');
+    if (!is_file($runner)) {
         return [\sprintf('"%s" does not exist', relative($runner))];
     }
 
-    $checks = checks($build);
-    $works = array_map(
-        static fn (string $extension, string $check): string => \sprintf('%1$s => extension_loaded(%1$s) && %2$s', var_export($extension, true), $check),
-        array_keys($checks),
-        $checks,
+    // What is wrong when a PHP expression is false
+    $php = $stack->php ?? dockerfile_default('PHP_VERSION');
+    $problems = ["PHP_VERSION is not {$php}" => 'PHP_VERSION === ' . var_export($php, true)];
+    foreach ($stack->extensions as $extension) {
+        $problems["{$extension} is not loaded"] = 'extension_loaded(' . var_export($extension, true) . ')';
+    }
+    // intl loads without ICU's data, then it only knows locale codes
+    if (\in_array('intl', $stack->extensions, true)) {
+        $problems += 'none' === $stack->icuData
+            ? ['intl does not normalize, or has ICU\'s data' => 'extension_loaded("intl") && Normalizer::normalize("e\u{301}") === "\u{e9}" && Locale::getDisplayLanguage("fr", "en") === "fr"']
+            : ['intl does not have ICU\'s data' => 'extension_loaded("intl") && Locale::getDisplayLanguage("fr", "en") === "French"'];
+    }
+
+    // Prints the problems whose expression is false
+    $code = \sprintf('echo json_encode(array_keys(array_filter([%s])));', implode(', ', array_map(
+        static fn (string $problem, string $expression): string => var_export($problem, true) . " => !({$expression})",
+        array_keys($problems),
+        $problems,
+    )));
+
+    $process = run(
+        ['node', builder_root() . '/run.mjs', '--build', $runner, '-r', $code],
+        context: context()->withPty(false)->withQuiet()->withAllowFailure(),
     );
+    $found = json_decode($process->getOutput(), true);
 
-    $code = '$e = ' . var_export($build->extensions, true) . '; echo json_encode(["version" => PHP_VERSION, "loaded" => array_map("extension_loaded", $e), "works" => [' . implode(', ', $works) . ']]);';
-
-    try {
-        $output = capture(
-            ['node', builder_root() . '/run.mjs', '--build', $runner, '-r', $code],
-            context: context()->withPty(false),
-        );
-    } catch (\Throwable $e) {
-        return ['node failed: ' . $e->getMessage()];
-    }
-
-    $result = json_decode($output, true);
-    if (!\is_array($result) || !isset($result['version'], $result['loaded'])) {
-        return ['unexpected output: ' . $output];
-    }
-
-    $problems = [];
-    if (null !== $build->php && $build->php !== $result['version']) {
-        $problems[] = \sprintf('PHP_VERSION is %s, expected %s', $result['version'], $build->php);
-    }
-    foreach ($build->extensions as $i => $extension) {
-        if (true !== ($result['loaded'][$i] ?? null)) {
-            $problems[] = \sprintf('extension_loaded("%s") is false', $extension);
-        }
-    }
-    foreach ($checks as $extension => $check) {
-        if (true !== ($result['works'][$extension] ?? null)) {
-            $problems[] = \sprintf('%s does not work: %s is false', $extension, $check);
-        }
-    }
-
-    return $problems;
+    return $process->isSuccessful() && \is_array($found) ? $found : ['it does not run: ' . trim($process->getOutput() . $process->getErrorOutput())];
 }
 
 /**
@@ -241,7 +168,7 @@ function check(Build $build): array
  */
 function dockerfile_default(string $argument): ?string
 {
-    $dockerfile = (string) file_get_contents(builder_root() . '/Dockerfile');
+    $dockerfile = file_get_contents(builder_root() . '/Dockerfile');
 
     return preg_match('/^ARG ' . preg_quote($argument, '/') . '=(\S+)/m', $dockerfile, $matches) ? trim($matches[1], '"') : null;
 }
