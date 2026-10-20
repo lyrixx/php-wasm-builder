@@ -39,11 +39,13 @@ function build_task(
     ?string $memory = null,
     #[AsOption(description: 'Override the directory to embed')]
     ?string $embed = null,
+    #[AsOption(description: 'Override the ICU data of intl: all or none', autocomplete: Build::ICU_DATA)]
+    ?string $icuData = null,
     #[AsOption(description: 'Print the bake file instead of building')]
     bool $print = false,
 ): int {
     if ($all) {
-        if (null !== $stack || null !== $php || [] !== $with || [] !== $target || null !== $memory || null !== $embed) {
+        if (null !== $stack || null !== $php || [] !== $with || [] !== $target || null !== $memory || null !== $embed || null !== $icuData) {
             throw new \InvalidArgumentException('--all builds every stack as declared, it can not be combined with a stack or with overrides.');
         }
 
@@ -62,6 +64,9 @@ function build_task(
         if (null !== $embed) {
             // It comes from the command line: relative to where the command is run
             $selected = $selected->embed(Path::makeAbsolute($embed, getcwd() ?: project_root()));
+        }
+        if (null !== $icuData) {
+            $selected = $selected->icuData($icuData);
         }
 
         $builds = [resolve($selected)];
@@ -106,11 +111,12 @@ function stacks_task(
             $build->php ?? '-',
             wordwrap(implode(' ', $build->extensions), 44) ?: '-',
             $build->memory ?? dockerfile_default('MEMORY') ?? '-',
+            \in_array('intl', $build->extensions, true) ? $build->icuData ?? dockerfile_default('ICU_DATA') ?? '-' : '-',
             implode(' ', $build->targets),
         ];
     }
 
-    io()->table(['Stack', 'PHP', 'Extensions', 'Memory', 'Targets'], $rows);
+    io()->table(['Stack', 'PHP', 'Extensions', 'Memory', 'ICU data', 'Targets'], $rows);
 }
 
 #[AsTask(name: 'sizes', namespace: 'wasm', description: 'Compares the size of what is built with the default stack')]

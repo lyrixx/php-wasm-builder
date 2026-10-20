@@ -29,4 +29,10 @@ return [
     $default->renamed('intl')
         ->extensions('intl')
         ->memory('160mb'),
+
+    // intl, without ICU's data: it is loaded, but only NFC normalization and
+    // the character properties of IntlChar work. It needs no more memory.
+    $default->renamed('intl-without-data')
+        ->extensions('intl')
+        ->icuData('none'),
 ];

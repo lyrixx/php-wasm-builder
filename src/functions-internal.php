@@ -52,6 +52,7 @@ function resolve(Stack $stack): Build
         $embed,
         $stack->getTargets() ?? array_keys(Build::TARGETS),
         $stack->getMemory(),
+        $stack->getIcuData(),
         build_dir() . '/' . $stack->getName(),
     );
 }
@@ -141,14 +142,26 @@ function node(Build $build, array $arguments): Process
 }
 
 /**
- * What has to be true for an extension to work, when extension_loaded() is not
- * enough: intl loads without ICU's data, then it only knows locale codes.
+ * What has to be true for the extensions of a stack to work, when
+ * extension_loaded() is not enough: intl loads without ICU's data, then it only
+ * knows locale codes.
+ *
+ * @return array<string, string> PHP expressions, by extension
  *
  * @internal
  */
-const CHECKS = [
-    'intl' => 'Locale::getDisplayLanguage("fr", "en") === "French"',
-];
+function checks(Build $build): array
+{
+    $checks = [];
+    if (\in_array('intl', $build->extensions, true)) {
+        $checks['intl'] = 'none' === $build->icuData
+            // What does not need the data works, and the data is not there
+            ? 'Normalizer::normalize("e\u{301}") === "\u{e9}" && Locale::getDisplayLanguage("fr", "en") === "fr"'
+            : 'Locale::getDisplayLanguage("fr", "en") === "French"';
+    }
+
+    return $checks;
+}
 
 /**
  * Checks from node that a built stack has the PHP version and the extensions
@@ -164,7 +177,7 @@ function check(Build $build): array
         return [\sprintf('"%s" does not exist', relative($runner))];
     }
 
-    $checks = array_intersect_key(CHECKS, array_flip($build->extensions));
+    $checks = checks($build);
     $works = array_map(
         static fn (string $extension, string $check): string => \sprintf('%1$s => extension_loaded(%1$s) && %2$s', var_export($extension, true), $check),
         array_keys($checks),

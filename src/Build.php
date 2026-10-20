@@ -18,6 +18,12 @@ final class Build
     ];
 
     /**
+     * The values of ICU_DATA. Keep in sync with the "resolve" stage of the
+     * Dockerfile.
+     */
+    public const ICU_DATA = ['all', 'none'];
+
+    /**
      * @param list<string> $extensions
      * @param string|null  $embed      absolute path of the directory to embed
      * @param list<string> $targets
@@ -30,6 +36,7 @@ final class Build
         public readonly ?string $embed,
         public readonly array $targets,
         public readonly ?string $memory,
+        public readonly ?string $icuData,
         public readonly string $outputDir,
     ) {
     }
@@ -40,7 +47,7 @@ final class Build
             return $this;
         }
 
-        return new self($this->name, $this->php, $this->extensions, $this->embed, [...$this->targets, $target], $this->memory, $this->outputDir);
+        return new self($this->name, $this->php, $this->extensions, $this->embed, [...$this->targets, $target], $this->memory, $this->icuData, $this->outputDir);
     }
 
     /**
@@ -83,6 +90,7 @@ final class Build
             'EXTENSIONS' => implode(' ', $this->extensions),
             'TARGETS' => implode(' ', $this->targets),
             'MEMORY' => $this->memory,
+            'ICU_DATA' => $this->icuData,
             // The name of the embedded directory in the WASM filesystem, none if nothing is embedded
             'EMBED_PATH' => null === $this->embed ? '' : basename($this->embed),
         ];

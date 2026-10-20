@@ -91,6 +91,10 @@ TARGETS
 MEMORY
     The (initial and maximum) memory of the WASM module. Defaults to ``128mb``.
 
+ICU_DATA
+    The data of ICU that intl links (see `intl`_): ``all`` (the default) or
+    ``none``.
+
 EMBED_PATH
     The name that the embedded directory has in the WASM filesystem. Defaults
     to ``examples``.
@@ -169,6 +173,16 @@ data takes 32 MB of the memory of the module. Add it to the extensions, with
 
 The ``intl`` stack (see `Stacks, and castor`_) is the same build.
 
+When the code only needs intl to be loaded, ``ICU_DATA=none`` leaves the
+data out: the ``.wasm`` file is then about 2 MB bigger than without intl (less
+than 1 MB gzipped), and it needs no more memory. ICU only has what is in its
+code: NFC normalization, and the character properties of ``IntlChar``.
+Everything else fails: ``Locale::getDisplayLanguage('fr', 'en')`` gives
+``fr``, and the formatters, collators, transliterators and ``grapheme_*()``
+functions do not work. The ``intl-without-data`` stack is this build::
+
+    docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter intl" --set default.args.ICU_DATA=none
+
 Limitations
 -----------
 
@@ -210,6 +224,8 @@ A stack never changes: each method returns a new one, so a stack is derived
 from another one with ``renamed()``. ``extensions()`` adds to the extensions
 the stack already has, the other methods replace what it has. ``embed()`` is
 relative to the root of the project, the directory of ``castor.php``.
+``memory()`` and ``icuData()`` set the ``MEMORY`` and ``ICU_DATA`` build
+arguments (see `Options`_).
 
 To build your own stacks with this repository as it is, declare them in a
 ``stacks.override.php`` file next to ``stacks.php``, with the same format (git
@@ -234,6 +250,7 @@ need to declare a stack to try something::
     castor wasm:build playground --target node          # only the node target
     castor wasm:build --with tokenizer --with bcmath    # the default stack, and two more extensions
     castor wasm:build --memory 256mb --embed my-app     # more memory, another directory to embed
+    castor wasm:build intl --icu-data none              # intl, without ICU's data
     castor wasm:build --print                           # only shows the bake file
 
 What is built with overrides goes to the directory of the stack
@@ -253,7 +270,8 @@ These are the stacks of ``stacks.php``:
   bake`` builds too;
 - ``php-8.4`` and ``php-8.3``: the same thing, on older PHP versions;
 - ``playground``: adds bcmath, filter and tokenizer;
-- ``intl``: adds intl (see `intl`_).
+- ``intl``: adds intl (see `intl`_);
+- ``intl-without-data``: adds intl, without ICU's data.
 
 Each script of ``examples/`` says which stack it needs::
 

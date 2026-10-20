@@ -23,6 +23,7 @@ final readonly class Stack
         private ?string $embed = null,
         private ?array $targets = null,
         private ?string $memory = null,
+        private ?string $icuData = null,
     ) {
     }
 
@@ -77,6 +78,19 @@ final readonly class Stack
         return $this->with(memory: $memory);
     }
 
+    /**
+     * The data of ICU that intl links: "all" of it (the default, every locale),
+     * or "none" (intl is loaded, but it only knows locale codes).
+     */
+    public function icuData(string $icuData): self
+    {
+        if (!\in_array($icuData, Build::ICU_DATA, true)) {
+            throw new \InvalidArgumentException(\sprintf('Unknown ICU data "%s", the values are: %s.', $icuData, implode(', ', Build::ICU_DATA)));
+        }
+
+        return $this->with(icuData: $icuData);
+    }
+
     public function getName(): string
     {
         return $this->name;
@@ -111,6 +125,11 @@ final readonly class Stack
     public function getMemory(): ?string
     {
         return $this->memory;
+    }
+
+    public function getIcuData(): ?string
+    {
+        return $this->icuData;
     }
 
     private function with(mixed ...$changes): self
