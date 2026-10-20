@@ -8,6 +8,7 @@
 #   php-src     PHP's sources, only depends on PHP_VERSION
 #   oniguruma   third-party libraries, each one only built when the plan says
 #   libxml2     an extension needs it (the others do nothing and stay tiny)
+#   icu
 #   php         configures and compiles PHP
 #   link        compiles the shim and links the .mjs/.wasm files
 #
@@ -63,6 +64,7 @@ ext ctype     - --enable-ctype
 ext bcmath    - --enable-bcmath
 ext filter    - --enable-filter
 ext tokenizer - --enable-tokenizer
+ext intl      icu --enable-intl
 
 for extension in $EXTENSIONS; do
 	has "$known" "$extension" || { echo "Unknown extension '$extension', supported extensions:$known" >&2; exit 1; }
@@ -71,6 +73,7 @@ done
 link=""
 libxml2=0
 oniguruma=0
+icu=0
 if has "$libs" libxml2; then
 	libxml2=1
 	flags="--with-libxml$flags"
@@ -79,6 +82,12 @@ fi
 if has "$libs" oniguruma; then
 	oniguruma=1
 	link="$link /local/install/lib/libonig.a"
+fi
+if has "$libs" icu; then
+	icu=1
+	# ICU and intl are C++: DEFAULT_TO_CXX links the C++ standard library,
+	# as em++ would
+	link="$link /local/install/lib/libicui18n.a /local/install/lib/libicuio.a /local/install/lib/libicuuc.a /local/install/lib/libicudata.a -sDEFAULT_TO_CXX"
 fi
 
 # targets: <output file name> <emscripten environment>
@@ -95,6 +104,7 @@ echo "$flags" > /plan/configure
 echo "$link" > /plan/link
 echo "$libxml2" > /plan/libxml2
 echo "$oniguruma" > /plan/oniguruma
+echo "$icu" > /plan/icu
 
 echo "./configure:$flags"
 echo "libraries:$libs"
@@ -175,18 +185,60 @@ emmake make -j`nproc`
 emmake make install
 EOF
 
+# Compile ICU and its data, for intl
+FROM base AS icu
+ARG ICU_VERSION=78.3
+COPY --from=resolve /plan/icu /plan/icu
+RUN <<EOF
+set -eu
+[ "$(cat /plan/icu)" = 1 ] || exit 0
+# The data comes already built with the release sources only, not with git
+python3 -c 'import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])' \
+	https://github.com/unicode-org/icu/releases/download/release-$ICU_VERSION/icu4c-$ICU_VERSION-sources.tgz icu.tgz
+tar -xzf icu.tgz
+cd icu/source
+# -Os: ICU is big, and it is only in the builds that ask for intl
+CFLAGS=-Os CXXFLAGS=-Os emconfigure ./configure --prefix=/local/install \
+	--enable-static --disable-shared --disable-dyload \
+	--disable-extras --disable-samples --disable-tests --disable-tools \
+	--with-data-packaging=archive
+emmake make -j`nproc`
+emmake make install
+
+# ICU finds its data through a single symbol, icudt<major>_dat, of which
+# libicudata.a only has an empty stub (the data tools are not built for
+# WASM). The sources come with the data, already built: link that instead, so
+# that it is in the .wasm file, and there is no file to load.
+major=${ICU_VERSION%%.*}
+test -s data/in/icudt${major}l.dat
+cat > icudata.c <<C
+#include <stdalign.h>
+
+alignas(16) const unsigned char icudt${major}_dat[] = {
+#embed "data/in/icudt${major}l.dat"
+};
+C
+emcc -std=c23 -c icudata.c -o icudata.o
+rm /local/install/lib/libicudata.a
+emar rcs /local/install/lib/libicudata.a icudata.o
+EOF
+
 # Configure and compile PHP
 FROM php-src AS php
 COPY --from=oniguruma /local/install /local/install
 COPY --from=libxml2 /local/install /local/install
+COPY --from=icu /local/install /local/install
 COPY --from=resolve /plan/configure /plan/configure
+COPY --from=resolve /plan/icu /plan/icu
 
 ENV ONIG_LIBS="-L/local/install"
 ENV ONIG_CFLAGS="-I/local/install/include"
 ENV LIBXML_LIBS="-L/local/install"
 ENV LIBXML_CFLAGS="-I/local/install/include/libxml2"
 
+# intl finds ICU, and its version, with pkg-config
 RUN cd php-src && \
+	if [ "$(cat /plan/icu)" = 1 ]; then export EM_PKG_CONFIG_PATH=/local/install/lib/pkgconfig; fi && \
 	emconfigure ./configure --host=$(emcc -dumpmachine) --enable-embed=static \
 	--disable-all --without-pcre-jit --disable-fiber-asm --disable-cgi --disable-cli --disable-phpdbg \
 	$(cat /plan/configure)

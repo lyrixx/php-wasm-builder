@@ -63,6 +63,10 @@ ONIGURUMA_VERSION
 	The Oniguruma library (used for regular expressions with mbstring) version
 	to download and build.
 
+ICU_VERSION
+	The ICU library (used by intl) version to download and build, for example
+	``78.3``.
+
 EMSDK_VERSION
 	The version of the Emscripten SDK that compiles everything. It is pinned,
 	so that the same arguments always give the same build.
@@ -83,6 +87,7 @@ These are the extensions that can be listed in ``EXTENSIONS``:
 - ctype
 - dom
 - filter
+- intl (see `intl`_)
 - libxml
 - mbstring
 - SimpleXML
@@ -105,6 +110,19 @@ They are always there, whatever ``EXTENSIONS`` says:
 
 To add an extension, add a line to the ``ext`` list at the top of the
 ``Dockerfile`` (and a stage for the library that it needs, if it needs one).
+
+intl
+~~~~
+
+intl is linked statically, with ICU and all of its data (every locale): there
+is no ``intl.so`` to load, nor data file to fetch, and it works the same on the
+web and on node. It does not come cheap, which is why php.net does not ship
+it: the ``.wasm`` file is about 33 MB bigger (14 MB gzipped), and the data
+takes 32 MB of the memory of the module. The ``intl`` stack has 32 MB more
+memory than php.net for that::
+
+	castor build intl
+	castor run -r 'echo (new NumberFormatter("fr_FR", NumberFormatter::CURRENCY))->formatCurrency(1234.5, "EUR");' --stack intl
 
 Limitations
 -----------

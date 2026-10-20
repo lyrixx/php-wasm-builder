@@ -308,6 +308,14 @@ function node(Build $build, array $arguments): \Symfony\Component\Process\Proces
 }
 
 /**
+ * What has to be true for an extension to work, when extension_loaded() is not
+ * enough: intl loads without ICU's data, then it only knows locale codes.
+ */
+const CHECKS = [
+    'intl' => 'Locale::getDisplayLanguage("fr", "en") === "French"',
+];
+
+/**
  * @return list<string> what is wrong with the stack, nothing when it works
  */
 function check(Build $build): array
@@ -316,7 +324,14 @@ function check(Build $build): array
         return [\sprintf('"%s" does not exist', relative($runner))];
     }
 
-    $code = '$e = ' . var_export($build->extensions, true) . '; echo json_encode(["version" => PHP_VERSION, "loaded" => array_map("extension_loaded", $e)]);';
+    $checks = array_intersect_key(CHECKS, array_flip($build->extensions));
+    $works = array_map(
+        static fn (string $extension, string $check): string => \sprintf('%1$s => extension_loaded(%1$s) && %2$s', var_export($extension, true), $check),
+        array_keys($checks),
+        $checks,
+    );
+
+    $code = '$e = ' . var_export($build->extensions, true) . '; echo json_encode(["version" => PHP_VERSION, "loaded" => array_map("extension_loaded", $e), "works" => [' . implode(', ', $works) . ']]);';
 
     try {
         $output = capture(
@@ -339,6 +354,11 @@ function check(Build $build): array
     foreach ($build->extensions as $i => $extension) {
         if (true !== ($result['loaded'][$i] ?? null)) {
             $problems[] = \sprintf('extension_loaded("%s") is false', $extension);
+        }
+    }
+    foreach ($checks as $extension => $check) {
+        if (true !== ($result['works'][$extension] ?? null)) {
+            $problems[] = \sprintf('%s does not work: %s is false', $extension, $check);
         }
     }
 
