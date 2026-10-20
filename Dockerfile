@@ -130,6 +130,7 @@ RUN apt-get update && \
 	git \
 	pv \
 	ca-certificates \
+	curl \
 	python3
 
 # Install emscripten sdk
@@ -193,8 +194,8 @@ RUN <<EOF
 set -eu
 [ "$(cat /plan/icu)" = 1 ] || exit 0
 # The data comes already built with the release sources only, not with git
-python3 -c 'import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])' \
-	https://github.com/unicode-org/icu/releases/download/release-$ICU_VERSION/icu4c-$ICU_VERSION-sources.tgz icu.tgz
+curl -fsSL --retry 3 --connect-timeout 30 -o icu.tgz \
+	https://github.com/unicode-org/icu/releases/download/release-$ICU_VERSION/icu4c-$ICU_VERSION-sources.tgz
 tar -xzf icu.tgz
 cd icu/source
 # -Os: ICU is big, and it is only in the builds that ask for intl
