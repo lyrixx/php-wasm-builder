@@ -56,6 +56,10 @@ ONIGURUMA_VERSION
 	The Oniguruma library (used for regular expressions with mbstring) version
 	to download and build.
 
+EMSDK_VERSION
+	The version of the Emscripten SDK that compiles everything. It is pinned,
+	so that the same arguments always give the same build.
+
 The directory to embed in the WASM filesystem is the ``embed`` named build
 context. ``docker-bake.hcl`` sets it to ``examples/``; anything can be used
 instead::
