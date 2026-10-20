@@ -23,26 +23,16 @@
 #include "sapi/embed/php_embed.h"
 #include <emscripten.h>
 #include <stdlib.h>
+#include <string.h>
 
-#include "zend_globals_macros.h"
 #include "zend_exceptions.h"
-#include "zend_closures.h"
 
-int main(int argc, char **argv)
-{
-    php_embed_init(0, NULL);
+/*
+ * The functions that JavaScript calls to run PHP. Each call is a request of
+ * its own: the engine is started, and shut down at the end.
+ */
 
-    zend_file_handle file_handle;
-    zend_stream_init_filename(&file_handle, argv[1]);
-
-    if (php_execute_script(&file_handle) == false) {
-        php_printf("Failed to execute PHP script.\n");
-        return 0;
-    }
-
-    php_embed_shutdown();
-    return 0;
-}
+static bool running = false;
 
 void phpw_flush()
 {
@@ -50,87 +40,88 @@ void phpw_flush()
     fprintf(stderr, "\n");
 }
 
-char *EMSCRIPTEN_KEEPALIVE phpw_exec(char *code)
+static void start(void)
 {
+    /* A previous call did not get to the end, a JavaScript exception went through it */
+    if (running) {
+        php_embed_shutdown();
+    }
+
     setenv("USE_ZEND_ALLOC", "0", 1);
     php_embed_init(0, NULL);
-    char *retVal = NULL;
-
-    zend_try
-    {
-        zval ret_zv;
-
-        zend_eval_string(code, &ret_zv, "expression");
-        convert_to_string(&ret_zv);
-
-        retVal = Z_STRVAL(ret_zv);
-    } zend_catch {
-    } zend_end_try();
-
-    phpw_flush();
-    php_embed_shutdown();
-
-    return retVal;
-}
-
-/*
- * Returns the exit status of the code: the one given to exit(), 255 on a fatal
- * error or an uncaught exception, 0 otherwise.
- */
-int EMSCRIPTEN_KEEPALIVE phpw_run(char *code)
-{
-    setenv("USE_ZEND_ALLOC", "0", 1);
-    php_embed_init(0, NULL);
+    running = true;
     /* Not reset by php_embed_init(), it would keep the status of a previous call */
     EG(exit_status) = 0;
     PG(during_request_startup) = 0;
+}
 
-    zend_try
-    {
+/*
+ * Returns the exit status of PHP: the one given to exit(), 255 on a fatal
+ * error or an uncaught exception, 0 otherwise.
+ */
+static int stop(void)
+{
+    int exit_status = EG(exit_status);
+
+    phpw_flush();
+    php_embed_shutdown();
+    running = false;
+
+    return exit_status;
+}
+
+/*
+ * Runs some code, and returns its exit status.
+ */
+int EMSCRIPTEN_KEEPALIVE phpw_run(char *code)
+{
+    start();
+    zend_first_try {
         zend_eval_string(code, NULL, "script");
         if (EG(exception)) {
             zend_exception_error(EG(exception), E_ERROR);
         }
     } zend_end_try();
 
-    int exit_status = EG(exit_status);
-    phpw_flush();
-    php_embed_shutdown();
-
-    return exit_status;
+    return stop();
 }
 
-int EMBED_SHUTDOWN = 1;
-
 /*
- * Runs a PHP file, and returns its exit status, as phpw_run() does.
+ * Runs a file of the WASM filesystem, and returns its exit status.
  */
-int phpw(char *file)
+int EMSCRIPTEN_KEEPALIVE phpw(char *file)
 {
-    setenv("USE_ZEND_ALLOC", "0", 1);
-    if (EMBED_SHUTDOWN == 0) {
-        php_embed_shutdown();
-    }
-
-    php_embed_init(0, NULL);
-    EG(exit_status) = 0;
-    EMBED_SHUTDOWN = 0;
+    start();
     zend_first_try {
         zend_file_handle file_handle;
         zend_stream_init_filename(&file_handle, file);
-        // file_handle.primary_script = 1;
-
-        if (!php_execute_script(&file_handle)) {
-            php_printf("Failed to execute PHP script.\n");
-        }
-
+        php_execute_script(&file_handle);
         zend_destroy_file_handle(&file_handle);
     } zend_end_try();
 
-    int exit_status = EG(exit_status);
-    phpw_flush();
-    php_embed_shutdown();
-    EMBED_SHUTDOWN = 1;
+    return stop();
+}
 
-    return exit_status;
+/*
+ * Evaluates an expression, and returns its value as a string (that is never
+ * freed), NULL when it fails.
+ */
+char *EMSCRIPTEN_KEEPALIVE phpw_exec(char *code)
+{
+    char *value = NULL;
+
+    start();
+    zend_first_try {
+        zval result;
+        if (zend_eval_string(code, &result, "expression") == SUCCESS) {
+            zend_string *string = zval_get_string(&result);
+            /* A copy: the strings of PHP are freed with the engine */
+            value = strdup(ZSTR_VAL(string));
+            zend_string_release(string);
+            zval_ptr_dtor(&result);
+        }
+    } zend_end_try();
+    stop();
+
+    return value;
 }
