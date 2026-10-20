@@ -38,7 +38,7 @@ const BUILDER_ROOT = __DIR__;
 
 import(__DIR__ . '/src');
 
-#[AsTask(name: 'build', namespace: 'wasm', description: 'Builds a stack: php.net when none is given')]
+#[AsTask(name: 'build', namespace: 'wasm', description: 'Builds a stack: the default one when none is given')]
 function build(
     #[AsArgument(description: 'The stack to build', autocomplete: 'PhpWasm\complete_stacks')]
     ?string $stack = null,
@@ -119,7 +119,7 @@ function list_stacks(
     io()->table(['Stack', 'PHP', 'Extensions', 'Targets'], $rows);
 }
 
-#[AsTask(name: 'sizes', namespace: 'wasm', description: 'Compares the size of what is built with the php.net stack')]
+#[AsTask(name: 'sizes', namespace: 'wasm', description: 'Compares the size of what is built with the default stack')]
 function sizes(): void
 {
     $size = static fn (string $stack, string $file): ?int => is_file($path = build_dir() . '/' . $stack . '/' . $file) ? (int) filesize($path) : null;
@@ -316,7 +316,7 @@ function node(Build $build, array $arguments): \Symfony\Component\Process\Proces
 
     // No pty: the output of PHP must not be altered, it may go through a pipe
     return run(
-        ['node', BUILDER_ROOT . '/demo/run-cli.mjs', '--build', $runner, ...$arguments],
+        ['node', BUILDER_ROOT . '/run.mjs', '--build', $runner, ...$arguments],
         context: context()->withPty(false)->withAllowFailure(),
     );
 }
@@ -349,7 +349,7 @@ function check(Build $build): array
 
     try {
         $output = capture(
-            ['node', BUILDER_ROOT . '/demo/run-cli.mjs', '--build', $runner, '-r', $code],
+            ['node', BUILDER_ROOT . '/run.mjs', '--build', $runner, '-r', $code],
             context: context()->withPty(false),
         );
     } catch (\Throwable $e) {

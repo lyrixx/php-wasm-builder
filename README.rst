@@ -1,41 +1,50 @@
 PHP WASM Builder
 ================
 
-The Dockerfile in this repository builds PHP as WebAssembly, for the browser
-and for node, with the extensions you ask for.
+Builds PHP as WebAssembly, for the browser and for node, with the PHP version
+and the extensions you ask for. Only Docker is needed to build it, and node to
+run what is built.
 
-This repository is a fork of `derickr/php-wasm-builder
-<https://github.com/derickr/php-wasm-builder>`_, which builds the PHP WASM
-files of the php.net documentation and of the PHP Tour, and it is where the
-builder is developed now (see `Credits`_). Its default build, the ``php.net``
-stack, is still what php.net ships: the same extensions, built with the same
-flags.
+This repository started as a fork of `derickr/php-wasm-builder
+<https://github.com/derickr/php-wasm-builder>`_, the builder of the PHP WASM
+files of the php.net documentation, and it is where it is developed now (see
+`Credits`_).
 
-Only Docker is needed to build it, and node to run what is built. `castor
-<https://castor.jolicode.com>`_ makes it simpler: named stacks, and tasks to
-build, run and test them, see `Stacks, and castor`_.
+What is in here:
 
-Build it with::
+- ``Dockerfile``: how PHP is compiled, everything else only drives it;
+- ``phpw.c``: the functions that JavaScript calls to run PHP (``phpw_run()``…);
+- ``examples/``: a few PHP scripts, embedded in what is built as ``/examples``;
+- ``run.mjs``: runs some PHP code, or a PHP file, in what is built, with node;
+- ``stacks.php``, ``castor.php`` and ``src/``: named builds, and castor tasks
+  to build, run and test them (see `Stacks, and castor`_).
+
+Quick start
+-----------
+
+With Docker only (`castor <https://castor.jolicode.com>`_ makes it simpler, see
+`Stacks, and castor`_), build PHP::
 
     docker buildx bake
 
-The files then end up in the ``build/php.net/`` directory. For php.net, the
-``.wasm`` and ``.mjs`` files for the web are the ones to copy to
-https://github.com/php/web-php.git/js (as ``php-web.wasm`` and
-``php-web.mjs``).
+The files end up in ``build/default/``: ``php-web.mjs`` and ``php-web.wasm``
+for the browser, ``php-cli.mjs`` and ``php-cli.wasm`` for node. Run PHP in
+them::
+
+    node run.mjs -r 'echo PHP_VERSION;'
+    node run.mjs examples/hello.php
+    node run.mjs -r 'require "/examples/hello.php";'
+
+``node run.mjs examples/hello.php`` reads the file from your disk, so you can
+edit it and run it again without building anything. ``/examples/hello.php`` is
+the copy embedded in the ``.wasm`` file: it only changes with a new build.
 
 Everything else is a build argument (see `Options`_). By default, this builds
-PHP 8.5.11, with the extensions of php.net (see `Supported Extensions`_)::
+PHP 8.5.11, with the extensions listed in `Supported Extensions`_::
 
     docker buildx bake --set default.args.PHP_VERSION=8.4.26                    # another PHP version
     docker buildx bake --set default.args.EXTENSIONS="ctype tokenizer bcmath"   # other extensions
     docker buildx bake --set default.args.TARGETS=node                          # only php-cli.mjs and php-cli.wasm
-
-Then run PHP in what is built, with node::
-
-    node demo/run-cli.mjs -r 'echo PHP_VERSION;'
-    node demo/run-cli.mjs -r 'var_dump(get_loaded_extensions());'
-    node demo/run-cli.mjs demo/phpinfo.php
 
 In a browser, ``php-web.mjs`` is the same module, built for the web. Serve it
 next to its ``php-web.wasm``, from any static server:
@@ -57,14 +66,14 @@ next to its ``php-web.wasm``, from any static server:
 Options
 -------
 
-The follow options are available for the baker:
+The following options are available for the baker:
 
 PHP_VERSION
     Configures the PHP version to build.
 
 EXTENSIONS
-    The extensions to build, separated by spaces. It defaults to the ones that
-    php.net ships: ``calendar ctype dom mbstring simplexml xml xmlreader xmlwriter``.
+    The extensions to build, separated by spaces. Defaults to
+    ``calendar ctype dom mbstring simplexml xml xmlreader xmlwriter``.
 
     The libraries that the extensions need (oniguruma for ``mbstring``, libxml2
     for the xml ones) are only built when an extension asks for them.
@@ -143,13 +152,13 @@ intl
 
 intl is linked statically, with ICU and all of its data (every locale): there
 is no ``intl.so`` to load, nor data file to fetch, and it works the same on the
-web and on node. It does not come cheap, which is why php.net does not ship
-it: the ``.wasm`` file is about 33 MB bigger (14 MB gzipped), and the data
-takes 32 MB of the memory of the module. Add it to the extensions, with 32 MB
-more memory::
+web and on node. It does not come cheap, which is why it is not in the default
+extensions: the ``.wasm`` file is about 33 MB bigger (14 MB gzipped), and the
+data takes 32 MB of the memory of the module. Add it to the extensions, with
+32 MB more memory::
 
     docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter intl" --set default.args.MEMORY=160mb
-    node demo/run-cli.mjs -r 'echo (new NumberFormatter("fr_FR", NumberFormatter::CURRENCY))->formatCurrency(1234.5, "EUR");'
+    node run.mjs examples/intl.php
 
 The ``intl`` stack (see `Stacks, and castor`_) is the same build.
 
@@ -178,14 +187,14 @@ on the host: castor is a single binary, installed with
     use PhpWasm\Stack;
 
     return [
-        Stack::named('php.net')
+        Stack::named('default')
             ->php('8.5.11')
             ->extensions('calendar', 'ctype', 'dom', 'mbstring', 'simplexml', 'xml', 'xmlreader', 'xmlwriter')
             ->embed('examples')
             ->targets('web', 'node'),
 
-        // Inherits everything from php.net, and adds two extensions
-        Stack::named('php.net-bcmath')->from('php.net')->extensions('bcmath', 'tokenizer'),
+        // Inherits everything from default, and adds two extensions
+        Stack::named('default-bcmath')->from('default')->extensions('bcmath', 'tokenizer'),
     ];
 
 A stack that inherits from another one with ``from()`` gets whatever it does
@@ -196,25 +205,25 @@ directory of the ``stacks.php`` file.
 Everything is built in ``build/<stack>/``::
 
     castor wasm:stacks                         # lists the stacks
-    castor wasm:build                          # builds the php.net stack
-    castor wasm:build playground               # builds another one
+    castor wasm:build                          # builds the default stack
+    castor wasm:build intl                     # builds another one
     castor wasm:build --all                    # builds all of them, in one buildx invocation
     castor wasm:test                           # builds them all, and checks them
-    castor wasm:sizes                          # compares the size of the .wasm files with php.net's
-    castor wasm:run demo/phpinfo.php           # runs a file, with the php.net stack
-    castor wasm:run -r 'echo PHP_VERSION;' --stack playground
+    castor wasm:sizes                          # compares the size of the .wasm files with the default stack
+    castor wasm:run examples/hello.php         # runs a file, in the default stack
+    castor wasm:run -r 'echo PHP_VERSION;' --stack php-8.3
 
 Anything in a stack can be overridden from the command line, so there is no
 need to declare a stack to try something::
 
-    castor wasm:build --php 8.3.35                      # the php.net stack, on PHP 8.3
+    castor wasm:build --php 8.3.35                      # the default stack, on PHP 8.3
     castor wasm:build playground --target node          # only the node target
-    castor wasm:build --with tokenizer --with bcmath    # php.net, and two more extensions
+    castor wasm:build --with tokenizer --with bcmath    # the default stack, and two more extensions
     castor wasm:build --memory 256mb --embed my-app     # more memory, another directory to embed
     castor wasm:build --print                           # only shows the bake file
 
 What is built with overrides goes to the directory of the stack
-(``build/php.net/``, ``build/playground/``), in place of what was there.
+(``build/default/``, ``build/playground/``), in place of what was there.
 
 ``castor wasm:test`` is what tells that a stack works: once built, it runs each
 stack in node, and checks that ``PHP_VERSION`` is the one that was asked for,
@@ -224,34 +233,22 @@ It does not run what the stack embeds.
 Playing with it
 ---------------
 
-Once a stack is built, ``castor wasm:run`` runs PHP in it, with
-``demo/run-cli.mjs``::
+These are the stacks of ``stacks.php``:
 
-    castor wasm:build
-    castor wasm:run -r 'echo PHP_VERSION;'
-    castor wasm:run -r 'var_dump(get_loaded_extensions());'
+- ``default``: PHP 8.5, with the default extensions, what ``docker buildx
+  bake`` builds too;
+- ``php-8.4`` and ``php-8.3``: the same thing, on older PHP versions;
+- ``playground``: adds bcmath, filter and tokenizer;
+- ``intl``: adds intl (see `intl`_).
 
-A stack also embeds a directory, that PHP sees in the WASM filesystem. The
-php.net stack embeds ``examples/`` as ``/examples``: these are the files that
-the examples of the PHP manual open (XML documents, the DocBook DTD…), so that
-they run on php.net too::
+Each script of ``examples/`` says which stack it needs::
 
-    castor wasm:run -r 'echo simplexml_load_file("/examples/book-simple.xml")->book[0]->title;'
-
-The ``playground`` stack adds tokenizer, bcmath and filter, and embeds
-``playground/app/`` as ``/app``. A file given to ``castor wasm:run`` is read
-from your disk, so you can edit it and run it again without building anything;
-the embedded copy only changes with a new build::
-
+    castor wasm:run examples/hello.php
+    castor wasm:run examples/xml.php --stack php-8.3
     castor wasm:build playground
-    castor wasm:run -r 'require "/app/index.php";' --stack playground    # the embedded copy
-    castor wasm:run playground/app/index.php --stack playground          # the one on your disk
-
-The ``intl`` stack is the place to try what ICU can do::
-
+    castor wasm:run examples/playground.php --stack playground
     castor wasm:build intl
-    castor wasm:run -r 'echo (new IntlDateFormatter("fr_FR", IntlDateFormatter::FULL, IntlDateFormatter::NONE))->format(time());' --stack intl
-    castor wasm:run -r '$c = new Collator("fr_FR"); $words = ["été", "eau", "Ébène", "zèbre"]; $c->sort($words); echo implode(" ", $words);' --stack intl
+    castor wasm:run examples/intl.php --stack intl
 
 Using it from your own project
 ------------------------------
@@ -286,7 +283,7 @@ to ``castor.php``. The stacks of this repository are there to inherit from:
 
     return [
         Stack::named('my-app')
-            ->from('php.net')
+            ->from('default')
             ->php('8.5.11')
             ->extensions('tokenizer', 'bcmath')
             ->embed('dist'),    // relative to your project

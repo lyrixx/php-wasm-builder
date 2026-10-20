@@ -5,6 +5,6 @@ target "default" {
   args = {
     EMBED_PATH = "examples"
   }
-  output = ["type=local,dest=./build/php.net"]
+  output = ["type=local,dest=./build/default"]
   tags = ["php-wasm"]
 }

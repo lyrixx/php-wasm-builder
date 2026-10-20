@@ -5,13 +5,13 @@ import { parseArgs, styleText } from 'node:util';
 
 // Runs some PHP code, or a PHP file, in a build for node (php-cli.mjs):
 //
-//     node run-cli.mjs [--build <php-cli.mjs>] (<file.php> | -r <code>)
+//     node run.mjs [--build <php-cli.mjs>] (<file.php> | -r <code>)
 //
-// --build  the php-cli.mjs of the stack to run, the php.net one by default
+// --build  the php-cli.mjs of the stack to run, the default one by default
 // -r       PHP code to run, without <?php ?>
 
-const USAGE = 'Usage: node run-cli.mjs [--build <php-cli.mjs>] (<file.php> | -r <code>)';
-const DEFAULT_BUILD = fileURLToPath(new URL('../build/php.net/php-cli.mjs', import.meta.url));
+const USAGE = 'Usage: node run.mjs [--build <php-cli.mjs>] (<file.php> | -r <code>)';
+const DEFAULT_BUILD = fileURLToPath(new URL('build/default/php-cli.mjs', import.meta.url));
 
 const { build, code, file } = parseArguments();
 
@@ -87,8 +87,8 @@ function howToBuild(build) {
         ];
     }
 
-    // docker buildx bake needs docker-bake.hcl, at the root of the repository
-    const root = path.relative(process.cwd(), path.resolve(DEFAULT_BUILD, '../../..'));
+    // docker buildx bake needs docker-bake.hcl, which is next to this file
+    const root = path.relative(process.cwd(), path.dirname(fileURLToPath(import.meta.url)));
 
     return [
         ...lines,

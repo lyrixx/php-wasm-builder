@@ -10,10 +10,3 @@ trim_trailing_whitespace = true
 
 [*.{hcl,yml}]
 indent_size = 2
-
-# The files that the examples of the PHP manual open, as they are published
-[examples/**]
-indent_size = unset
-indent_style = unset
-insert_final_newline = unset
-trim_trailing_whitespace = unset

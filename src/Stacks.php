@@ -9,9 +9,9 @@ namespace PhpWasm;
 final class Stacks
 {
     /**
-     * The stack that is built when none is given: what php.net ships.
+     * The stack that is built when none is given, as docker buildx bake does.
      */
-    public const DEFAULT = 'php.net';
+    public const DEFAULT = 'default';
 
     /**
      * @param array<string, Stack> $stacks

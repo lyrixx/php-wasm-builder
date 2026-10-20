@@ -2,7 +2,7 @@ name: Build
 
 # Builds every stack of stacks.php, one job each, and checks that it works: the
 # PHP version and the extensions are the ones that were asked for. The sizes of
-# the .wasm files are then compared with the php.net stack.
+# the .wasm files are then compared with the default stack.
 
 on:
   pull_request:
