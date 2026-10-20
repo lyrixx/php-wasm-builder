@@ -104,8 +104,16 @@ function build(
 }
 
 #[AsTask(name: 'stacks', namespace: '', description: 'Lists the stacks')]
-function list_stacks(): void
-{
+function list_stacks(
+    #[AsOption(description: 'Only print their names, as JSON (the CI builds one stack per job)')]
+    bool $json = false,
+): void {
+    if ($json) {
+        io()->writeln(json_encode(registry()->names(), \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
+
+        return;
+    }
+
     $rows = [];
     foreach (registry()->names() as $name) {
         $stack = registry()->describe($name);
@@ -173,6 +181,8 @@ function test(
     array $stacks = [],
     #[AsOption(description: 'Check what is already built')]
     bool $noBuild = false,
+    #[AsOption(description: 'Override a value of the bake file, as "docker buildx bake --set" does (the CI gives the cache this way), can be repeated', mode: InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY)]
+    array $set = [],
 ): int {
     $registry = registry();
 
@@ -180,7 +190,7 @@ function test(
     $builds = array_map(static fn (string $name): Build => $registry->resolve($name, build_dir())->withTarget('node'), [] !== $stacks ? $stacks : $registry->names());
 
     if (!$noBuild) {
-        bake($builds, build_dir() . '/bake.json');
+        bake($builds, build_dir() . '/bake.json', $set);
     }
 
     $failed = 0;
@@ -279,14 +289,22 @@ function bake_definition(array $builds): string
  * Builds the stacks in a single buildx invocation: it builds them in parallel,
  * and shares the layers they have in common.
  *
- * @param list<Build> $builds
+ * @param list<Build>  $builds
+ * @param list<string> $set    overrides, given to "docker buildx bake --set"
  */
-function bake(array $builds, string $bakeFile): void
+function bake(array $builds, string $bakeFile, array $set = []): void
 {
     fs()->dumpFile($bakeFile, bake_definition($builds) . "\n");
 
-    io()->writeln(' // docker buildx bake -f ' . relative($bakeFile));
-    run(['docker', 'buildx', 'bake', '-f', $bakeFile]);
+    $command = ['docker', 'buildx', 'bake', '-f', $bakeFile];
+    $printed = ' // docker buildx bake -f ' . relative($bakeFile);
+    foreach ($set as $override) {
+        array_push($command, '--set', $override);
+        $printed .= ' --set ' . escapeshellarg($override);
+    }
+
+    io()->writeln($printed);
+    run($command);
 }
 
 /**
