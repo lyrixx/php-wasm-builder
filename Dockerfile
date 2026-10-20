@@ -258,11 +258,11 @@ mkdir -p /build
 [ -z "$EMBED_PATH" ] || mkdir -p "$EMBED_PATH"
 while read -r output environment; do
     emcc -o /build/$output.mjs \
-    -O2 --llvm-lto 2 \
+    -O2 \
     -s EXPORTED_FUNCTIONS='["_phpw", "_phpw_flush", "_phpw_exec", "_phpw_run", "_chdir", "_setenv", "_php_embed_init", "_php_embed_shutdown", "_zend_eval_string"]' \
     -s EXPORTED_RUNTIME_METHODS='["ccall", "UTF8ToString", "lengthBytesUTF8", "FS"]' \
     -s ENVIRONMENT=$environment \
-    -s MAXIMUM_MEMORY=$MEMORY -s INITIAL_MEMORY=$MEMORY -s ALLOW_MEMORY_GROWTH=0 \
+    -s INITIAL_MEMORY=$MEMORY -s ALLOW_MEMORY_GROWTH=0 \
     -s ASSERTIONS=0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s MODULARIZE=1 -s INVOKE_RUN=0 -s LZ4=1 -s EXPORT_ES6=1 \
     -s EXPORT_NAME=createPhpModule \
     ${EMBED_PATH:+--embed-file "$EMBED_PATH"} \
