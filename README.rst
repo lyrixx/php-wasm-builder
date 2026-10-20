@@ -20,10 +20,10 @@ The files then end up in the ``build/php.net/`` directory. For php.net, the
 https://github.com/php/web-php.git/js (as ``php-web.wasm`` and
 ``php-web.mjs``).
 
-By default, this will build PHP 8.4.26, but you can override this by setting an
+By default, this will build PHP 8.5.11, but you can override this by setting an
 argument::
 
-	docker buildx bake --set default.args.PHP_VERSION=8.3.35
+	docker buildx bake --set default.args.PHP_VERSION=8.4.26
 
 The extensions are an argument too, so you can build PHP with other ones (see
 `Supported Extensions`_)::
@@ -149,7 +149,7 @@ on the host: only Docker (and node, to run what is built).
 
 	return [
 	    Stack::named('php.net')
-	        ->php('8.4.26')
+	        ->php('8.5.11')
 	        ->extensions('calendar', 'ctype', 'dom', 'mbstring', 'simplexml', 'xml', 'xmlreader', 'xmlwriter')
 	        ->embed('examples')
 	        ->targets('web', 'node'),

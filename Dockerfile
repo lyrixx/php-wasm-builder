@@ -151,7 +151,7 @@ RUN mkdir -p /local/install
 # Download PHP and Set-Up Configure
 FROM base AS php-src
 # Keep in sync with the php.net stack, in stacks.php
-ARG PHP_VERSION=8.4.26
+ARG PHP_VERSION=8.5.11
 RUN \
 	git clone https://github.com/php/php-src.git php-src --branch php-$PHP_VERSION --single-branch --depth 1 && \
 	cd php-src && \
