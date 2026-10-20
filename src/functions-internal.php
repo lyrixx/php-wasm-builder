@@ -58,6 +58,15 @@ function bake(array $builds, array $set = []): void
         $printed .= ' --set ' . escapeshellarg($override);
     }
 
+    // buildx asks before it reads or writes outside of the current directory,
+    // which the builder (when the project requires it) and the stacks may be
+    foreach ([builder_root(), ...array_filter(array_map(static fn (Build $build): ?string => $build->embed, $builds))] as $read) {
+        $command[] = '--allow=fs.read=' . $read;
+    }
+    foreach ($builds as $build) {
+        $command[] = '--allow=fs.write=' . $build->outputDir;
+    }
+
     io()->writeln($printed);
     run($command);
 
