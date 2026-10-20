@@ -9,6 +9,8 @@ import { parseArgs, styleText } from 'node:util';
 //
 // --build  the php-cli.mjs of the stack to run, the default one by default
 // -r       PHP code to run, without <?php ?>
+//
+// It exits with the exit status of PHP.
 
 const USAGE = 'Usage: node run.mjs [--build <php-cli.mjs>] (<file.php> | -r <code>)';
 const DEFAULT_BUILD = fileURLToPath(new URL('build/default/php-cli.mjs', import.meta.url));
@@ -32,10 +34,11 @@ const { ccall } = await createPhpModule({
 });
 
 // The code of a file starts in HTML mode, the one of -r in PHP mode
-ccall('phpw_run', null, ['string'], [code ?? '?>' + fs.readFileSync(file, 'utf8')]);
+const status = ccall('phpw_run', 'number', ['string'], [code ?? '?>' + fs.readFileSync(file, 'utf8')]);
 
 stdout.end();
 stderr.end();
+process.exitCode = status;
 
 /**
  * @returns {{build: string, code: string|null, file: string|null}}

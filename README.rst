@@ -64,6 +64,11 @@ next to its ``php-web.wasm``, from any static server:
         php.ccall('phpw_run', null, ['string'], ['echo "Hello from PHP ", PHP_VERSION;']);
     </script>
 
+``phpw_run()`` runs some code, ``phpw()`` a file of the WASM filesystem. Both
+return the exit status of PHP: the one given to ``exit()``, 255 on a fatal
+error or an uncaught exception, 0 otherwise. Ask ``ccall()`` for it with
+``'number'`` instead of ``null``.
+
 Options
 -------
 
