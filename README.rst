@@ -35,7 +35,7 @@ Then run PHP in what is built, with node::
 
 	node demo/run-cli.mjs -r 'echo PHP_VERSION;'
 	node demo/run-cli.mjs -r 'var_dump(get_loaded_extensions());'
-	node demo/run-cli.mjs my-script.php
+	node demo/run-cli.mjs demo/phpinfo.php
 
 In a browser, ``php-web.mjs`` is the same module, built for the web. Serve it
 next to its ``php-web.wasm``, from any static server:
