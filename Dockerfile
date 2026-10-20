@@ -32,8 +32,8 @@ libs=""
 known=""
 
 has() {
-	case " $1 " in *" $2 "*) return 0 ;; esac
-	return 1
+    case " $1 " in *" $2 "*) return 0 ;; esac
+    return 1
 }
 
 # ext <name> <library or -> [<./configure flag>]
@@ -42,14 +42,14 @@ has() {
 # line, which phpinfo() shows: it is kept as it always was, so that the default
 # extensions still give the exact same command line.
 ext() {
-	known="$known $1"
-	has "$EXTENSIONS" "$1" || return 0
-	if [ "$2" != "-" ] && ! has "$libs" "$2"; then
-		libs="$libs $2"
-	fi
-	if [ -n "${3:-}" ]; then
-		flags="$flags $3"
-	fi
+    known="$known $1"
+    has "$EXTENSIONS" "$1" || return 0
+    if [ "$2" != "-" ] && ! has "$libs" "$2"; then
+        libs="$libs $2"
+    fi
+    if [ -n "${3:-}" ]; then
+        flags="$flags $3"
+    fi
 }
 
 ext libxml    libxml2
@@ -67,7 +67,7 @@ ext tokenizer - --enable-tokenizer
 ext intl      icu --enable-intl
 
 for extension in $EXTENSIONS; do
-	has "$known" "$extension" || { echo "Unknown extension '$extension', supported extensions:$known" >&2; exit 1; }
+    has "$known" "$extension" || { echo "Unknown extension '$extension', supported extensions:$known" >&2; exit 1; }
 done
 
 link=""
@@ -75,29 +75,29 @@ libxml2=0
 oniguruma=0
 icu=0
 if has "$libs" libxml2; then
-	libxml2=1
-	flags="--with-libxml$flags"
-	link="$link /local/install/lib/libxml2.a"
+    libxml2=1
+    flags="--with-libxml$flags"
+    link="$link /local/install/lib/libxml2.a"
 fi
 if has "$libs" oniguruma; then
-	oniguruma=1
-	link="$link /local/install/lib/libonig.a"
+    oniguruma=1
+    link="$link /local/install/lib/libonig.a"
 fi
 if has "$libs" icu; then
-	icu=1
-	# ICU and intl are C++: DEFAULT_TO_CXX links the C++ standard library,
-	# as em++ would
-	link="$link /local/install/lib/libicui18n.a /local/install/lib/libicuio.a /local/install/lib/libicuuc.a /local/install/lib/libicudata.a -sDEFAULT_TO_CXX"
+    icu=1
+    # ICU and intl are C++: DEFAULT_TO_CXX links the C++ standard library,
+    # as em++ would
+    link="$link /local/install/lib/libicui18n.a /local/install/lib/libicuio.a /local/install/lib/libicuuc.a /local/install/lib/libicudata.a -sDEFAULT_TO_CXX"
 fi
 
 # targets: <output file name> <emscripten environment>
 : > /plan/targets
 for target in $TARGETS; do
-	case $target in
-		web)  echo "php-web web" >> /plan/targets ;;
-		node) echo "php-cli node" >> /plan/targets ;;
-		*)    echo "Unknown target '$target', supported targets: web node" >&2; exit 1 ;;
-	esac
+    case $target in
+        web)  echo "php-web web" >> /plan/targets ;;
+        node) echo "php-cli node" >> /plan/targets ;;
+        *)    echo "Unknown target '$target', supported targets: web node" >&2; exit 1 ;;
+    esac
 done
 
 echo "$flags" > /plan/configure
@@ -117,29 +117,29 @@ WORKDIR /local/src
 
 # Apt-Install
 RUN apt-get update && \
-	apt-get --no-install-recommends -y install \
-	build-essential \
-	automake \
-	autoconf \
-	libtool \
-	pkg-config \
-	bison \
-	flex \
-	make \
-	re2c \
-	git \
-	pv \
-	ca-certificates \
-	curl \
-	python3
+    apt-get --no-install-recommends -y install \
+    build-essential \
+    automake \
+    autoconf \
+    libtool \
+    pkg-config \
+    bison \
+    flex \
+    make \
+    re2c \
+    git \
+    pv \
+    ca-certificates \
+    curl \
+    python3
 
 # Install emscripten sdk
 ARG EMSDK_VERSION=6.0.13
 RUN \
-	git clone https://github.com/emscripten-core/emsdk.git --branch $EMSDK_VERSION --single-branch --depth 1 && \
-	cd emsdk && \
-	./emsdk install $EMSDK_VERSION && \
-	./emsdk activate $EMSDK_VERSION
+    git clone https://github.com/emscripten-core/emsdk.git --branch $EMSDK_VERSION --single-branch --depth 1 && \
+    cd emsdk && \
+    ./emsdk install $EMSDK_VERSION && \
+    ./emsdk activate $EMSDK_VERSION
 
 # Setting ENV vars
 ENV PATH=/local/src/emsdk:/local/src/emsdk/upstream/emscripten:/usr/local/bin:/usr/bin
@@ -153,9 +153,9 @@ FROM base AS php-src
 # Keep in sync with the php.net stack, in stacks.php
 ARG PHP_VERSION=8.5.11
 RUN \
-	git clone https://github.com/php/php-src.git php-src --branch php-$PHP_VERSION --single-branch --depth 1 && \
-	cd php-src && \
-	./buildconf --force
+    git clone https://github.com/php/php-src.git php-src --branch php-$PHP_VERSION --single-branch --depth 1 && \
+    cd php-src && \
+    ./buildconf --force
 
 # Compile mbstring regex library
 FROM base AS oniguruma
@@ -195,14 +195,14 @@ set -eu
 [ "$(cat /plan/icu)" = 1 ] || exit 0
 # The data comes already built with the release sources only, not with git
 curl -fsSL --retry 3 --connect-timeout 30 -o icu.tgz \
-	https://github.com/unicode-org/icu/releases/download/release-$ICU_VERSION/icu4c-$ICU_VERSION-sources.tgz
+    https://github.com/unicode-org/icu/releases/download/release-$ICU_VERSION/icu4c-$ICU_VERSION-sources.tgz
 tar -xzf icu.tgz
 cd icu/source
 # -Os: ICU is big, and it is only in the builds that ask for intl
 CFLAGS=-Os CXXFLAGS=-Os emconfigure ./configure --prefix=/local/install \
-	--enable-static --disable-shared --disable-dyload \
-	--disable-extras --disable-samples --disable-tests --disable-tools \
-	--with-data-packaging=archive
+    --enable-static --disable-shared --disable-dyload \
+    --disable-extras --disable-samples --disable-tests --disable-tools \
+    --with-data-packaging=archive
 emmake make -j`nproc`
 emmake make install
 
@@ -239,14 +239,14 @@ ENV LIBXML_CFLAGS="-I/local/install/include/libxml2"
 
 # intl finds ICU, and its version, with pkg-config
 RUN cd php-src && \
-	if [ "$(cat /plan/icu)" = 1 ]; then export EM_PKG_CONFIG_PATH=/local/install/lib/pkgconfig; fi && \
-	emconfigure ./configure --host=$(emcc -dumpmachine) --enable-embed=static \
-	--disable-all --without-pcre-jit --disable-fiber-asm --disable-cgi --disable-cli --disable-phpdbg \
-	$(cat /plan/configure)
+    if [ "$(cat /plan/icu)" = 1 ]; then export EM_PKG_CONFIG_PATH=/local/install/lib/pkgconfig; fi && \
+    emconfigure ./configure --host=$(emcc -dumpmachine) --enable-embed=static \
+    --disable-all --without-pcre-jit --disable-fiber-asm --disable-cgi --disable-cli --disable-phpdbg \
+    $(cat /plan/configure)
 
 RUN \
-	cd php-src && \
-	emmake make -j`nproc`
+    cd php-src && \
+    emmake make -j`nproc`
 
 # The directory to embed in the WASM filesystem is the named build context
 # "embed" (empty unless given, see docker-bake.hcl), it shows up as /$EMBED_PATH
@@ -260,7 +260,7 @@ ARG MEMORY=128mb
 # Compile WASM shim
 COPY phpw.c /local/src/phpw.c
 RUN \
-	emcc -O2 -I php-src/. -I php-src/Zend -I php-src/main -I php-src/TSRM -c phpw.c -o phpw.o
+    emcc -O2 -I php-src/. -I php-src/Zend -I php-src/main -I php-src/TSRM -c phpw.c -o phpw.o
 
 COPY --from=embed / /local/src/$EMBED_PATH
 COPY --from=resolve /plan/link /plan/link
@@ -272,18 +272,18 @@ set -eu
 mkdir -p /build
 [ -z "$EMBED_PATH" ] || mkdir -p "$EMBED_PATH"
 while read -r output environment; do
-	emcc -o /build/$output.mjs \
-	-O2 --llvm-lto 2 \
-	-s EXPORTED_FUNCTIONS='["_phpw", "_phpw_flush", "_phpw_exec", "_phpw_run", "_chdir", "_setenv", "_php_embed_init", "_php_embed_shutdown", "_zend_eval_string"]' \
-	-s EXPORTED_RUNTIME_METHODS='["ccall", "UTF8ToString", "lengthBytesUTF8", "FS"]' \
-	-s ENVIRONMENT=$environment \
-	-s MAXIMUM_MEMORY=$MEMORY -s INITIAL_MEMORY=$MEMORY -s ALLOW_MEMORY_GROWTH=0 \
-	-s ASSERTIONS=0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s MODULARIZE=1 -s INVOKE_RUN=0 -s LZ4=1 -s EXPORT_ES6=1 \
-	-s EXPORT_NAME=createPhpModule \
-	${EMBED_PATH:+--embed-file "$EMBED_PATH"} \
-	phpw.o php-src/.libs/libphp.a \
-	$(cat /plan/link) \
-	php-src/.libs/libphp.a < /dev/null
+    emcc -o /build/$output.mjs \
+    -O2 --llvm-lto 2 \
+    -s EXPORTED_FUNCTIONS='["_phpw", "_phpw_flush", "_phpw_exec", "_phpw_run", "_chdir", "_setenv", "_php_embed_init", "_php_embed_shutdown", "_zend_eval_string"]' \
+    -s EXPORTED_RUNTIME_METHODS='["ccall", "UTF8ToString", "lengthBytesUTF8", "FS"]' \
+    -s ENVIRONMENT=$environment \
+    -s MAXIMUM_MEMORY=$MEMORY -s INITIAL_MEMORY=$MEMORY -s ALLOW_MEMORY_GROWTH=0 \
+    -s ASSERTIONS=0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s MODULARIZE=1 -s INVOKE_RUN=0 -s LZ4=1 -s EXPORT_ES6=1 \
+    -s EXPORT_NAME=createPhpModule \
+    ${EMBED_PATH:+--embed-file "$EMBED_PATH"} \
+    phpw.o php-src/.libs/libphp.a \
+    $(cat /plan/link) \
+    php-src/.libs/libphp.a < /dev/null
 done < /plan/targets
 EOF
 

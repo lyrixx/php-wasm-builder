@@ -30,95 +30,95 @@
 
 int main(int argc, char **argv)
 {
-	php_embed_init(0, NULL);
+    php_embed_init(0, NULL);
 
-	zend_file_handle file_handle;
-	zend_stream_init_filename(&file_handle, argv[1]);
+    zend_file_handle file_handle;
+    zend_stream_init_filename(&file_handle, argv[1]);
 
-	if (php_execute_script(&file_handle) == false) {
-		php_printf("Failed to execute PHP script.\n");
-		return 0;
-	}
+    if (php_execute_script(&file_handle) == false) {
+        php_printf("Failed to execute PHP script.\n");
+        return 0;
+    }
 
-	php_embed_shutdown();
-	return 0;
+    php_embed_shutdown();
+    return 0;
 }
 
 void phpw_flush()
 {
-	fprintf(stdout, "\n");
-	fprintf(stderr, "\n");
+    fprintf(stdout, "\n");
+    fprintf(stderr, "\n");
 }
 
 char *EMSCRIPTEN_KEEPALIVE phpw_exec(char *code)
 {
-	setenv("USE_ZEND_ALLOC", "0", 1);
-	php_embed_init(0, NULL);
-	char *retVal = NULL;
+    setenv("USE_ZEND_ALLOC", "0", 1);
+    php_embed_init(0, NULL);
+    char *retVal = NULL;
 
-	zend_try
-	{
-		zval ret_zv;
+    zend_try
+    {
+        zval ret_zv;
 
-		zend_eval_string(code, &ret_zv, "expression");
-		convert_to_string(&ret_zv);
+        zend_eval_string(code, &ret_zv, "expression");
+        convert_to_string(&ret_zv);
 
-		retVal = Z_STRVAL(ret_zv);
-	} zend_catch {
-	} zend_end_try();
+        retVal = Z_STRVAL(ret_zv);
+    } zend_catch {
+    } zend_end_try();
 
-	phpw_flush();
-	php_embed_shutdown();
+    phpw_flush();
+    php_embed_shutdown();
 
-	return retVal;
+    return retVal;
 }
 
 void EMSCRIPTEN_KEEPALIVE phpw_run(char *code)
 {
-	setenv("USE_ZEND_ALLOC", "0", 1);
-	php_embed_init(0, NULL);
-	PG(during_request_startup) = 0;
+    setenv("USE_ZEND_ALLOC", "0", 1);
+    php_embed_init(0, NULL);
+    PG(during_request_startup) = 0;
 
-	zend_try
-	{
-		zend_eval_string(code, NULL, "script");
-		if (EG(exception)) {
-			zend_exception_error(EG(exception), E_ERROR);
-		}
-	} zend_catch {
-		/* int exit_status = EG(exit_status); */
-	} zend_end_try();
+    zend_try
+    {
+        zend_eval_string(code, NULL, "script");
+        if (EG(exception)) {
+            zend_exception_error(EG(exception), E_ERROR);
+        }
+    } zend_catch {
+        /* int exit_status = EG(exit_status); */
+    } zend_end_try();
 
-	phpw_flush();
-	php_embed_shutdown();
+    phpw_flush();
+    php_embed_shutdown();
 }
 
 int EMBED_SHUTDOWN = 1;
 
 void phpw(char *file)
 {
-	setenv("USE_ZEND_ALLOC", "0", 1);
-	if (EMBED_SHUTDOWN == 0) {
-		php_embed_shutdown();
-	}
+    setenv("USE_ZEND_ALLOC", "0", 1);
+    if (EMBED_SHUTDOWN == 0) {
+        php_embed_shutdown();
+    }
 
-	php_embed_init(0, NULL);
-	EMBED_SHUTDOWN = 0;
-	zend_first_try {
-		zend_file_handle file_handle;
-		zend_stream_init_filename(&file_handle, file);
-		// file_handle.primary_script = 1;
+    php_embed_init(0, NULL);
+    EMBED_SHUTDOWN = 0;
+    zend_first_try {
+        zend_file_handle file_handle;
+        zend_stream_init_filename(&file_handle, file);
+        // file_handle.primary_script = 1;
 
-		if (!php_execute_script(&file_handle)) {
-			php_printf("Failed to execute PHP script.\n");
-		}
+        if (!php_execute_script(&file_handle)) {
+            php_printf("Failed to execute PHP script.\n");
+        }
 
-		zend_destroy_file_handle(&file_handle);
-	} zend_catch {
-		/* int exit_status = EG(exit_status); */
-	} zend_end_try();
+        zend_destroy_file_handle(&file_handle);
+    } zend_catch {
+        /* int exit_status = EG(exit_status); */
+    } zend_end_try();
 
-	phpw_flush();
-	php_embed_shutdown();
-	EMBED_SHUTDOWN = 1;
+    phpw_flush();
+    php_embed_shutdown();
+    EMBED_SHUTDOWN = 1;
 }
