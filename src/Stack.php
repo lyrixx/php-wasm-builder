@@ -21,6 +21,7 @@ final readonly class Stack
         private ?string $php = null,
         private array $extensions = [],
         private ?string $embed = null,
+        private ?string $embedPath = null,
         private ?array $targets = null,
         private ?string $memory = null,
         private ?string $icuData = null,
@@ -54,12 +55,18 @@ final readonly class Stack
     }
 
     /**
-     * The directory to embed in the WASM filesystem (at /<its name>), relative
-     * to the root of the project: the directory of its castor.php.
+     * The directory to embed in the WASM filesystem, relative to the root of
+     * the project: the directory of its castor.php. It is at /<path> in the
+     * WASM filesystem, /<its name> by default.
      */
-    public function embed(string $directory): self
+    public function embed(string $directory, ?string $path = null): self
     {
-        return $this->with(embed: $directory);
+        // A single name: it is a directory of the build, next to the sources of PHP
+        if (null !== $path && !preg_match('/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/', $path)) {
+            throw new \InvalidArgumentException(\sprintf('"%s" is not a valid path to embed the directory at, use a name made of letters, digits, ".", "-" and "_", as "app" for /app.', $path));
+        }
+
+        return $this->with(embed: $directory, embedPath: $path);
     }
 
     public function targets(string ...$targets): self
@@ -112,6 +119,11 @@ final readonly class Stack
     public function getEmbed(): ?string
     {
         return $this->embed;
+    }
+
+    public function getEmbedPath(): ?string
+    {
+        return $this->embedPath;
     }
 
     /**

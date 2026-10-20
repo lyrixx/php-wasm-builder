@@ -26,6 +26,7 @@ final class Build
     /**
      * @param list<string> $extensions
      * @param string|null  $embed      absolute path of the directory to embed
+     * @param string|null  $embedPath  the name of the embedded directory in the WASM filesystem
      * @param list<string> $targets
      * @param string       $outputDir  absolute path of the directory the files are written to
      */
@@ -34,6 +35,7 @@ final class Build
         public readonly ?string $php,
         public readonly array $extensions,
         public readonly ?string $embed,
+        public readonly ?string $embedPath,
         public readonly array $targets,
         public readonly ?string $memory,
         public readonly ?string $icuData,
@@ -47,7 +49,7 @@ final class Build
             return $this;
         }
 
-        return new self($this->name, $this->php, $this->extensions, $this->embed, [...$this->targets, $target], $this->memory, $this->icuData, $this->outputDir);
+        return new self($this->name, $this->php, $this->extensions, $this->embed, $this->embedPath, [...$this->targets, $target], $this->memory, $this->icuData, $this->outputDir);
     }
 
     /**
@@ -91,8 +93,8 @@ final class Build
             'TARGETS' => implode(' ', $this->targets),
             'MEMORY' => $this->memory,
             'ICU_DATA' => $this->icuData,
-            // The name of the embedded directory in the WASM filesystem, none if nothing is embedded
-            'EMBED_PATH' => null === $this->embed ? '' : basename($this->embed),
+            // None if nothing is embedded
+            'EMBED_PATH' => $this->embedPath ?? '',
         ];
 
         $target = [

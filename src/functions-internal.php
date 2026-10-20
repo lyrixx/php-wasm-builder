@@ -50,6 +50,7 @@ function resolve(Stack $stack): Build
         $stack->getPhp() ?? dockerfile_default('PHP_VERSION'),
         $stack->getExtensions(),
         $embed,
+        null === $embed ? null : $stack->getEmbedPath() ?? basename($embed),
         $stack->getTargets() ?? array_keys(Build::TARGETS),
         $stack->getMemory(),
         $stack->getIcuData(),

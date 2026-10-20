@@ -223,9 +223,11 @@ no PHP is needed on the host: castor is a single binary, installed with
 A stack never changes: each method returns a new one, so a stack is derived
 from another one with ``renamed()``. ``extensions()`` adds to the extensions
 the stack already has, the other methods replace what it has. ``embed()`` is
-relative to the root of the project, the directory of ``castor.php``.
-``memory()`` and ``icuData()`` set the ``MEMORY`` and ``ICU_DATA`` build
-arguments (see `Options`_).
+relative to the root of the project, the directory of ``castor.php``, and the
+directory shows up at ``/<its name>`` in the WASM filesystem, unless
+``embed()`` is given another name (``->embed('build/dist', 'app')`` for
+``/app``). ``memory()`` and ``icuData()`` set the ``MEMORY`` and ``ICU_DATA``
+build arguments (see `Options`_).
 
 To build your own stacks with this repository as it is, declare them in a
 ``stacks.override.php`` file next to ``stacks.php``, with the same format (git
@@ -315,7 +317,8 @@ directory of your project:
             Stack::named('my-app')
                 ->php('8.5.11')
                 ->extensions('ctype', 'mbstring', 'tokenizer')
-                ->embed('dist'),    // relative to your project
+                // Relative to your project: at /app in the WASM filesystem
+                ->embed('build/dist', 'app'),
         ]);
     }
 
