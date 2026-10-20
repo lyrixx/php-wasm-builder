@@ -14,12 +14,11 @@ use function Castor\run;
 
 // What build() and the tasks of castor.php are made of. Castor never knows how
 // to compile PHP: the Dockerfile does. These functions only know how to name a
-// combination (a stack, see stacks.php) and ask the Dockerfile for it, through
+// combination (a stack, see Stack.php) and ask the Dockerfile for it, through
 // `docker buildx bake`.
 
 /**
- * The stacks of the stacks.php files: the one of this package first, then the
- * one of the project.
+ * The stacks of this repository, that the tasks of castor.php build.
  *
  * @internal
  */
@@ -27,15 +26,34 @@ function stacks(): Stacks
 {
     static $stacks;
 
-    return $stacks ??= Stacks::load(builder_root(), project_root());
+    return $stacks ??= Stacks::load(builder_root());
 }
 
 /**
+ * Turns a stack into what the Dockerfile builds, in the build/<stack>/
+ * directory of the project.
+ *
  * @internal
  */
-function resolve(string $stack): Build
+function resolve(Stack $stack): Build
 {
-    return stacks()->resolve($stack, build_dir());
+    $embed = $stack->getEmbed();
+    if (null !== $embed) {
+        $embed = Path::makeAbsolute($embed, project_root());
+        if (!is_dir($embed)) {
+            throw new \InvalidArgumentException(\sprintf('Cannot embed "%s" in the stack "%s": it is not a directory.', $embed, $stack->getName()));
+        }
+    }
+
+    return new Build(
+        $stack->getName(),
+        $stack->getPhp() ?? dockerfile_default('PHP_VERSION'),
+        $stack->getExtensions(),
+        $embed,
+        $stack->getTargets() ?? array_keys(Build::TARGETS),
+        $stack->getMemory(),
+        build_dir() . '/' . $stack->getName(),
+    );
 }
 
 /**
@@ -185,6 +203,18 @@ function check(Build $build): array
     }
 
     return $problems;
+}
+
+/**
+ * The default of a build argument, as declared by the Dockerfile.
+ *
+ * @internal
+ */
+function dockerfile_default(string $argument): ?string
+{
+    $dockerfile = (string) file_get_contents(builder_root() . '/Dockerfile');
+
+    return preg_match('/^ARG ' . preg_quote($argument, '/') . '=(\S+)/m', $dockerfile, $matches) ? trim($matches[1], '"') : null;
 }
 
 /**

@@ -175,11 +175,11 @@ Stacks, and castor
 ------------------
 
 A *stack* is a PHP version, a set of extensions, what to embed and which
-targets to build, with a name. The stacks are declared in ``stacks.php``, and
-`castor <https://castor.jolicode.com>`_ builds them with one command; castor
-only runs ``docker buildx bake`` for you, the Dockerfile is what knows how to
-compile PHP. Nobody needs castor to use this repository, and no PHP is needed
-on the host: castor is a single binary, installed with
+targets to build, with a name. The stacks of this repository are declared in
+``stacks.php``, and `castor <https://castor.jolicode.com>`_ builds them with
+one command; castor only runs ``docker buildx bake`` for you, the Dockerfile is
+what knows how to compile PHP. Nobody needs castor to use this repository, and
+no PHP is needed on the host: castor is a single binary, installed with
 ``curl "https://castor.jolicode.com/install" | bash``.
 
 .. code-block:: php
@@ -188,21 +188,28 @@ on the host: castor is a single binary, installed with
 
     use PhpWasm\Stack;
 
-    return [
-        Stack::named('default')
-            ->php('8.5.11')
-            ->extensions('calendar', 'ctype', 'dom', 'mbstring', 'simplexml', 'xml', 'xmlreader', 'xmlwriter')
-            ->embed('examples')
-            ->targets('web', 'node'),
+    $default = Stack::named('default')
+        ->php('8.5.11')
+        ->extensions('calendar', 'ctype', 'dom', 'mbstring', 'simplexml', 'xml', 'xmlreader', 'xmlwriter')
+        ->embed('examples')
+        ->targets('web', 'node');
 
-        // Inherits everything from default, and adds two extensions
-        Stack::named('default-bcmath')->from('default')->extensions('bcmath', 'tokenizer'),
+    return [
+        $default,
+
+        // Everything from default, and two more extensions
+        $default->renamed('default-bcmath')->extensions('bcmath', 'tokenizer'),
     ];
 
-A stack that inherits from another one with ``from()`` gets whatever it does
-not declare from it. The extensions it declares are added to the ones of its
-parent, the rest replaces what the parent says. ``embed()`` is relative to the
-directory of the ``stacks.php`` file.
+A stack never changes: each method returns a new one, so a stack is derived
+from another one with ``renamed()``. ``extensions()`` adds to the extensions
+the stack already has, the other methods replace what it has. ``embed()`` is
+relative to the root of the project, the directory of ``castor.php``.
+
+To build your own stacks with this repository as it is, declare them in a
+``stacks.override.php`` file next to ``stacks.php``, with the same format (git
+ignores it). Its stacks are added to the ones of ``stacks.php``, or replace the
+ones that have the same name.
 
 Everything is built in ``build/<stack>/``::
 
@@ -262,26 +269,9 @@ Dockerfile, by requiring this repository as a castor package::
 
     castor composer require lyrixx/php-wasm-builder
 
-Declare your stacks, with the same format, in a ``stacks.php`` file next to
-``castor.php``. The stacks of this repository are there to inherit from:
-
-.. code-block:: php
-
-    <?php
-    // stacks.php
-
-    use PhpWasm\Stack;
-
-    return [
-        Stack::named('my-app')
-            ->from('default')
-            ->php('8.5.11')
-            ->extensions('tokenizer', 'bcmath')
-            ->embed('dist'),    // relative to your project
-    ];
-
-Then build them from your own tasks, with ``PhpWasm\build()``. It builds them
-in the ``build/<stack>/`` directory of your project:
+Then build your stacks from your own tasks, with ``PhpWasm\build()``. Declare
+them wherever suits your project, they are built in the ``build/<stack>/``
+directory of your project:
 
 .. code-block:: php
 
@@ -289,6 +279,7 @@ in the ``build/<stack>/`` directory of your project:
     // castor.php
 
     use Castor\Attribute\AsTask;
+    use PhpWasm\Stack;
 
     use function PhpWasm\build;
 
@@ -297,18 +288,18 @@ in the ``build/<stack>/`` directory of your project:
     #[AsTask]
     function wasm(): void
     {
-        build('my-app');
+        build(
+            Stack::named('my-app')
+                ->php('8.5.11')
+                ->extensions('ctype', 'mbstring', 'tokenizer')
+                ->embed('dist'),    // relative to your project
+        );
     }
 
-Requiring the package does not add any task to your project. To get the ones
-of this repository too (``castor wasm:build my-app``, ``castor wasm:run``,
-``castor wasm:test``…), import it in your ``castor.php``:
-
-.. code-block:: php
-
-    use function Castor\import;
-
-    import('composer://lyrixx/php-wasm-builder');
+Several stacks given at once are built in a single buildx invocation: in
+parallel, and sharing the layers they have in common. Requiring the package
+does not add any task to your project: the tasks of this repository build its
+own stacks.
 
 Credits
 -------
