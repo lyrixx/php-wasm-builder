@@ -44,7 +44,7 @@ jobs:
       - uses: castor-php/setup-castor@v1
 
       - id: stacks
-        run: echo "stacks=$(castor --no-ansi stacks --json)" >> "$GITHUB_OUTPUT"
+        run: echo "stacks=$(castor --no-ansi wasm:stacks --json)" >> "$GITHUB_OUTPUT"
 
   build:
     needs: stacks
@@ -76,7 +76,7 @@ jobs:
         env:
           STACK: ${{ matrix.stack }}
         run: |
-          castor test "$STACK" \
+          castor wasm:test "$STACK" \
             --set "*.cache-from=type=gha,scope=$STACK" \
             --set "*.cache-to=type=gha,scope=$STACK,mode=max,ignore-error=true"
 
@@ -116,7 +116,7 @@ jobs:
             echo '### Sizes'
             echo
             echo '```'
-            castor --no-ansi sizes
+            castor --no-ansi wasm:sizes
             echo '```'
           } | tee "$RUNNER_TEMP/sizes.md" >> "$GITHUB_STEP_SUMMARY"
 

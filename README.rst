@@ -121,8 +121,8 @@ it: the ``.wasm`` file is about 33 MB bigger (14 MB gzipped), and the data
 takes 32 MB of the memory of the module. The ``intl`` stack has 32 MB more
 memory than php.net for that::
 
-	castor build intl
-	castor run -r 'echo (new NumberFormatter("fr_FR", NumberFormatter::CURRENCY))->formatCurrency(1234.5, "EUR");' --stack intl
+	castor wasm:build intl
+	castor wasm:run -r 'echo (new NumberFormatter("fr_FR", NumberFormatter::CURRENCY))->formatCurrency(1234.5, "EUR");' --stack intl
 
 Limitations
 -----------
@@ -165,25 +165,25 @@ directory of the ``stacks.php`` file.
 
 Everything is built in ``build/<stack>/``::
 
-	castor stacks                         # lists the stacks
-	castor build                          # builds the php.net stack
-	castor build playground               # builds another one
-	castor build --all                    # builds all of them, in one buildx invocation
-	castor test                           # builds them all, and checks them
-	castor sizes                          # compares the size of the .wasm files with php.net's
-	castor run demo/phpinfo.php           # runs a file, with the php.net stack
-	castor run -r 'echo PHP_VERSION;' --stack playground
+	castor wasm:stacks                         # lists the stacks
+	castor wasm:build                          # builds the php.net stack
+	castor wasm:build playground               # builds another one
+	castor wasm:build --all                    # builds all of them, in one buildx invocation
+	castor wasm:test                           # builds them all, and checks them
+	castor wasm:sizes                          # compares the size of the .wasm files with php.net's
+	castor wasm:run demo/phpinfo.php           # runs a file, with the php.net stack
+	castor wasm:run -r 'echo PHP_VERSION;' --stack playground
 
 Anything in a stack can be overridden from the command line, so there is no
 need to declare a stack to try something::
 
-	castor build --php 8.3.35                      # the php.net stack, on PHP 8.3
-	castor build playground --target node          # only the node target
-	castor build --with tokenizer --with bcmath    # php.net, and two more extensions
-	castor build --memory 256mb --embed my-app     # more memory, another directory to embed
-	castor build --print                           # only shows the bake file
+	castor wasm:build --php 8.3.35                      # the php.net stack, on PHP 8.3
+	castor wasm:build playground --target node          # only the node target
+	castor wasm:build --with tokenizer --with bcmath    # php.net, and two more extensions
+	castor wasm:build --memory 256mb --embed my-app     # more memory, another directory to embed
+	castor wasm:build --print                           # only shows the bake file
 
-``castor test`` is what tells that a stack works: once built, it runs each
+``castor wasm:test`` is what tells that a stack works: once built, it runs each
 stack in node, and checks that ``PHP_VERSION`` is the one that was asked for,
 and that ``extension_loaded()`` is true for every extension that was asked for.
 
@@ -226,11 +226,9 @@ to ``castor.php``. The stacks of this repository are there to inherit from:
 	        ->embed('dist'),    // relative to your project
 	];
 
-``castor build my-app`` then builds it in the ``build/my-app/`` directory of
-your project. Use ``mount('composer://lyrixx/php-wasm-builder', 'wasm')``
-instead of ``import()`` to get the tasks under a ``wasm:`` prefix
-(``castor wasm:build``), if ``build``, ``run`` or ``test`` are already tasks of
-your project.
+``castor wasm:build my-app`` then builds it in the ``build/my-app/`` directory of
+your project. The tasks are under a ``wasm:`` prefix, so they do not collide
+with the ones of your project.
 
 Credits
 -------

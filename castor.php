@@ -42,7 +42,7 @@ spl_autoload_register(static function (string $class): void {
     }
 });
 
-#[AsTask(name: 'build', namespace: '', description: 'Builds a stack: php.net when none is given')]
+#[AsTask(name: 'build', namespace: 'wasm', description: 'Builds a stack: php.net when none is given')]
 function build(
     #[AsArgument(description: 'The stack to build', autocomplete: 'PhpWasm\complete_stacks')]
     ?string $stack = null,
@@ -103,7 +103,7 @@ function build(
     return 0;
 }
 
-#[AsTask(name: 'stacks', namespace: '', description: 'Lists the stacks')]
+#[AsTask(name: 'stacks', namespace: 'wasm', description: 'Lists the stacks')]
 function list_stacks(
     #[AsOption(description: 'Only print their names, as JSON (the CI builds one stack per job)')]
     bool $json = false,
@@ -123,7 +123,7 @@ function list_stacks(
     io()->table(['Stack', 'PHP', 'Extensions', 'Targets'], $rows);
 }
 
-#[AsTask(name: 'sizes', namespace: '', description: 'Compares the size of what is built with the php.net stack')]
+#[AsTask(name: 'sizes', namespace: 'wasm', description: 'Compares the size of what is built with the php.net stack')]
 function sizes(): void
 {
     $size = static fn (string $stack, string $file): ?int => is_file($path = build_dir() . '/' . $stack . '/' . $file) ? (int) filesize($path) : null;
@@ -149,7 +149,7 @@ function sizes(): void
     }
 
     if ([] === $rows) {
-        io()->warning('Nothing is built yet, run "castor build".');
+        io()->warning('Nothing is built yet, run "castor wasm:build".');
 
         return;
     }
@@ -157,7 +157,7 @@ function sizes(): void
     io()->table(['Stack', 'File', 'Size', 'vs ' . Stacks::DEFAULT], $rows);
 }
 
-#[AsTask(name: 'run', namespace: '', description: 'Runs a PHP file, or some code with -r, in a built stack (node target)')]
+#[AsTask(name: 'run', namespace: 'wasm', description: 'Runs a PHP file, or some code with -r, in a built stack (node target)')]
 function wasm_run(
     #[AsArgument(description: 'The PHP file to run')]
     ?string $file = null,
@@ -175,7 +175,7 @@ function wasm_run(
     return node(registry()->resolve($stack, build_dir()), $arguments)->getExitCode() ?? 1;
 }
 
-#[AsTask(name: 'test', namespace: '', description: 'Builds the stacks, then checks from node that each has the right PHP version and its extensions')]
+#[AsTask(name: 'test', namespace: 'wasm', description: 'Builds the stacks, then checks from node that each has the right PHP version and its extensions')]
 function test(
     #[AsArgument(description: 'The stacks to test, all by default', autocomplete: 'PhpWasm\complete_stacks')]
     array $stacks = [],
@@ -315,7 +315,7 @@ function bake(array $builds, string $bakeFile, array $set = []): void
 function node(Build $build, array $arguments): \Symfony\Component\Process\Process
 {
     if (!is_file($runner = $build->artifact('node', 'mjs'))) {
-        throw new \RuntimeException(\sprintf('"%s" does not exist: build the stack with the node target first ("castor build %s").', relative($runner), $build->name));
+        throw new \RuntimeException(\sprintf('"%s" does not exist: build the stack with the node target first ("castor wasm:build %s").', relative($runner), $build->name));
     }
 
     // No pty: the output of PHP must not be altered, it may go through a pipe
