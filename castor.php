@@ -7,18 +7,16 @@ use Castor\Attribute\AsOption;
 use Castor\Attribute\AsTask;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Filesystem\Path;
 
 use function Castor\import;
 use function Castor\io;
 use function Castor\notify;
 
-// The wasm:* tasks. A project that requires this package only gets build(),
-// see src/functions.php, it gets the tasks too with:
-//
-//     import('composer://lyrixx/php-wasm-builder');
-//
-// The tasks then build the stacks of both stacks.php files, in the build/
-// directory of the project.
+// The wasm:* tasks, that build the stacks of stacks.php, and of
+// stacks.override.php when there is one (it is not versioned: the stacks of
+// whoever uses this repository as it is). A project that requires this package
+// only gets build(), see src/functions.php.
 
 defined('CASTOR_USE_CHDIR') || define('CASTOR_USE_CHDIR', false);
 
@@ -49,9 +47,24 @@ function build_task(
             throw new \InvalidArgumentException('--all builds every stack as declared, it can not be combined with a stack or with overrides.');
         }
 
-        $builds = array_map(resolve(...), stacks()->names());
+        $builds = array_map(resolve(...), stacks()->all());
     } else {
-        $builds = [stacks()->resolve($stack ?? Stacks::DEFAULT, build_dir(), php: $php, with: $with, targets: $target, memory: $memory, embed: $embed)];
+        $selected = stacks()->get($stack ?? Stacks::DEFAULT)->extensions(...$with);
+        if (null !== $php) {
+            $selected = $selected->php($php);
+        }
+        if ([] !== $target) {
+            $selected = $selected->targets(...$target);
+        }
+        if (null !== $memory) {
+            $selected = $selected->memory($memory);
+        }
+        if (null !== $embed) {
+            // It comes from the command line: relative to where the command is run
+            $selected = $selected->embed(Path::makeAbsolute($embed, getcwd() ?: project_root()));
+        }
+
+        $builds = [resolve($selected)];
     }
 
     if ($print) {
@@ -87,12 +100,17 @@ function stacks_task(
     }
 
     $rows = [];
-    foreach (stacks()->names() as $name) {
-        $stack = stacks()->describe($name);
-        $rows[] = [$name, $stack['php'], $stack['extensions'], $stack['targets']];
+    foreach (array_map(resolve(...), stacks()->all()) as $build) {
+        $rows[] = [
+            $build->name,
+            $build->php ?? '-',
+            wordwrap(implode(' ', $build->extensions), 44) ?: '-',
+            $build->memory ?? dockerfile_default('MEMORY') ?? '-',
+            implode(' ', $build->targets),
+        ];
     }
 
-    io()->table(['Stack', 'PHP', 'Extensions', 'Targets'], $rows);
+    io()->table(['Stack', 'PHP', 'Extensions', 'Memory', 'Targets'], $rows);
 }
 
 #[AsTask(name: 'sizes', namespace: 'wasm', description: 'Compares the size of what is built with the default stack')]
@@ -144,7 +162,7 @@ function run_task(
 
     $arguments = null !== $code ? ['-r', $code] : [is_file($file) ? realpath($file) : throw new \InvalidArgumentException(\sprintf('The file "%s" does not exist.', $file))];
 
-    return node(resolve($stack), $arguments)->getExitCode() ?? 1;
+    return node(resolve(stacks()->get($stack)), $arguments)->getExitCode() ?? 1;
 }
 
 #[AsTask(name: 'test', namespace: 'wasm', description: 'Builds the stacks, then checks from node that each has the right PHP version and its extensions')]
@@ -156,16 +174,15 @@ function test_task(
     #[AsOption(description: 'Override a value of the bake file, as "docker buildx bake --set" does (the CI gives the cache this way), can be repeated', mode: InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY)]
     array $set = [],
 ): int {
-    $names = [] !== $stacks ? $stacks : stacks()->names();
+    $builds = array_map(resolve(...), [] !== $stacks ? array_map(stacks()->get(...), $stacks) : stacks()->all());
 
     if (!$noBuild) {
         // The checks run on node, so every stack needs that target
-        bake(array_map(static fn (string $name): Build => resolve($name)->withTarget('node'), $names), $set);
+        bake(array_map(static fn (Build $build): Build => $build->withTarget('node'), $builds), $set);
     }
 
     $failed = 0;
-    foreach ($names as $name) {
-        $build = resolve($name);
+    foreach ($builds as $build) {
         $problems = check($build);
 
         if ([] === $problems) {
@@ -179,12 +196,12 @@ function test_task(
     }
 
     if ($failed > 0) {
-        io()->error(\sprintf('%d of %d stacks are broken.', $failed, \count($names)));
+        io()->error(\sprintf('%d of %d stacks are broken.', $failed, \count($builds)));
 
         return 1;
     }
 
-    io()->success(\sprintf('%d stacks work.', \count($names)));
+    io()->success(\sprintf('%d stacks work.', \count($builds)));
 
     return 0;
 }

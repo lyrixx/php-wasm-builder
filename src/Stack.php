@@ -6,103 +6,80 @@ namespace PhpWasm;
  * A named, declarative combination: a PHP version, a set of extensions, what to
  * embed and which targets to build.
  *
- * A stack can inherit from another one with from(): whatever it does not
- * declare comes from its parent, the extensions it declares are added to the
- * parent's, and anything else it declares replaces the parent's.
+ * A stack never changes: each method returns a new one, so a stack is derived
+ * from another one by renaming it. The extensions it is given are added to the
+ * ones it already has, anything else replaces what it has.
  */
-final class Stack
+final readonly class Stack
 {
-    private ?string $parent = null;
-    private ?string $php = null;
-    /** @var list<string> */
-    private array $extensions = [];
-    private ?string $embed = null;
-    /** @var list<string>|null */
-    private ?array $targets = null;
-    private ?string $memory = null;
-    private ?string $directory = null;
-
-    private function __construct(private readonly string $name)
-    {
+    /**
+     * @param list<string>      $extensions
+     * @param list<string>|null $targets
+     */
+    private function __construct(
+        private string $name,
+        private ?string $php = null,
+        private array $extensions = [],
+        private ?string $embed = null,
+        private ?array $targets = null,
+        private ?string $memory = null,
+    ) {
     }
 
     public static function named(string $name): self
     {
-        // The name is used as a directory name, and (once cleaned up) as a bake target name
-        if (!preg_match('/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/', $name)) {
-            throw new \InvalidArgumentException(\sprintf('"%s" is not a valid stack name, use letters, digits, ".", "-" and "_".', $name));
-        }
-
-        return new self($name);
+        return new self(self::validName($name));
     }
 
-    public function from(string $parent): self
+    /**
+     * The same stack, under another name: how a stack is derived from this one.
+     */
+    public function renamed(string $name): self
     {
-        $this->parent = $parent;
-
-        return $this;
+        return $this->with(name: self::validName($name));
     }
 
     public function php(string $version): self
     {
-        $this->php = $version;
-
-        return $this;
+        return $this->with(php: $version);
     }
 
     /**
-     * Extensions to build, in addition to the ones of the parent stack.
+     * Extensions to build, in addition to the ones the stack already has.
      */
     public function extensions(string ...$extensions): self
     {
-        $this->extensions = array_values(array_unique([...$this->extensions, ...$extensions]));
-
-        return $this;
+        return $this->with(extensions: array_values(array_unique([...$this->extensions, ...$extensions])));
     }
 
     /**
      * The directory to embed in the WASM filesystem (at /<its name>), relative
-     * to the directory of the stacks.php file that declares the stack.
+     * to the root of the project: the directory of its castor.php.
      */
     public function embed(string $directory): self
     {
-        $this->embed = $directory;
-
-        return $this;
+        return $this->with(embed: $directory);
     }
 
     public function targets(string ...$targets): self
     {
-        $this->targets = array_values(array_unique($targets));
+        foreach ($targets as $target) {
+            if (!isset(Build::TARGETS[$target])) {
+                throw new \InvalidArgumentException(\sprintf('Unknown target "%s", the targets are: %s.', $target, implode(', ', array_keys(Build::TARGETS))));
+            }
+        }
 
-        return $this;
+        return $this->with(targets: array_values(array_unique($targets)));
     }
 
     public function memory(string $memory): self
     {
-        $this->memory = $memory;
-
-        return $this;
-    }
-
-    /**
-     * @internal Called when the stacks.php file that declares the stack is loaded
-     */
-    public function definedIn(string $directory): self
-    {
-        $this->directory = $directory;
-
-        return $this;
+        return $this->with(memory: $memory);
     }
 
     public function getName(): string
     {
         return $this->name;
-    }
-
-    public function getParent(): ?string
-    {
-        return $this->parent;
     }
 
     public function getPhp(): ?string
@@ -111,7 +88,7 @@ final class Stack
     }
 
     /**
-     * @return list<string> the extensions declared by this stack only
+     * @return list<string>
      */
     public function getExtensions(): array
     {
@@ -136,8 +113,18 @@ final class Stack
         return $this->memory;
     }
 
-    public function getDirectory(): ?string
+    private function with(mixed ...$changes): self
     {
-        return $this->directory;
+        return new self(...[...get_object_vars($this), ...$changes]);
+    }
+
+    private static function validName(string $name): string
+    {
+        // The name is used as a directory name, and (once cleaned up) as a bake target name
+        if (!preg_match('/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/', $name)) {
+            throw new \InvalidArgumentException(\sprintf('"%s" is not a valid stack name, use letters, digits, ".", "-" and "_".', $name));
+        }
+
+        return $name;
     }
 }
