@@ -13,10 +13,10 @@ and ``.mjs`` files for the web then need to be copied to
 https://github.com/php/web-php.git/js (as ``php-web.wasm`` and
 ``php-web.mjs``)
 
-By default, this will build PHP 8.4.4, but you can override this by setting an
+By default, this will build PHP 8.4.26, but you can override this by setting an
 argument::
 
-	docker buildx bake --set default.args.PHP_VERSION=8.3.16
+	docker buildx bake --set default.args.PHP_VERSION=8.3.35
 
 The extensions are an argument too, so you can build PHP with other ones (see
 `Supported Extensions`_)::

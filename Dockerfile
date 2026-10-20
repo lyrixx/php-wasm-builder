@@ -16,6 +16,7 @@
 # depends on what changed.
 
 FROM debian:bookworm AS resolve
+# Keep in sync with the php.net stack, in stacks.php
 ARG EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter"
 ARG TARGETS="web node"
 COPY <<'EOF' /resolve.sh
@@ -138,7 +139,8 @@ RUN mkdir -p /local/install
 
 # Download PHP and Set-Up Configure
 FROM base AS php-src
-ARG PHP_VERSION=8.4.4
+# Keep in sync with the php.net stack, in stacks.php
+ARG PHP_VERSION=8.4.26
 RUN \
 	git clone https://github.com/php/php-src.git php-src --branch php-$PHP_VERSION --single-branch --depth 1 && \
 	cd php-src && \
