@@ -170,7 +170,7 @@ libxml2, which ``./configure`` flags PHP needs to link and which ``emcc``
 flags make it load. Any PHP project can reuse that, instead of copying the
 Dockerfile, by importing this repository as a castor package::
 
-	castor composer require derickr/php-wasm-builder
+	castor composer require lyrixx/php-wasm-builder
 
 .. code-block:: php
 
@@ -181,7 +181,7 @@ Dockerfile, by importing this repository as a castor package::
 
 	defined('CASTOR_USE_CHDIR') || define('CASTOR_USE_CHDIR', false);
 
-	import('composer://derickr/php-wasm-builder');
+	import('composer://lyrixx/php-wasm-builder');
 
 Then declare your stacks, with the same format, in a ``stacks.php`` file next
 to ``castor.php``. The stacks of this repository are there to inherit from:
@@ -202,7 +202,7 @@ to ``castor.php``. The stacks of this repository are there to inherit from:
 	];
 
 ``castor build my-app`` then builds it in the ``build/my-app/`` directory of
-your project. Use ``mount('composer://derickr/php-wasm-builder', 'wasm')``
+your project. Use ``mount('composer://lyrixx/php-wasm-builder', 'wasm')``
 instead of ``import()`` to get the tasks under a ``wasm:`` prefix
 (``castor wasm:build``), if ``build``, ``run`` or ``test`` are already tasks of
 your project.
