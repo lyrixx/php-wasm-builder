@@ -22,4 +22,12 @@ return [
         ->extensions('tokenizer', 'bcmath', 'filter')
         ->memory('256mb')
         ->embed('playground/app'),
+
+    // intl, with all of ICU's data linked in the .wasm file. The data takes
+    // 32 MB of the memory: this leaves PHP as much of it as php.net has.
+    Stack::named('intl')
+        ->from('php.net')
+        ->php('8.5.11')
+        ->extensions('intl')
+        ->memory('160mb'),
 ];
