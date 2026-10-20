@@ -9,12 +9,16 @@ namespace PhpWasm;
  * built in a single buildx invocation: in parallel, and sharing the layers they
  * have in common.
  *
+ * @param list<Stack>  $stacks
+ * @param list<string> $set    overrides, given to "docker buildx bake --set",
+ *                             for example "*.cache-from=type=gha" for a cache
+ *
  * @return list<Build>
  */
-function build(Stack ...$stacks): array
+function build(array $stacks, array $set = []): array
 {
     $builds = array_map(resolve(...), array_values($stacks));
-    bake($builds);
+    bake($builds, $set);
 
     return $builds;
 }

@@ -39,11 +39,13 @@ function build_task(
     ?string $memory = null,
     #[AsOption(description: 'Override the directory to embed')]
     ?string $embed = null,
+    #[AsOption(description: 'Override the ICU data of intl: all or none', autocomplete: Build::ICU_DATA)]
+    ?string $icuData = null,
     #[AsOption(description: 'Print the bake file instead of building')]
     bool $print = false,
 ): int {
     if ($all) {
-        if (null !== $stack || null !== $php || [] !== $with || [] !== $target || null !== $memory || null !== $embed) {
+        if (null !== $stack || null !== $php || [] !== $with || [] !== $target || null !== $memory || null !== $embed || null !== $icuData) {
             throw new \InvalidArgumentException('--all builds every stack as declared, it can not be combined with a stack or with overrides.');
         }
 
@@ -62,6 +64,9 @@ function build_task(
         if (null !== $embed) {
             // It comes from the command line: relative to where the command is run
             $selected = $selected->embed(Path::makeAbsolute($embed, getcwd() ?: project_root()));
+        }
+        if (null !== $icuData) {
+            $selected = $selected->icuData($icuData);
         }
 
         $builds = [resolve($selected)];
@@ -106,32 +111,34 @@ function stacks_task(
             $build->php ?? '-',
             wordwrap(implode(' ', $build->extensions), 44) ?: '-',
             $build->memory ?? dockerfile_default('MEMORY') ?? '-',
+            \in_array('intl', $build->extensions, true) ? $build->icuData ?? dockerfile_default('ICU_DATA') ?? '-' : '-',
             implode(' ', $build->targets),
         ];
     }
 
-    io()->table(['Stack', 'PHP', 'Extensions', 'Memory', 'Targets'], $rows);
+    io()->table(['Stack', 'PHP', 'Extensions', 'Memory', 'ICU data', 'Targets'], $rows);
 }
 
 #[AsTask(name: 'sizes', namespace: 'wasm', description: 'Compares the size of what is built with the default stack')]
 function sizes_task(): void
 {
-    $size = static fn (string $stack, string $file): ?int => is_file($path = build_dir() . '/' . $stack . '/' . $file) ? (int) filesize($path) : null;
+    $size = static fn (Build $build, string $target): ?int => is_file($path = $build->artifact($target, 'wasm')) ? (int) filesize($path) : null;
+    $default = resolve(stacks()->get(Stacks::DEFAULT));
 
     $rows = [];
-    foreach (stacks()->names() as $name) {
+    foreach (array_map(resolve(...), stacks()->all()) as $build) {
         // The web build is the one that matters, and the one everybody has
-        foreach (['php-web.wasm', 'php-cli.wasm'] as $file) {
-            if (null === $bytes = $size($name, $file)) {
+        foreach (['web', 'node'] as $target) {
+            if (null === $bytes = $size($build, $target)) {
                 continue;
             }
 
-            $reference = $size(Stacks::DEFAULT, $file);
+            $reference = $size($default, $target);
             $rows[] = [
-                $name,
-                $file,
+                $build->name,
+                basename($build->artifact($target, 'wasm')),
                 \sprintf('%.1f MB', $bytes / 1024 / 1024),
-                Stacks::DEFAULT === $name ? '-' : (null === $reference ? 'n/a' : \sprintf('%+.1f %%', ($bytes / $reference - 1) * 100)),
+                Stacks::DEFAULT === $build->name ? '-' : (null === $reference ? 'n/a' : \sprintf('%+.1f %%', ($bytes / $reference - 1) * 100)),
             ];
 
             break;

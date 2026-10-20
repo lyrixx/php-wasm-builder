@@ -73,10 +73,16 @@ char *EMSCRIPTEN_KEEPALIVE phpw_exec(char *code)
     return retVal;
 }
 
-void EMSCRIPTEN_KEEPALIVE phpw_run(char *code)
+/*
+ * Returns the exit status of the code: the one given to exit(), 255 on a fatal
+ * error or an uncaught exception, 0 otherwise.
+ */
+int EMSCRIPTEN_KEEPALIVE phpw_run(char *code)
 {
     setenv("USE_ZEND_ALLOC", "0", 1);
     php_embed_init(0, NULL);
+    /* Not reset by php_embed_init(), it would keep the status of a previous call */
+    EG(exit_status) = 0;
     PG(during_request_startup) = 0;
 
     zend_try
@@ -85,17 +91,21 @@ void EMSCRIPTEN_KEEPALIVE phpw_run(char *code)
         if (EG(exception)) {
             zend_exception_error(EG(exception), E_ERROR);
         }
-    } zend_catch {
-        /* int exit_status = EG(exit_status); */
     } zend_end_try();
 
+    int exit_status = EG(exit_status);
     phpw_flush();
     php_embed_shutdown();
+
+    return exit_status;
 }
 
 int EMBED_SHUTDOWN = 1;
 
-void phpw(char *file)
+/*
+ * Runs a PHP file, and returns its exit status, as phpw_run() does.
+ */
+int phpw(char *file)
 {
     setenv("USE_ZEND_ALLOC", "0", 1);
     if (EMBED_SHUTDOWN == 0) {
@@ -103,6 +113,7 @@ void phpw(char *file)
     }
 
     php_embed_init(0, NULL);
+    EG(exit_status) = 0;
     EMBED_SHUTDOWN = 0;
     zend_first_try {
         zend_file_handle file_handle;
@@ -114,11 +125,12 @@ void phpw(char *file)
         }
 
         zend_destroy_file_handle(&file_handle);
-    } zend_catch {
-        /* int exit_status = EG(exit_status); */
     } zend_end_try();
 
+    int exit_status = EG(exit_status);
     phpw_flush();
     php_embed_shutdown();
     EMBED_SHUTDOWN = 1;
+
+    return exit_status;
 }

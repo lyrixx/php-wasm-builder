@@ -23,6 +23,7 @@ FROM emscripten/emsdk:$EMSDK_VERSION AS resolve
 # Keep in sync with the default stack, in stacks.php
 ARG EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter"
 ARG TARGETS="web node"
+ARG ICU_DATA=all
 COPY <<'EOF' /resolve.sh
 set -eu
 mkdir -p /plan
@@ -73,6 +74,12 @@ for extension in $EXTENSIONS; do
     has "$known" "$extension" || { echo "Unknown extension '$extension', supported extensions:$known" >&2; exit 1; }
 done
 
+# Keep in sync with Build::ICU_DATA, in src/Build.php
+case $ICU_DATA in
+    all|none) ;;
+    *) echo "Unknown ICU data '$ICU_DATA', supported values: all none" >&2; exit 1 ;;
+esac
+
 link=""
 libxml2=0
 oniguruma=0
@@ -88,9 +95,15 @@ if has "$libs" oniguruma; then
 fi
 if has "$libs" icu; then
     icu=1
+    # The icu stage builds both, only the link depends on ICU_DATA: libicudata.a
+    # is the empty stub that ICU installs
+    icudata=/local/install/lib/libicudata.a
+    if [ "$ICU_DATA" = all ]; then
+        icudata=/local/install/lib/libicudata-all.a
+    fi
     # ICU and intl are C++: DEFAULT_TO_CXX links the C++ standard library,
     # as em++ would
-    link="$link /local/install/lib/libicui18n.a /local/install/lib/libicuio.a /local/install/lib/libicuuc.a /local/install/lib/libicudata.a -sDEFAULT_TO_CXX"
+    link="$link /local/install/lib/libicui18n.a /local/install/lib/libicuio.a /local/install/lib/libicuuc.a $icudata -sDEFAULT_TO_CXX"
 fi
 
 # targets: <output file name> <emscripten environment>
@@ -193,8 +206,9 @@ emmake make install
 
 # ICU finds its data through a single symbol, icudt<major>_dat, of which
 # libicudata.a only has an empty stub (the data tools are not built for
-# WASM). The sources come with the data, already built: link that instead, so
-# that it is in the .wasm file, and there is no file to load.
+# WASM). The sources come with the data, already built: libicudata-all.a has
+# it, to link instead of the stub when ICU_DATA is "all", so that the data is
+# in the .wasm file, and there is no file to load.
 major=${ICU_VERSION%%.*}
 test -s data/in/icudt${major}l.dat
 cat > icudata.c <<C
@@ -205,8 +219,7 @@ alignas(16) const unsigned char icudt${major}_dat[] = {
 };
 C
 emcc -std=c23 -c icudata.c -o icudata.o
-rm /local/install/lib/libicudata.a
-emar rcs /local/install/lib/libicudata.a icudata.o
+emar rcs /local/install/lib/libicudata-all.a icudata.o
 EOF
 
 # Configure and compile PHP
@@ -258,11 +271,11 @@ mkdir -p /build
 [ -z "$EMBED_PATH" ] || mkdir -p "$EMBED_PATH"
 while read -r output environment; do
     emcc -o /build/$output.mjs \
-    -O2 --llvm-lto 2 \
+    -O2 \
     -s EXPORTED_FUNCTIONS='["_phpw", "_phpw_flush", "_phpw_exec", "_phpw_run", "_chdir", "_setenv", "_php_embed_init", "_php_embed_shutdown", "_zend_eval_string"]' \
     -s EXPORTED_RUNTIME_METHODS='["ccall", "UTF8ToString", "lengthBytesUTF8", "FS"]' \
     -s ENVIRONMENT=$environment \
-    -s MAXIMUM_MEMORY=$MEMORY -s INITIAL_MEMORY=$MEMORY -s ALLOW_MEMORY_GROWTH=0 \
+    -s INITIAL_MEMORY=$MEMORY -s ALLOW_MEMORY_GROWTH=0 \
     -s ASSERTIONS=0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s MODULARIZE=1 -s INVOKE_RUN=0 -s LZ4=1 -s EXPORT_ES6=1 \
     -s EXPORT_NAME=createPhpModule \
     ${EMBED_PATH:+--embed-file "$EMBED_PATH"} \

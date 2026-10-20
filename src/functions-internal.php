@@ -31,7 +31,7 @@ function stacks(): Stacks
 
 /**
  * Turns a stack into what the Dockerfile builds, in the build/<stack>/
- * directory of the project.
+ * directory of the project unless the stack has its own.
  *
  * @internal
  */
@@ -45,14 +45,18 @@ function resolve(Stack $stack): Build
         }
     }
 
+    $outputDir = $stack->getOutputDir();
+
     return new Build(
         $stack->getName(),
         $stack->getPhp() ?? dockerfile_default('PHP_VERSION'),
         $stack->getExtensions(),
         $embed,
+        null === $embed ? null : $stack->getEmbedPath() ?? basename($embed),
         $stack->getTargets() ?? array_keys(Build::TARGETS),
         $stack->getMemory(),
-        build_dir() . '/' . $stack->getName(),
+        $stack->getIcuData(),
+        null === $outputDir ? build_dir() . '/' . $stack->getName() : Path::makeAbsolute($outputDir, project_root()),
     );
 }
 
@@ -66,7 +70,8 @@ function resolve(Stack $stack): Build
  */
 function bake(array $builds, array $set = []): void
 {
-    $bakeFile = 1 === \count($builds) ? $builds[0]->outputDir . '/bake.json' : build_dir() . '/bake.json';
+    // Not next to what is built: that may be a public directory
+    $bakeFile = build_dir() . '/bake.json';
     fs()->dumpFile($bakeFile, bake_definition($builds) . "\n");
 
     $command = ['docker', 'buildx', 'bake', '-f', $bakeFile];
@@ -82,6 +87,8 @@ function bake(array $builds, array $set = []): void
         $command[] = '--allow=fs.read=' . $read;
     }
     foreach ($builds as $build) {
+        // Or buildx asks to write to its parent
+        fs()->mkdir($build->outputDir);
         $command[] = '--allow=fs.write=' . $build->outputDir;
     }
 
@@ -89,6 +96,9 @@ function bake(array $builds, array $set = []): void
     run($command);
 
     foreach ($builds as $build) {
+        // buildx gives it 0700, a web server or GitHub Pages could not read it
+        fs()->chmod($build->outputDir, 0o777, umask());
+
         // The output directory is only ever added to: forget about the targets that are not built anymore
         foreach (Build::TARGETS as $name => $file) {
             if (!\in_array($name, $build->targets, true)) {
@@ -106,10 +116,17 @@ function bake(array $builds, array $set = []): void
 function bake_definition(array $builds): string
 {
     $targets = [];
+    $outputDirs = [];
     foreach ($builds as $build) {
         if (isset($targets[$build->bakeName()])) {
             throw new \LogicException(\sprintf('The stack "%s" has the same name as another one, once cleaned up for buildx ("%s").', $build->name, $build->bakeName()));
         }
+        // They would write the same files
+        if (isset($outputDirs[$build->outputDir])) {
+            throw new \InvalidArgumentException(\sprintf('The stacks "%s" and "%s" are built in the same directory, "%s".', $outputDirs[$build->outputDir], $build->name, relative($build->outputDir)));
+        }
+
+        $outputDirs[$build->outputDir] = $build->name;
 
         $targets[$build->bakeName()] = $build->bakeTarget(builder_root());
     }
@@ -141,14 +158,26 @@ function node(Build $build, array $arguments): Process
 }
 
 /**
- * What has to be true for an extension to work, when extension_loaded() is not
- * enough: intl loads without ICU's data, then it only knows locale codes.
+ * What has to be true for the extensions of a stack to work, when
+ * extension_loaded() is not enough: intl loads without ICU's data, then it only
+ * knows locale codes.
+ *
+ * @return array<string, string> PHP expressions, by extension
  *
  * @internal
  */
-const CHECKS = [
-    'intl' => 'Locale::getDisplayLanguage("fr", "en") === "French"',
-];
+function checks(Build $build): array
+{
+    $checks = [];
+    if (\in_array('intl', $build->extensions, true)) {
+        $checks['intl'] = 'none' === $build->icuData
+            // What does not need the data works, and the data is not there
+            ? 'Normalizer::normalize("e\u{301}") === "\u{e9}" && Locale::getDisplayLanguage("fr", "en") === "fr"'
+            : 'Locale::getDisplayLanguage("fr", "en") === "French"';
+    }
+
+    return $checks;
+}
 
 /**
  * Checks from node that a built stack has the PHP version and the extensions
@@ -164,7 +193,7 @@ function check(Build $build): array
         return [\sprintf('"%s" does not exist', relative($runner))];
     }
 
-    $checks = array_intersect_key(CHECKS, array_flip($build->extensions));
+    $checks = checks($build);
     $works = array_map(
         static fn (string $extension, string $check): string => \sprintf('%1$s => extension_loaded(%1$s) && %2$s', var_export($extension, true), $check),
         array_keys($checks),
