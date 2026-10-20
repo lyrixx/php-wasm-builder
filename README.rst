@@ -11,7 +11,11 @@ builder is developed now (see `Credits`_). Its default build, the ``php.net``
 stack, is still what php.net ships: the same extensions, built with the same
 flags.
 
-You can build it by running the following command::
+Only Docker is needed to build it, and node to run what is built. `castor
+<https://castor.jolicode.com>`_ makes it simpler: named stacks, and tasks to
+build, run and test them, see `Stacks, and castor`_.
+
+Build it with::
 
 	docker buildx bake
 
@@ -20,15 +24,35 @@ The files then end up in the ``build/php.net/`` directory. For php.net, the
 https://github.com/php/web-php.git/js (as ``php-web.wasm`` and
 ``php-web.mjs``).
 
-By default, this will build PHP 8.5.11, but you can override this by setting an
-argument::
+Everything else is a build argument (see `Options`_). By default, this builds
+PHP 8.5.11, with the extensions of php.net (see `Supported Extensions`_)::
 
-	docker buildx bake --set default.args.PHP_VERSION=8.4.26
+	docker buildx bake --set default.args.PHP_VERSION=8.4.26                    # another PHP version
+	docker buildx bake --set default.args.EXTENSIONS="ctype tokenizer bcmath"   # other extensions
+	docker buildx bake --set default.args.TARGETS=node                          # only php-cli.mjs and php-cli.wasm
 
-The extensions are an argument too, so you can build PHP with other ones (see
-`Supported Extensions`_)::
+Then run PHP in what is built, with node::
 
-	docker buildx bake --set default.args.EXTENSIONS="ctype tokenizer bcmath"
+	node demo/run-cli.mjs -r 'echo PHP_VERSION;'
+	node demo/run-cli.mjs -r 'var_dump(get_loaded_extensions());'
+	node demo/run-cli.mjs my-script.php
+
+In a browser, ``php-web.mjs`` is the same module, built for the web. Serve it
+next to its ``php-web.wasm``, from any static server:
+
+.. code-block:: html
+
+	<pre id="output"></pre>
+	<script type="module">
+		import createPhpModule from './php-web.mjs';
+
+		const output = document.getElementById('output');
+		const php = await createPhpModule({
+			print: (line) => output.textContent += line + '\n',
+		});
+
+		php.ccall('phpw_run', null, ['string'], ['echo "Hello from PHP ", PHP_VERSION;']);
+	</script>
 
 Options
 -------
@@ -121,11 +145,13 @@ intl is linked statically, with ICU and all of its data (every locale): there
 is no ``intl.so`` to load, nor data file to fetch, and it works the same on the
 web and on node. It does not come cheap, which is why php.net does not ship
 it: the ``.wasm`` file is about 33 MB bigger (14 MB gzipped), and the data
-takes 32 MB of the memory of the module. The ``intl`` stack has 32 MB more
-memory than php.net for that::
+takes 32 MB of the memory of the module. Add it to the extensions, with 32 MB
+more memory::
 
-	castor wasm:build intl
-	castor wasm:run -r 'echo (new NumberFormatter("fr_FR", NumberFormatter::CURRENCY))->formatCurrency(1234.5, "EUR");' --stack intl
+	docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter intl" --set default.args.MEMORY=160mb
+	node demo/run-cli.mjs -r 'echo (new NumberFormatter("fr_FR", NumberFormatter::CURRENCY))->formatCurrency(1234.5, "EUR");'
+
+The ``intl`` stack (see `Stacks, and castor`_) is the same build.
 
 Limitations
 -----------
@@ -142,7 +168,8 @@ targets to build, with a name. The stacks are declared in ``stacks.php``, and
 `castor <https://castor.jolicode.com>`_ builds them with one command; castor
 only runs ``docker buildx bake`` for you, the Dockerfile is what knows how to
 compile PHP. Nobody needs castor to use this repository, and no PHP is needed
-on the host: only Docker (and node, to run what is built).
+on the host: castor is a single binary, installed with
+``curl "https://castor.jolicode.com/install" | bash``.
 
 .. code-block:: php
 
@@ -197,7 +224,8 @@ It does not run what the stack embeds.
 Playing with it
 ---------------
 
-Once a stack is built, ``castor wasm:run`` runs PHP in it, with node::
+Once a stack is built, ``castor wasm:run`` runs PHP in it, with
+``demo/run-cli.mjs``::
 
 	castor wasm:build
 	castor wasm:run -r 'echo PHP_VERSION;'
@@ -224,28 +252,6 @@ The ``intl`` stack is the place to try what ICU can do::
 	castor wasm:build intl
 	castor wasm:run -r 'echo (new IntlDateFormatter("fr_FR", IntlDateFormatter::FULL, IntlDateFormatter::NONE))->format(time());' --stack intl
 	castor wasm:run -r '$c = new Collator("fr_FR"); $words = ["été", "eau", "Ébène", "zèbre"]; $c->sort($words); echo implode(" ", $words);' --stack intl
-
-``castor wasm:run`` is a wrapper around ``demo/run-cli.mjs``, which works without
-castor::
-
-	node demo/run-cli.mjs --build build/playground/php-cli.mjs -r 'echo PHP_VERSION;'
-
-In a browser, ``php-web.mjs`` is the same module, built for the web. Serve it
-next to its ``php-web.wasm``, from any static server:
-
-.. code-block:: html
-
-	<pre id="output"></pre>
-	<script type="module">
-		import createPhpModule from './php-web.mjs';
-
-		const output = document.getElementById('output');
-		const php = await createPhpModule({
-			print: (line) => output.textContent += line + '\n',
-		});
-
-		php.ccall('phpw_run', null, ['string'], ['echo "Hello from PHP ", PHP_VERSION;']);
-	</script>
 
 Using it from your own project
 ------------------------------
