@@ -1,27 +1,42 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { parseArgs, styleText } from 'node:util';
+import { parseArgs } from 'node:util';
 
-// Runs some PHP code, or a PHP file, in a build for node (php-cli.mjs):
+// Runs some PHP code, or a PHP file, in a build for node (php-cli.mjs), and
+// exits with the exit status of PHP:
 //
 //     node run.mjs [--build <php-cli.mjs>] (<file.php> | -r <code>)
 //
 // --build  the php-cli.mjs of the stack to run, the default one by default
 // -r       PHP code to run, without <?php ?>
-//
-// It exits with the exit status of PHP.
 
 const USAGE = 'Usage: node run.mjs [--build <php-cli.mjs>] (<file.php> | -r <code>)';
-const DEFAULT_BUILD = fileURLToPath(new URL('build/default/php-cli.mjs', import.meta.url));
 
-const { build, code, file } = parseArguments();
-
-if (!fs.existsSync(build)) {
-    fail(...howToBuild(build));
+let args;
+try {
+    args = parseArgs({
+        options: {
+            build: { type: 'string', default: fileURLToPath(new URL('build/default/php-cli.mjs', import.meta.url)) },
+            code: { type: 'string', short: 'r' },
+        },
+        allowPositionals: true,
+    });
+} catch (exception) {
+    fail(exception.message, USAGE);
 }
-if (file !== null && !fs.existsSync(file)) {
-    fail(error(`${file} does not exist.`));
+
+const build = path.resolve(args.values.build);
+const code = args.values.code;
+const [file, ...more] = args.positionals;
+if (more.length > 0 || (file === undefined) === (code === undefined)) {
+    fail(USAGE);
+}
+if (!fs.existsSync(build)) {
+    fail(`${build} does not exist: build PHP for node first, with "castor wasm:build [<stack>]" or "docker buildx bake".`);
+}
+if (file !== undefined && !fs.existsSync(file)) {
+    fail(`${file} does not exist.`);
 }
 
 const { default: createPhpModule } = await import(pathToFileURL(build));
@@ -34,77 +49,10 @@ const { ccall } = await createPhpModule({
 });
 
 // The code of a file starts in HTML mode, the one of -r in PHP mode
-const status = ccall('phpw_run', 'number', ['string'], [code ?? '?>' + fs.readFileSync(file, 'utf8')]);
+process.exitCode = ccall('phpw_run', 'number', ['string'], [code ?? '?>' + fs.readFileSync(file, 'utf8')]);
 
 stdout.end();
 stderr.end();
-process.exitCode = status;
-
-/**
- * @returns {{build: string, code: string|null, file: string|null}}
- */
-function parseArguments() {
-    let parsed;
-    try {
-        parsed = parseArgs({
-            options: {
-                build: { type: 'string' },
-                code: { type: 'string', short: 'r' },
-            },
-            allowPositionals: true,
-        });
-    } catch (exception) {
-        fail(error(exception.message), '', USAGE);
-    }
-
-    const { values, positionals } = parsed;
-    const code = values.code ?? null;
-    const file = positionals[0] ?? null;
-    if (positionals.length > 1 || (file === null) === (code === null)) {
-        fail(USAGE);
-    }
-
-    return {
-        build: values.build === undefined ? DEFAULT_BUILD : path.resolve(values.build),
-        code,
-        file,
-    };
-}
-
-/**
- * What to do when the build to run does not exist.
- *
- * @returns {string[]}
- */
-function howToBuild(build) {
-    const lines = [error(`${path.relative(process.cwd(), build)} does not exist.`), ''];
-
-    if (build !== DEFAULT_BUILD) {
-        // castor builds each stack in build/<stack>/
-        return [
-            ...lines,
-            'Build PHP for node (the "node" target) first, with castor:',
-            '',
-            `    castor wasm:build ${path.basename(path.dirname(build))}`,
-            '',
-        ];
-    }
-
-    // docker buildx bake needs docker-bake.hcl, which is next to this file
-    const root = path.relative(process.cwd(), path.dirname(fileURLToPath(import.meta.url)));
-
-    return [
-        ...lines,
-        'Build PHP for node (the "node" target) first, with Docker:',
-        '',
-        `    ${root ? `cd ${root} && ` : ''}docker buildx bake`,
-        '',
-        'or with castor:',
-        '',
-        '    castor wasm:build',
-        '',
-    ];
-}
 
 /**
  * print() and printErr() get what PHP writes line by line, without the line
@@ -130,10 +78,6 @@ function lineWriter(stream) {
             }
         },
     };
-}
-
-function error(message) {
-    return styleText(['bold', 'red'], message);
 }
 
 function fail(...lines) {
