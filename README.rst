@@ -296,11 +296,17 @@ with the ones of your project.
 Credits
 -------
 
-This builder was created by Derick Rethans, for The PHP Foundation, in
-`derickr/php-wasm-builder <https://github.com/derickr/php-wasm-builder>`_. Its
-shim, ``phpw.c``, comes from the work of Antoine Bluchet on PHP in WebAssembly.
-Both are under the MIT license, see ``LICENSE``.
+This builder was created by `Derick Rethans <https://github.com/derickr>`__,
+for `The PHP Foundation <https://github.com/ThePHPF>`__, in
+`derickr/php-wasm-builder <https://github.com/derickr/php-wasm-builder>`__. Its
+shim, ``phpw.c``, comes from the work of `Antoine Bluchet
+<https://github.com/soyuka>`__ on PHP in WebAssembly. Both are under the MIT
+license, see ``LICENSE``.
 
 Thanks to the people whose work on the original repository is part of this
-one: Lewis Cowles, Arnaud Le Blanc, Jordi Kroon, and Marc (henderkes), for the
-work on the intl extension in derickr/php-wasm-builder#7 and #8.
+one: `Lewis Cowles <https://github.com/Lewiscowles1986>`__, `Arnaud Le Blanc
+<https://github.com/arnaud-lb>`__, `Jordi Kroon
+<https://github.com/jordikroon>`__, and `Marc (henderkes)
+<https://github.com/henderkes>`__, for the work on the intl extension in
+`derickr/php-wasm-builder#7 <https://github.com/derickr/php-wasm-builder/pull/7>`__
+and `#8 <https://github.com/derickr/php-wasm-builder/pull/8>`__.
