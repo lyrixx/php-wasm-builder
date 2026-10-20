@@ -102,11 +102,14 @@ They are always there, whatever ``EXTENSIONS`` says:
 - date
 - hash
 - json
+- lexbor (PHP 8.5 and later)
 - pcre
 - random
 - Reflection
 - SPL
 - standard
+- uri (PHP 8.5 and later)
+- Zend OPcache (PHP 8.5 and later)
 
 To add an extension, add a line to the ``ext`` list at the top of the
 ``Dockerfile`` (and a stage for the library that it needs, if it needs one).
@@ -183,9 +186,66 @@ need to declare a stack to try something::
 	castor wasm:build --memory 256mb --embed my-app     # more memory, another directory to embed
 	castor wasm:build --print                           # only shows the bake file
 
+What is built with overrides goes to the directory of the stack
+(``build/php.net/``, ``build/playground/``), in place of what was there.
+
 ``castor wasm:test`` is what tells that a stack works: once built, it runs each
 stack in node, and checks that ``PHP_VERSION`` is the one that was asked for,
 and that ``extension_loaded()`` is true for every extension that was asked for.
+It does not run what the stack embeds.
+
+Playing with it
+---------------
+
+Once a stack is built, ``castor wasm:run`` runs PHP in it, with node::
+
+	castor wasm:build
+	castor wasm:run -r 'echo PHP_VERSION;'
+	castor wasm:run -r 'var_dump(get_loaded_extensions());'
+
+A stack also embeds a directory, that PHP sees in the WASM filesystem. The
+php.net stack embeds ``examples/`` as ``/examples``: these are the files that
+the examples of the PHP manual open (XML documents, the DocBook DTD…), so that
+they run on php.net too::
+
+	castor wasm:run -r 'echo simplexml_load_file("/examples/book-simple.xml")->book[0]->title;'
+
+The ``playground`` stack adds tokenizer, bcmath and filter, and embeds
+``playground/app/`` as ``/app``. A file given to ``castor wasm:run`` is read
+from your disk, so you can edit it and run it again without building anything;
+the embedded copy only changes with a new build::
+
+	castor wasm:build playground
+	castor wasm:run -r 'require "/app/index.php";' --stack playground    # the embedded copy
+	castor wasm:run playground/app/index.php --stack playground          # the one on your disk
+
+The ``intl`` stack is the place to try what ICU can do::
+
+	castor wasm:build intl
+	castor wasm:run -r 'echo (new IntlDateFormatter("fr_FR", IntlDateFormatter::FULL, IntlDateFormatter::NONE))->format(time());' --stack intl
+	castor wasm:run -r '$c = new Collator("fr_FR"); $words = ["été", "eau", "Ébène", "zèbre"]; $c->sort($words); echo implode(" ", $words);' --stack intl
+
+``castor wasm:run`` is a wrapper around ``demo/run-cli.mjs``, which works without
+castor::
+
+	node demo/run-cli.mjs --build build/playground/php-cli.mjs -r 'echo PHP_VERSION;'
+
+In a browser, ``php-web.mjs`` is the same module, built for the web. Serve it
+next to its ``php-web.wasm``, from any static server:
+
+.. code-block:: html
+
+	<pre id="output"></pre>
+	<script type="module">
+		import createPhpModule from './php-web.mjs';
+
+		const output = document.getElementById('output');
+		const php = await createPhpModule({
+			print: (line) => output.textContent += line + '\n',
+		});
+
+		php.ccall('phpw_run', null, ['string'], ['echo "Hello from PHP ", PHP_VERSION;']);
+	</script>
 
 Using it from your own project
 ------------------------------
