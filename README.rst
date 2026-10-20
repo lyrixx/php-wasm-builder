@@ -155,7 +155,7 @@ They are always there, whatever ``EXTENSIONS`` says:
 - uri (PHP 8.5 and later)
 - Zend OPcache (PHP 8.5 and later)
 
-To add an extension, add a line to the ``ext`` list at the top of the
+To add an extension, add it to the ``case`` of the ``resolve`` stage of the
 ``Dockerfile`` (and a stage for the library that it needs, if it needs one),
 and to ``Stack::EXTENSIONS``.
 
