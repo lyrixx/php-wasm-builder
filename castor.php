@@ -13,6 +13,7 @@ use Symfony\Component\Filesystem\Path;
 use function Castor\capture;
 use function Castor\context;
 use function Castor\fs;
+use function Castor\import;
 use function Castor\io;
 use function Castor\notify;
 use function Castor\run;
@@ -35,12 +36,7 @@ defined('CASTOR_USE_CHDIR') || define('CASTOR_USE_CHDIR', false);
  */
 const BUILDER_ROOT = __DIR__;
 
-// Composer does it when the builder is imported by another project
-spl_autoload_register(static function (string $class): void {
-    if (str_starts_with($class, __NAMESPACE__ . '\\') && is_file($file = BUILDER_ROOT . '/.castor/' . substr($class, \strlen(__NAMESPACE__) + 1) . '.php')) {
-        require $file;
-    }
-});
+import(__DIR__ . '/src');
 
 #[AsTask(name: 'build', namespace: 'wasm', description: 'Builds a stack: php.net when none is given')]
 function build(
