@@ -23,7 +23,7 @@ use function Castor\run;
 //
 // This file works from this repository, and from any project that imports it:
 //
-//     import('composer://derickr/php-wasm-builder');
+//     import('composer://lyrixx/php-wasm-builder');
 //
 // The tasks then build the stacks of both, in the build/ directory of the
 // project.

@@ -16,6 +16,7 @@
 # depends on what changed.
 
 FROM debian:bookworm AS resolve
+# Keep in sync with the php.net stack, in stacks.php
 ARG EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter"
 ARG TARGETS="web node"
 COPY <<'EOF' /resolve.sh
@@ -122,23 +123,24 @@ RUN apt-get update && \
 	python3
 
 # Install emscripten sdk
+ARG EMSDK_VERSION=6.0.13
 RUN \
-	git clone  https://github.com/emscripten-core/emsdk.git && \
+	git clone https://github.com/emscripten-core/emsdk.git --branch $EMSDK_VERSION --single-branch --depth 1 && \
 	cd emsdk && \
-	./emsdk install latest && \
-	./emsdk activate latest
+	./emsdk install $EMSDK_VERSION && \
+	./emsdk activate $EMSDK_VERSION
 
 # Setting ENV vars
 ENV PATH=/local/src/emsdk:/local/src/emsdk/upstream/emscripten:/usr/local/bin:/usr/bin
 ENV EMSDK=/local/src/emsdk
-ENV EMSDK_NODE=/local/src/emsdk/node/20.18.0_64bit/bin/node
 
 # Create install directory
 RUN mkdir -p /local/install
 
 # Download PHP and Set-Up Configure
 FROM base AS php-src
-ARG PHP_VERSION=8.4.4
+# Keep in sync with the php.net stack, in stacks.php
+ARG PHP_VERSION=8.4.26
 RUN \
 	git clone https://github.com/php/php-src.git php-src --branch php-$PHP_VERSION --single-branch --depth 1 && \
 	cd php-src && \

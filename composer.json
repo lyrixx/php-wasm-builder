@@ -1,5 +1,5 @@
 {
-    "name": "derickr/php-wasm-builder",
+    "name": "lyrixx/php-wasm-builder",
     "description": "Builds PHP as WebAssembly: a Dockerfile, and castor tasks to build named stacks (a PHP version, extensions, what to embed) with one command",
     "type": "library",
     "license": "MIT",

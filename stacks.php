@@ -4,6 +4,8 @@ use PhpWasm\Stack;
 
 return [
     // What php.net ships (docs + PHP Tour). `castor build` builds this one.
+    // Its PHP version and its extensions are the defaults of the Dockerfile:
+    // keep them in sync.
     Stack::named('php.net')
         ->php('8.4.26')
         ->extensions('calendar', 'ctype', 'dom', 'mbstring', 'simplexml', 'xml', 'xmlreader', 'xmlwriter')

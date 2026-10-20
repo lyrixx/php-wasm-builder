@@ -1,22 +1,29 @@
 PHP WASM Builder
 ================
 
-The Dockerfile in this repository builds the PHP WASM files for use in the
-documentation, and the PHP Tour.
+The Dockerfile in this repository builds PHP as WebAssembly, for the browser
+and for node, with the extensions you ask for.
 
-You can build them, by running the following command::
+This repository is a fork of `derickr/php-wasm-builder
+<https://github.com/derickr/php-wasm-builder>`_, which builds the PHP WASM
+files of the php.net documentation and of the PHP Tour, and it is where the
+builder is developed now (see `Credits`_). Its default build, the ``php.net``
+stack, is still what php.net ships: the same extensions, built with the same
+flags.
+
+You can build it by running the following command::
 
 	docker buildx bake
 
-The builds will then end up in the ``build/php.net/`` directory. The ``.wasm``
-and ``.mjs`` files for the web then need to be copied to
+The files then end up in the ``build/php.net/`` directory. For php.net, the
+``.wasm`` and ``.mjs`` files for the web are the ones to copy to
 https://github.com/php/web-php.git/js (as ``php-web.wasm`` and
-``php-web.mjs``)
+``php-web.mjs``).
 
-By default, this will build PHP 8.4.4, but you can override this by setting an
+By default, this will build PHP 8.4.26, but you can override this by setting an
 argument::
 
-	docker buildx bake --set default.args.PHP_VERSION=8.3.16
+	docker buildx bake --set default.args.PHP_VERSION=8.3.35
 
 The extensions are an argument too, so you can build PHP with other ones (see
 `Supported Extensions`_)::
@@ -55,6 +62,10 @@ LIBXML_VERSION
 ONIGURUMA_VERSION
 	The Oniguruma library (used for regular expressions with mbstring) version
 	to download and build.
+
+EMSDK_VERSION
+	The version of the Emscripten SDK that compiles everything. It is pinned,
+	so that the same arguments always give the same build.
 
 The directory to embed in the WASM filesystem is the ``embed`` named build
 context. ``docker-bake.hcl`` sets it to ``examples/``; anything can be used
@@ -166,7 +177,7 @@ libxml2, which ``./configure`` flags PHP needs to link and which ``emcc``
 flags make it load. Any PHP project can reuse that, instead of copying the
 Dockerfile, by importing this repository as a castor package::
 
-	castor composer require derickr/php-wasm-builder
+	castor composer require lyrixx/php-wasm-builder
 
 .. code-block:: php
 
@@ -177,7 +188,7 @@ Dockerfile, by importing this repository as a castor package::
 
 	defined('CASTOR_USE_CHDIR') || define('CASTOR_USE_CHDIR', false);
 
-	import('composer://derickr/php-wasm-builder');
+	import('composer://lyrixx/php-wasm-builder');
 
 Then declare your stacks, with the same format, in a ``stacks.php`` file next
 to ``castor.php``. The stacks of this repository are there to inherit from:
@@ -198,7 +209,19 @@ to ``castor.php``. The stacks of this repository are there to inherit from:
 	];
 
 ``castor build my-app`` then builds it in the ``build/my-app/`` directory of
-your project. Use ``mount('composer://derickr/php-wasm-builder', 'wasm')``
+your project. Use ``mount('composer://lyrixx/php-wasm-builder', 'wasm')``
 instead of ``import()`` to get the tasks under a ``wasm:`` prefix
 (``castor wasm:build``), if ``build``, ``run`` or ``test`` are already tasks of
 your project.
+
+Credits
+-------
+
+This builder was created by Derick Rethans, for The PHP Foundation, in
+`derickr/php-wasm-builder <https://github.com/derickr/php-wasm-builder>`_. Its
+shim, ``phpw.c``, comes from the work of Antoine Bluchet on PHP in WebAssembly.
+Both are under the MIT license, see ``LICENSE``.
+
+Thanks to the people whose work on the original repository is part of this
+one: Lewis Cowles, Arnaud Le Blanc, Jordi Kroon, and Marc (henderkes), for the
+work on the intl extension in derickr/php-wasm-builder#7 and #8.
