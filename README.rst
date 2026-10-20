@@ -311,18 +311,29 @@ directory of your project:
     #[AsTask]
     function wasm(): void
     {
-        build(
+        build([
             Stack::named('my-app')
                 ->php('8.5.11')
                 ->extensions('ctype', 'mbstring', 'tokenizer')
                 ->embed('dist'),    // relative to your project
-        );
+        ]);
     }
 
 Several stacks given at once are built in a single buildx invocation: in
 parallel, and sharing the layers they have in common. Requiring the package
 does not add any task to your project: the tasks of this repository build its
 own stacks.
+
+The second argument of ``build()`` is given to ``docker buildx bake --set``.
+On GitHub Actions, this keeps the layers in the cache of the repository, as
+the CI of this repository does (the cache needs
+`crazy-max/ghaction-github-runtime
+<https://github.com/crazy-max/ghaction-github-runtime>`_)::
+
+    build([$stack], [
+        '*.cache-from=type=gha',
+        '*.cache-to=type=gha,mode=max,ignore-error=true',
+    ]);
 
 Credits
 -------
