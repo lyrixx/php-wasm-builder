@@ -4,7 +4,7 @@
 #
 #   resolve     turns EXTENSIONS and TARGETS into a build plan (/plan). This is
 #               where the extension -> ./configure flags / libraries map lives.
-#   base        the toolchain: build tools and the emscripten SDK
+#   base        the toolchain: the emscripten SDK image, and build tools
 #   php-src     PHP's sources, only depends on PHP_VERSION
 #   oniguruma   third-party libraries, each one only built when the plan says
 #   libxml2     an extension needs it (the others do nothing and stay tiny)
@@ -16,7 +16,10 @@
 # of small files: changing EXTENSIONS, TARGETS, ... only rebuilds what actually
 # depends on what changed.
 
-FROM debian:bookworm AS resolve
+ARG EMSDK_VERSION=6.0.13
+
+# The same image as base: one image less to pull
+FROM emscripten/emsdk:$EMSDK_VERSION AS resolve
 # Keep in sync with the default stack, in stacks.php
 ARG EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter"
 ARG TARGETS="web node"
@@ -112,38 +115,20 @@ echo "targets: $TARGETS"
 EOF
 RUN sh /resolve.sh
 
-FROM debian:bookworm AS base
+FROM emscripten/emsdk:$EMSDK_VERSION AS base
 WORKDIR /local/src
 
-# Apt-Install
+# What the emscripten SDK image does not have: the autotools, to build the
+# libraries and PHP from git, and pkg-config, for intl to find ICU
 RUN apt-get update && \
     apt-get --no-install-recommends -y install \
-    build-essential \
-    automake \
     autoconf \
-    libtool \
-    pkg-config \
+    automake \
     bison \
     flex \
-    make \
-    re2c \
-    git \
-    pv \
-    ca-certificates \
-    curl \
-    python3
-
-# Install emscripten sdk
-ARG EMSDK_VERSION=6.0.13
-RUN \
-    git clone https://github.com/emscripten-core/emsdk.git --branch $EMSDK_VERSION --single-branch --depth 1 && \
-    cd emsdk && \
-    ./emsdk install $EMSDK_VERSION && \
-    ./emsdk activate $EMSDK_VERSION
-
-# Setting ENV vars
-ENV PATH=/local/src/emsdk:/local/src/emsdk/upstream/emscripten:/usr/local/bin:/usr/bin
-ENV EMSDK=/local/src/emsdk
+    libtool \
+    pkg-config \
+    re2c
 
 # Create install directory
 RUN mkdir -p /local/install
