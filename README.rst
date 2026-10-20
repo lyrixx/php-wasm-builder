@@ -155,8 +155,9 @@ They are always there, whatever ``EXTENSIONS`` says:
 - uri (PHP 8.5 and later)
 - Zend OPcache (PHP 8.5 and later)
 
-To add an extension, add a line to the ``ext`` list at the top of the
-``Dockerfile`` (and a stage for the library that it needs, if it needs one).
+To add an extension, add it to the ``case`` of the ``resolve`` stage of the
+``Dockerfile`` (and a stage for the library that it needs, if it needs one),
+and to ``Stack::EXTENSIONS``.
 
 intl
 ~~~~
@@ -241,7 +242,7 @@ Unless a stack says otherwise, everything is built in ``build/<stack>/``::
     castor wasm:stacks                         # lists the stacks
     castor wasm:build                          # builds the default stack
     castor wasm:build intl                     # builds another one
-    castor wasm:build --all                    # builds all of them, in one buildx invocation
+    castor wasm:build --all                    # builds all of them, in one buildx invocation (with the overrides below)
     castor wasm:test                           # builds them all, and checks them
     castor wasm:sizes                          # compares the size of the .wasm files with the default stack
     castor wasm:run examples/hello.php         # runs a file, in the default stack

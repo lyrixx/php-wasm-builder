@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.5.0 (2026-10-21)
+
+* BC break: `PhpWasm\Build` is gone: `build()` returns the stacks it is given,
+  with the same `artifact()` and `artifacts()`.
+* BC break: the getters of `Stack` are gone, its fields are public and
+  read-only: `$stack->name` instead of `$stack->getName()`. `embed` and
+  `outputDir` are absolute paths, and `targets` is never null.
+* BC break: `renamed()` builds the new stack in `build/<name>/`, even when the
+  stack it comes from has another `outputDir()`: two stacks can not share
+  their output directory.
+* `extensions()` rejects an unknown extension as soon as it is given, instead
+  of the build failing.
+* `castor wasm:build --all` takes the overrides (`--php`, `--target`…), for
+  every stack.
+* `EXTENSIONS` and `TARGETS` are separated by spaces only, as documented: they
+  do not accept commas anymore.
+* The `./configure` flags are sorted, so that the same extensions always give
+  the same flags: PHP is compiled once more.
+* `phpw_exec()` returns a copy of the value: it pointed to a string that PHP
+  freed when it stopped.
+* `phpw()` does not print "Failed to execute PHP script." anymore: PHP already
+  says why.
+
 ## 0.4.0 (2026-10-21)
 
 * BC break: `build()` takes the list of the stacks: `build($stack)` is now

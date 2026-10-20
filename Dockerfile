@@ -28,85 +28,46 @@ COPY <<'EOF' /resolve.sh
 set -eu
 mkdir -p /plan
 
-EXTENSIONS=$(echo "$EXTENSIONS" | tr ',\n' '  ')
-TARGETS=$(echo "$TARGETS" | tr ',\n' '  ')
-
 flags=""
-libs=""
-known=""
-
-has() {
-    case " $1 " in *" $2 "*) return 0 ;; esac
-    return 1
-}
-
-# ext <name> <library or -> [<./configure flag>]
-#
-# The order of the lines is the order of the flags on the ./configure command
-# line, which phpinfo() shows: it is kept as it always was, so that the default
-# extensions still give the exact same command line.
-ext() {
-    known="$known $1"
-    has "$EXTENSIONS" "$1" || return 0
-    if [ "$2" != "-" ] && ! has "$libs" "$2"; then
-        libs="$libs $2"
-    fi
-    if [ -n "${3:-}" ]; then
-        flags="$flags $3"
-    fi
-}
-
-ext libxml    libxml2
-ext simplexml libxml2 --enable-simplexml
-ext xml       libxml2 --enable-xml
-ext xmlreader libxml2 --enable-xmlreader
-ext xmlwriter libxml2 --enable-xmlwriter
-ext dom       libxml2 --enable-dom
-ext mbstring  oniguruma --enable-mbstring
-ext calendar  - --enable-calendar
-ext ctype     - --enable-ctype
-ext bcmath    - --enable-bcmath
-ext filter    - --enable-filter
-ext tokenizer - --enable-tokenizer
-ext intl      icu --enable-intl
-
-for extension in $EXTENSIONS; do
-    has "$known" "$extension" || { echo "Unknown extension '$extension', supported extensions:$known" >&2; exit 1; }
-done
-
-# Keep in sync with Build::ICU_DATA, in src/Build.php
-case $ICU_DATA in
-    all|none) ;;
-    *) echo "Unknown ICU data '$ICU_DATA', supported values: all none" >&2; exit 1 ;;
-esac
-
-link=""
 libxml2=0
 oniguruma=0
 icu=0
-if has "$libs" libxml2; then
-    libxml2=1
+# Sorted, so that the same extensions always give the same ./configure flags.
+# Keep in sync with Stack::EXTENSIONS, in src/Stack.php
+for extension in $(printf '%s\n' $EXTENSIONS | sort -u); do
+    case $extension in
+        bcmath|calendar|ctype|filter|tokenizer) flags="$flags --enable-$extension" ;;
+        dom|simplexml|xml|xmlreader|xmlwriter)  flags="$flags --enable-$extension"; libxml2=1 ;;
+        libxml)                                 libxml2=1 ;;
+        mbstring)                               flags="$flags --enable-mbstring"; oniguruma=1 ;;
+        intl)                                   flags="$flags --enable-intl"; icu=1 ;;
+        *) echo "Unknown extension '$extension'" >&2; exit 1 ;;
+    esac
+done
+
+link=""
+if [ $libxml2 = 1 ]; then
     flags="--with-libxml$flags"
     link="$link /local/install/lib/libxml2.a"
 fi
-if has "$libs" oniguruma; then
-    oniguruma=1
+if [ $oniguruma = 1 ]; then
     link="$link /local/install/lib/libonig.a"
 fi
-if has "$libs" icu; then
-    icu=1
-    # The icu stage builds both, only the link depends on ICU_DATA: libicudata.a
-    # is the empty stub that ICU installs
-    icudata=/local/install/lib/libicudata.a
-    if [ "$ICU_DATA" = all ]; then
-        icudata=/local/install/lib/libicudata-all.a
-    fi
+if [ $icu = 1 ]; then
+    # The icu stage builds both: libicudata.a is the empty stub that ICU
+    # installs. Keep in sync with Stack::ICU_DATA, in src/Stack.php
+    case $ICU_DATA in
+        all)  icudata=libicudata-all.a ;;
+        none) icudata=libicudata.a ;;
+        *) echo "Unknown ICU data '$ICU_DATA', supported values: all none" >&2; exit 1 ;;
+    esac
     # ICU and intl are C++: DEFAULT_TO_CXX links the C++ standard library,
     # as em++ would
-    link="$link /local/install/lib/libicui18n.a /local/install/lib/libicuio.a /local/install/lib/libicuuc.a $icudata -sDEFAULT_TO_CXX"
+    link="$link /local/install/lib/libicui18n.a /local/install/lib/libicuio.a /local/install/lib/libicuuc.a /local/install/lib/$icudata -sDEFAULT_TO_CXX"
 fi
 
-# targets: <output file name> <emscripten environment>
+# <output file name> <emscripten environment>, by target. Keep in sync with
+# Stack::TARGETS, in src/Stack.php
 : > /plan/targets
 for target in $TARGETS; do
     case $target in
@@ -123,8 +84,7 @@ echo "$oniguruma" > /plan/oniguruma
 echo "$icu" > /plan/icu
 
 echo "./configure:$flags"
-echo "libraries:$libs"
-echo "targets: $TARGETS"
+echo "link:$link"
 EOF
 RUN sh /resolve.sh
 
