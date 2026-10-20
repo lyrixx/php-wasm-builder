@@ -4,7 +4,7 @@ namespace PhpWasm;
 
 /**
  * A named, declarative combination: a PHP version, a set of extensions, what to
- * embed and which targets to build.
+ * embed, which targets to build and where.
  *
  * A stack never changes: each method returns a new one, so a stack is derived
  * from another one by renaming it. The extensions it is given are added to the
@@ -25,6 +25,7 @@ final readonly class Stack
         private ?array $targets = null,
         private ?string $memory = null,
         private ?string $icuData = null,
+        private ?string $outputDir = null,
     ) {
     }
 
@@ -98,6 +99,15 @@ final readonly class Stack
         return $this->with(icuData: $icuData);
     }
 
+    /**
+     * The directory the files are written to, relative to the root of the
+     * project: build/<name> by default.
+     */
+    public function outputDir(string $directory): self
+    {
+        return $this->with(outputDir: $directory);
+    }
+
     public function getName(): string
     {
         return $this->name;
@@ -142,6 +152,11 @@ final readonly class Stack
     public function getIcuData(): ?string
     {
         return $this->icuData;
+    }
+
+    public function getOutputDir(): ?string
+    {
+        return $this->outputDir;
     }
 
     private function with(mixed ...$changes): self

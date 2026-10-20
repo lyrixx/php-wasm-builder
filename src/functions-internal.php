@@ -31,7 +31,7 @@ function stacks(): Stacks
 
 /**
  * Turns a stack into what the Dockerfile builds, in the build/<stack>/
- * directory of the project.
+ * directory of the project unless the stack has its own.
  *
  * @internal
  */
@@ -45,6 +45,8 @@ function resolve(Stack $stack): Build
         }
     }
 
+    $outputDir = $stack->getOutputDir();
+
     return new Build(
         $stack->getName(),
         $stack->getPhp() ?? dockerfile_default('PHP_VERSION'),
@@ -54,7 +56,7 @@ function resolve(Stack $stack): Build
         $stack->getTargets() ?? array_keys(Build::TARGETS),
         $stack->getMemory(),
         $stack->getIcuData(),
-        build_dir() . '/' . $stack->getName(),
+        null === $outputDir ? build_dir() . '/' . $stack->getName() : Path::makeAbsolute($outputDir, project_root()),
     );
 }
 
@@ -68,7 +70,8 @@ function resolve(Stack $stack): Build
  */
 function bake(array $builds, array $set = []): void
 {
-    $bakeFile = 1 === \count($builds) ? $builds[0]->outputDir . '/bake.json' : build_dir() . '/bake.json';
+    // Not next to what is built: that may be a public directory
+    $bakeFile = build_dir() . '/bake.json';
     fs()->dumpFile($bakeFile, bake_definition($builds) . "\n");
 
     $command = ['docker', 'buildx', 'bake', '-f', $bakeFile];
@@ -84,6 +87,8 @@ function bake(array $builds, array $set = []): void
         $command[] = '--allow=fs.read=' . $read;
     }
     foreach ($builds as $build) {
+        // Or buildx asks to write to its parent
+        fs()->mkdir($build->outputDir);
         $command[] = '--allow=fs.write=' . $build->outputDir;
     }
 
@@ -91,6 +96,9 @@ function bake(array $builds, array $set = []): void
     run($command);
 
     foreach ($builds as $build) {
+        // buildx gives it 0700, a web server or GitHub Pages could not read it
+        fs()->chmod($build->outputDir, 0o777, umask());
+
         // The output directory is only ever added to: forget about the targets that are not built anymore
         foreach (Build::TARGETS as $name => $file) {
             if (!\in_array($name, $build->targets, true)) {
@@ -108,10 +116,17 @@ function bake(array $builds, array $set = []): void
 function bake_definition(array $builds): string
 {
     $targets = [];
+    $outputDirs = [];
     foreach ($builds as $build) {
         if (isset($targets[$build->bakeName()])) {
             throw new \LogicException(\sprintf('The stack "%s" has the same name as another one, once cleaned up for buildx ("%s").', $build->name, $build->bakeName()));
         }
+        // They would write the same files
+        if (isset($outputDirs[$build->outputDir])) {
+            throw new \InvalidArgumentException(\sprintf('The stacks "%s" and "%s" are built in the same directory, "%s".', $outputDirs[$build->outputDir], $build->name, relative($build->outputDir)));
+        }
+
+        $outputDirs[$build->outputDir] = $build->name;
 
         $targets[$build->bakeName()] = $build->bakeTarget(builder_root());
     }

@@ -122,22 +122,23 @@ function stacks_task(
 #[AsTask(name: 'sizes', namespace: 'wasm', description: 'Compares the size of what is built with the default stack')]
 function sizes_task(): void
 {
-    $size = static fn (string $stack, string $file): ?int => is_file($path = build_dir() . '/' . $stack . '/' . $file) ? (int) filesize($path) : null;
+    $size = static fn (Build $build, string $target): ?int => is_file($path = $build->artifact($target, 'wasm')) ? (int) filesize($path) : null;
+    $default = resolve(stacks()->get(Stacks::DEFAULT));
 
     $rows = [];
-    foreach (stacks()->names() as $name) {
+    foreach (array_map(resolve(...), stacks()->all()) as $build) {
         // The web build is the one that matters, and the one everybody has
-        foreach (['php-web.wasm', 'php-cli.wasm'] as $file) {
-            if (null === $bytes = $size($name, $file)) {
+        foreach (['web', 'node'] as $target) {
+            if (null === $bytes = $size($build, $target)) {
                 continue;
             }
 
-            $reference = $size(Stacks::DEFAULT, $file);
+            $reference = $size($default, $target);
             $rows[] = [
-                $name,
-                $file,
+                $build->name,
+                basename($build->artifact($target, 'wasm')),
                 \sprintf('%.1f MB', $bytes / 1024 / 1024),
-                Stacks::DEFAULT === $name ? '-' : (null === $reference ? 'n/a' : \sprintf('%+.1f %%', ($bytes / $reference - 1) * 100)),
+                Stacks::DEFAULT === $build->name ? '-' : (null === $reference ? 'n/a' : \sprintf('%+.1f %%', ($bytes / $reference - 1) * 100)),
             ];
 
             break;

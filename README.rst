@@ -193,8 +193,8 @@ Limitations
 Stacks, and castor
 ------------------
 
-A *stack* is a PHP version, a set of extensions, what to embed and which
-targets to build, with a name. The stacks of this repository are declared in
+A *stack* is a PHP version, a set of extensions, what to embed, which targets
+to build and where, with a name. The stacks of this repository are declared in
 ``stacks.php``, and `castor <https://castor.jolicode.com>`_ builds them with
 one command; castor only runs ``docker buildx bake`` for you, the Dockerfile is
 what knows how to compile PHP. Nobody needs castor to use this repository, and
@@ -226,15 +226,17 @@ the stack already has, the other methods replace what it has. ``embed()`` is
 relative to the root of the project, the directory of ``castor.php``, and the
 directory shows up at ``/<its name>`` in the WASM filesystem, unless
 ``embed()`` is given another name (``->embed('build/dist', 'app')`` for
-``/app``). ``memory()`` and ``icuData()`` set the ``MEMORY`` and ``ICU_DATA``
-build arguments (see `Options`_).
+``/app``). ``outputDir()`` writes the files somewhere else than
+``build/<stack>/``, also relative to the root of the project. ``memory()`` and
+``icuData()`` set the ``MEMORY`` and ``ICU_DATA`` build arguments (see
+`Options`_).
 
 To build your own stacks with this repository as it is, declare them in a
 ``stacks.override.php`` file next to ``stacks.php``, with the same format (git
 ignores it). Its stacks are added to the ones of ``stacks.php``, or replace the
 ones that have the same name.
 
-Everything is built in ``build/<stack>/``::
+Unless a stack says otherwise, everything is built in ``build/<stack>/``::
 
     castor wasm:stacks                         # lists the stacks
     castor wasm:build                          # builds the default stack
@@ -295,8 +297,7 @@ Dockerfile, by requiring this repository as a castor package::
     castor composer require lyrixx/php-wasm-builder
 
 Then build your stacks from your own tasks, with ``PhpWasm\build()``. Declare
-them wherever suits your project, they are built in the ``build/<stack>/``
-directory of your project:
+them wherever suits your project:
 
 .. code-block:: php
 
@@ -317,8 +318,10 @@ directory of your project:
             Stack::named('my-app')
                 ->php('8.5.11')
                 ->extensions('ctype', 'mbstring', 'tokenizer')
-                // Relative to your project: at /app in the WASM filesystem
-                ->embed('build/dist', 'app'),
+                // Relative to your project, like outputDir(): at /app in the WASM filesystem
+                ->embed('build/dist', 'app')
+                // build/my-app/ by default
+                ->outputDir('public/build'),
         ]);
     }
 
