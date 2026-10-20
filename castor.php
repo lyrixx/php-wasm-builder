@@ -5,41 +5,28 @@ namespace PhpWasm;
 use Castor\Attribute\AsArgument;
 use Castor\Attribute\AsOption;
 use Castor\Attribute\AsTask;
-use Castor\Helper\PathHelper;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Filesystem\Path;
 
-use function Castor\capture;
-use function Castor\context;
-use function Castor\fs;
 use function Castor\import;
 use function Castor\io;
 use function Castor\notify;
-use function Castor\run;
 
-// Castor never knows how to compile PHP: the Dockerfile does. These tasks only
-// know how to name a combination (a stack, see stacks.php) and ask the
-// Dockerfile for it, through `docker buildx bake`.
-//
-// This file works from this repository, and from any project that imports it:
+// The wasm:* tasks. A project that requires this package only gets build(),
+// see src/functions.php, it gets the tasks too with:
 //
 //     import('composer://lyrixx/php-wasm-builder');
 //
-// The tasks then build the stacks of both, in the build/ directory of the
-// project.
+// The tasks then build the stacks of both stacks.php files, in the build/
+// directory of the project.
 
 defined('CASTOR_USE_CHDIR') || define('CASTOR_USE_CHDIR', false);
 
-/**
- * Where the Dockerfile, the shim and the runner are.
- */
-const BUILDER_ROOT = __DIR__;
-
+// Composer autoloads them when the package is required by another project
 import(__DIR__ . '/src');
 
 #[AsTask(name: 'build', namespace: 'wasm', description: 'Builds a stack: the default one when none is given')]
-function build(
+function build_task(
     #[AsArgument(description: 'The stack to build', autocomplete: 'PhpWasm\complete_stacks')]
     ?string $stack = null,
     #[AsOption(description: 'Build every stack, in one buildx invocation')]
@@ -57,18 +44,14 @@ function build(
     #[AsOption(description: 'Print the bake file instead of building')]
     bool $print = false,
 ): int {
-    $registry = registry();
-
     if ($all) {
         if (null !== $stack || null !== $php || [] !== $with || [] !== $target || null !== $memory || null !== $embed) {
             throw new \InvalidArgumentException('--all builds every stack as declared, it can not be combined with a stack or with overrides.');
         }
 
-        $builds = array_map(static fn (string $name): Build => $registry->resolve($name, build_dir()), $registry->names());
-        $bakeFile = build_dir() . '/bake.json';
+        $builds = array_map(resolve(...), stacks()->names());
     } else {
-        $builds = [$registry->resolve($stack ?? Stacks::DEFAULT, build_dir(), php: $php, with: $with, targets: $target, memory: $memory, embed: $embed)];
-        $bakeFile = $builds[0]->outputDir . '/bake.json';
+        $builds = [stacks()->resolve($stack ?? Stacks::DEFAULT, build_dir(), php: $php, with: $with, targets: $target, memory: $memory, embed: $embed)];
     }
 
     if ($print) {
@@ -81,17 +64,10 @@ function build(
         io()->writeln(\sprintf(' // Stack "%s": PHP %s · %s', $build->name, $build->php ?? 'default', [] === $build->extensions ? 'no extension' : implode(' ', $build->extensions)));
     }
 
-    bake($builds, $bakeFile);
+    bake($builds);
 
     foreach ($builds as $build) {
-        // The output directory is only ever added to: forget about the targets that are not built anymore
-        foreach (Build::TARGETS as $name => $file) {
-            if (!\in_array($name, $build->targets, true)) {
-                fs()->remove([$build->artifact($name, 'mjs'), $build->artifact($name, 'wasm')]);
-            }
-        }
-
-        io()->success(array_map(static fn (string $file): string => relative($file), $build->artifacts()));
+        io()->success(array_map(relative(...), $build->artifacts()));
     }
 
     notify(1 === \count($builds) ? \sprintf('Stack "%s" is built', $builds[0]->name) : \sprintf('%d stacks are built', \count($builds)));
@@ -100,19 +76,19 @@ function build(
 }
 
 #[AsTask(name: 'stacks', namespace: 'wasm', description: 'Lists the stacks')]
-function list_stacks(
+function stacks_task(
     #[AsOption(description: 'Only print their names, as JSON (the CI builds one stack per job)')]
     bool $json = false,
 ): void {
     if ($json) {
-        io()->writeln(json_encode(registry()->names(), \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
+        io()->writeln(json_encode(stacks()->names(), \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
 
         return;
     }
 
     $rows = [];
-    foreach (registry()->names() as $name) {
-        $stack = registry()->describe($name);
+    foreach (stacks()->names() as $name) {
+        $stack = stacks()->describe($name);
         $rows[] = [$name, $stack['php'], $stack['extensions'], $stack['targets']];
     }
 
@@ -120,12 +96,12 @@ function list_stacks(
 }
 
 #[AsTask(name: 'sizes', namespace: 'wasm', description: 'Compares the size of what is built with the default stack')]
-function sizes(): void
+function sizes_task(): void
 {
     $size = static fn (string $stack, string $file): ?int => is_file($path = build_dir() . '/' . $stack . '/' . $file) ? (int) filesize($path) : null;
 
     $rows = [];
-    foreach (registry()->names() as $name) {
+    foreach (stacks()->names() as $name) {
         // The web build is the one that matters, and the one everybody has
         foreach (['php-web.wasm', 'php-cli.wasm'] as $file) {
             if (null === $bytes = $size($name, $file)) {
@@ -154,7 +130,7 @@ function sizes(): void
 }
 
 #[AsTask(name: 'run', namespace: 'wasm', description: 'Runs a PHP file, or some code with -r, in a built stack (node target)')]
-function wasm_run(
+function run_task(
     #[AsArgument(description: 'The PHP file to run')]
     ?string $file = null,
     #[AsOption(shortcut: 'r', description: 'The PHP code to run, without <?php ?>')]
@@ -168,11 +144,11 @@ function wasm_run(
 
     $arguments = null !== $code ? ['-r', $code] : [is_file($file) ? realpath($file) : throw new \InvalidArgumentException(\sprintf('The file "%s" does not exist.', $file))];
 
-    return node(registry()->resolve($stack, build_dir()), $arguments)->getExitCode() ?? 1;
+    return node(resolve($stack), $arguments)->getExitCode() ?? 1;
 }
 
 #[AsTask(name: 'test', namespace: 'wasm', description: 'Builds the stacks, then checks from node that each has the right PHP version and its extensions')]
-function test(
+function test_task(
     #[AsArgument(description: 'The stacks to test, all by default', autocomplete: 'PhpWasm\complete_stacks')]
     array $stacks = [],
     #[AsOption(description: 'Check what is already built')]
@@ -180,17 +156,16 @@ function test(
     #[AsOption(description: 'Override a value of the bake file, as "docker buildx bake --set" does (the CI gives the cache this way), can be repeated', mode: InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY)]
     array $set = [],
 ): int {
-    $registry = registry();
-
-    // The checks run on node, so every stack needs that target
-    $builds = array_map(static fn (string $name): Build => $registry->resolve($name, build_dir())->withTarget('node'), [] !== $stacks ? $stacks : $registry->names());
+    $names = [] !== $stacks ? $stacks : stacks()->names();
 
     if (!$noBuild) {
-        bake($builds, build_dir() . '/bake.json', $set);
+        // The checks run on node, so every stack needs that target
+        bake(array_map(static fn (string $name): Build => resolve($name)->withTarget('node'), $names), $set);
     }
 
     $failed = 0;
-    foreach ($builds as $build) {
+    foreach ($names as $name) {
+        $build = resolve($name);
         $problems = check($build);
 
         if ([] === $problems) {
@@ -204,12 +179,12 @@ function test(
     }
 
     if ($failed > 0) {
-        io()->error(\sprintf('%d of %d stacks are broken.', $failed, \count($builds)));
+        io()->error(\sprintf('%d of %d stacks are broken.', $failed, \count($names)));
 
         return 1;
     }
 
-    io()->success(\sprintf('%d stacks work.', \count($builds)));
+    io()->success(\sprintf('%d stacks work.', \count($names)));
 
     return 0;
 }
@@ -219,7 +194,7 @@ function test(
  */
 function complete_stacks(): array
 {
-    return registry()->names();
+    return stacks()->names();
 }
 
 /**
@@ -228,153 +203,7 @@ function complete_stacks(): array
 function complete_extensions(): array
 {
     // What the Dockerfile knows: ext <name> ...
-    preg_match_all('/^ext (\w+)\s/m', (string) file_get_contents(BUILDER_ROOT . '/Dockerfile'), $matches);
+    preg_match_all('/^ext (\w+)\s/m', (string) file_get_contents(builder_root() . '/Dockerfile'), $matches);
 
     return $matches[1];
-}
-
-/**
- * The stacks of this repository, and the ones of the project that imports it.
- */
-function registry(): Stacks
-{
-    static $registry;
-
-    return $registry ??= Stacks::load(BUILDER_ROOT, project_root());
-}
-
-/**
- * The project that runs castor, which is not always this repository.
- */
-function project_root(): string
-{
-    return PathHelper::getRoot();
-}
-
-function build_dir(): string
-{
-    return project_root() . '/build';
-}
-
-function relative(string $path): string
-{
-    return Path::makeRelative($path, getcwd() ?: project_root());
-}
-
-/**
- * @param list<Build> $builds
- */
-function bake_definition(array $builds): string
-{
-    $targets = [];
-    foreach ($builds as $build) {
-        if (isset($targets[$build->bakeName()])) {
-            throw new \LogicException(\sprintf('The stack "%s" has the same name as another one, once cleaned up for buildx ("%s").', $build->name, $build->bakeName()));
-        }
-
-        $targets[$build->bakeName()] = $build->bakeTarget(BUILDER_ROOT);
-    }
-
-    return json_encode([
-        'group' => ['default' => ['targets' => array_keys($targets)]],
-        'target' => $targets,
-    ], \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR);
-}
-
-/**
- * Builds the stacks in a single buildx invocation: it builds them in parallel,
- * and shares the layers they have in common.
- *
- * @param list<Build>  $builds
- * @param list<string> $set    overrides, given to "docker buildx bake --set"
- */
-function bake(array $builds, string $bakeFile, array $set = []): void
-{
-    fs()->dumpFile($bakeFile, bake_definition($builds) . "\n");
-
-    $command = ['docker', 'buildx', 'bake', '-f', $bakeFile];
-    $printed = ' // docker buildx bake -f ' . relative($bakeFile);
-    foreach ($set as $override) {
-        array_push($command, '--set', $override);
-        $printed .= ' --set ' . escapeshellarg($override);
-    }
-
-    io()->writeln($printed);
-    run($command);
-}
-
-/**
- * Runs the node runner on a stack.
- *
- * @param list<string> $arguments the PHP file, or -r and some code
- */
-function node(Build $build, array $arguments): \Symfony\Component\Process\Process
-{
-    if (!is_file($runner = $build->artifact('node', 'mjs'))) {
-        throw new \RuntimeException(\sprintf('"%s" does not exist: build the stack with the node target first ("castor wasm:build %s").', relative($runner), $build->name));
-    }
-
-    // No pty: the output of PHP must not be altered, it may go through a pipe
-    return run(
-        ['node', BUILDER_ROOT . '/run.mjs', '--build', $runner, ...$arguments],
-        context: context()->withPty(false)->withAllowFailure(),
-    );
-}
-
-/**
- * What has to be true for an extension to work, when extension_loaded() is not
- * enough: intl loads without ICU's data, then it only knows locale codes.
- */
-const CHECKS = [
-    'intl' => 'Locale::getDisplayLanguage("fr", "en") === "French"',
-];
-
-/**
- * @return list<string> what is wrong with the stack, nothing when it works
- */
-function check(Build $build): array
-{
-    if (!is_file($runner = $build->artifact('node', 'mjs'))) {
-        return [\sprintf('"%s" does not exist', relative($runner))];
-    }
-
-    $checks = array_intersect_key(CHECKS, array_flip($build->extensions));
-    $works = array_map(
-        static fn (string $extension, string $check): string => \sprintf('%1$s => extension_loaded(%1$s) && %2$s', var_export($extension, true), $check),
-        array_keys($checks),
-        $checks,
-    );
-
-    $code = '$e = ' . var_export($build->extensions, true) . '; echo json_encode(["version" => PHP_VERSION, "loaded" => array_map("extension_loaded", $e), "works" => [' . implode(', ', $works) . ']]);';
-
-    try {
-        $output = capture(
-            ['node', BUILDER_ROOT . '/run.mjs', '--build', $runner, '-r', $code],
-            context: context()->withPty(false),
-        );
-    } catch (\Throwable $e) {
-        return ['node failed: ' . $e->getMessage()];
-    }
-
-    $result = json_decode($output, true);
-    if (!\is_array($result) || !isset($result['version'], $result['loaded'])) {
-        return ['unexpected output: ' . $output];
-    }
-
-    $problems = [];
-    if (null !== $build->php && $build->php !== $result['version']) {
-        $problems[] = \sprintf('PHP_VERSION is %s, expected %s', $result['version'], $build->php);
-    }
-    foreach ($build->extensions as $i => $extension) {
-        if (true !== ($result['loaded'][$i] ?? null)) {
-            $problems[] = \sprintf('extension_loaded("%s") is false', $extension);
-        }
-    }
-    foreach ($checks as $extension => $check) {
-        if (true !== ($result['works'][$extension] ?? null)) {
-            $problems[] = \sprintf('%s does not work: %s is false', $extension, $check);
-        }
-    }
-
-    return $problems;
 }

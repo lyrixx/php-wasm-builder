@@ -1,6 +1,6 @@
 {
     "name": "lyrixx/php-wasm-builder",
-    "description": "Builds PHP as WebAssembly: a Dockerfile, and castor tasks to build named stacks (a PHP version, extensions, what to embed) with one command",
+    "description": "Builds PHP as WebAssembly: a Dockerfile, and castor functions and tasks to build named stacks (a PHP version, extensions, what to embed) with one command",
     "type": "library",
     "license": "MIT",
     "keywords": ["php", "wasm", "webassembly", "emscripten", "castor"],
@@ -8,6 +8,10 @@
         "php": ">=8.2"
     },
     "autoload": {
+        "files": [
+            "src/functions-internal.php",
+            "src/functions.php"
+        ],
         "psr-4": {
             "PhpWasm\\": "src/"
         }

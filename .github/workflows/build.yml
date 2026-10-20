@@ -85,7 +85,7 @@ jobs:
           name: php-wasm-${{ matrix.stack }}
           path: |
             build/
-            !build/bake.json
+            !build/**/bake.json
           if-no-files-found: error
 
   sizes:

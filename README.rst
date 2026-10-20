@@ -16,8 +16,9 @@ What is in here:
 - ``phpw.c``: the functions that JavaScript calls to run PHP (``phpw_run()``…);
 - ``examples/``: a few PHP scripts, embedded in what is built as ``/examples``;
 - ``run.mjs``: runs some PHP code, or a PHP file, in what is built, with node;
-- ``stacks.php``, ``castor.php`` and ``src/``: named builds, and castor tasks
-  to build, run and test them (see `Stacks, and castor`_).
+- ``stacks.php``, ``src/`` and ``castor.php``: named builds, a ``build()``
+  function, and castor tasks to build, run and test them (see `Stacks, and
+  castor`_).
 
 Quick start
 -----------
@@ -257,23 +258,12 @@ Using it from your own project
 The Dockerfile knows which emsdk works, how to cross-compile oniguruma and
 libxml2, which ``./configure`` flags PHP needs to link and which ``emcc``
 flags make it load. Any PHP project can reuse that, instead of copying the
-Dockerfile, by importing this repository as a castor package::
+Dockerfile, by requiring this repository as a castor package::
 
     castor composer require lyrixx/php-wasm-builder
 
-.. code-block:: php
-
-    <?php
-    // castor.php
-
-    use function Castor\import;
-
-    defined('CASTOR_USE_CHDIR') || define('CASTOR_USE_CHDIR', false);
-
-    import('composer://lyrixx/php-wasm-builder');
-
-Then declare your stacks, with the same format, in a ``stacks.php`` file next
-to ``castor.php``. The stacks of this repository are there to inherit from:
+Declare your stacks, with the same format, in a ``stacks.php`` file next to
+``castor.php``. The stacks of this repository are there to inherit from:
 
 .. code-block:: php
 
@@ -290,9 +280,35 @@ to ``castor.php``. The stacks of this repository are there to inherit from:
             ->embed('dist'),    // relative to your project
     ];
 
-``castor wasm:build my-app`` then builds it in the ``build/my-app/`` directory of
-your project. The tasks are under a ``wasm:`` prefix, so they do not collide
-with the ones of your project.
+Then build them from your own tasks, with ``PhpWasm\build()``. It builds them
+in the ``build/<stack>/`` directory of your project:
+
+.. code-block:: php
+
+    <?php
+    // castor.php
+
+    use Castor\Attribute\AsTask;
+
+    use function PhpWasm\build;
+
+    defined('CASTOR_USE_CHDIR') || define('CASTOR_USE_CHDIR', false);
+
+    #[AsTask]
+    function wasm(): void
+    {
+        build('my-app');
+    }
+
+Requiring the package does not add any task to your project. To get the ones
+of this repository too (``castor wasm:build my-app``, ``castor wasm:run``,
+``castor wasm:test``…), import it in your ``castor.php``:
+
+.. code-block:: php
+
+    use function Castor\import;
+
+    import('composer://lyrixx/php-wasm-builder');
 
 Credits
 -------
