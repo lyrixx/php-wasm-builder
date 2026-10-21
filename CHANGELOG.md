@@ -1,6 +1,14 @@
 # Changelog
 
-## 0.6.0 (unreleased)
+## 0.7.0 (unreleased)
+
+* Add `PhpWasm\test_page()` and `page.mjs`, to test the JavaScript of a page
+  in node: preloaded with `node --import`, `page.mjs` makes `fetch()` read the
+  files from the disk, and record their resource timing, as a browser does. The
+  modules of the page, and the `php-web.mjs` they load, run as they are.
+* `run.mjs` loads the build for the web with `page.mjs`.
+
+## 0.6.0 (2026-10-21)
 
 * Add `PhpWasm\check_stack()` and `PhpWasm\run_wasm()`, to check in the CI
   of a project that what it built boots and answers: they run the build for
