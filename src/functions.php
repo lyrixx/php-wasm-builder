@@ -2,6 +2,9 @@
 
 namespace PhpWasm;
 
+use Castor\Exception\ProblemException;
+
+use function Castor\context;
 use function Castor\fs;
 use function Castor\io;
 use function Castor\run;
@@ -58,4 +61,77 @@ function build(array $stacks, array $set = []): array
     }
 
     return $stacks;
+}
+
+/**
+ * Checks that what a stack built boots, with its PHP version and its
+ * extensions, as castor's check() does. It runs every build from node, the one
+ * for the web too: no browser is needed.
+ *
+ * @throws ProblemException with what is wrong
+ */
+function check_stack(Stack $stack): void
+{
+    io()->write(\sprintf('Stack "%s": %s', $stack->name, describe($stack)));
+
+    // What is wrong when a PHP expression is false
+    $php = $stack->php ?? dockerfile_default('PHP_VERSION');
+    $problems = ["PHP_VERSION is not {$php}" => 'PHP_VERSION === ' . var_export($php, true)];
+    foreach ($stack->extensions as $extension) {
+        $problems["{$extension} is not loaded"] = 'extension_loaded(' . var_export($extension, true) . ')';
+    }
+    // intl loads without ICU's data, then it only knows locale codes
+    if (\in_array('intl', $stack->extensions, true)) {
+        $problems += 'none' === $stack->icuData
+            ? ['intl does not normalize, or has ICU\'s data' => 'extension_loaded("intl") && Normalizer::normalize("e\u{301}") === "\u{e9}" && Locale::getDisplayLanguage("fr", "en") === "fr"']
+            : ['intl does not have ICU\'s data' => 'extension_loaded("intl") && Locale::getDisplayLanguage("fr", "en") === "French"'];
+    }
+
+    // Prints the problems whose expression is false
+    $code = \sprintf('echo json_encode(array_keys(array_filter([%s])));', implode(', ', array_map(
+        static fn (string $problem, string $expression): string => var_export($problem, true) . " => !({$expression})",
+        array_keys($problems),
+        $problems,
+    )));
+
+    $found = [];
+    foreach ($stack->targets as $target) {
+        $build = $stack->artifact($target, 'mjs');
+        if (!is_file($build)) {
+            $found[] = \sprintf('%s does not exist', relative($build));
+            continue;
+        }
+
+        $process = node($build, ['-r', $code], context()->withQuiet());
+        $wrong = json_decode($process->getOutput(), true);
+        foreach ($process->isSuccessful() && \is_array($wrong) ? $wrong : ['it does not run: ' . trim($process->getOutput() . $process->getErrorOutput())] as $problem) {
+            $found[] = basename($build) . ': ' . $problem;
+        }
+    }
+
+    if ([] !== $found) {
+        io()->writeln(' ❌');
+
+        throw new ProblemException(implode("\n", $found));
+    }
+
+    io()->writeln(' ✅');
+}
+
+/**
+ * Runs some PHP code in what a stack built, from node: in the build of its
+ * first target, the web one by default, as a browser would run it.
+ *
+ * @return string what PHP prints, without the line breaks at the end
+ *
+ * @throws ProblemException when PHP does not exit with 0
+ */
+function run_wasm(Stack $stack, string $code): string
+{
+    $process = node($stack->artifact($stack->targets[0], 'mjs'), ['-r', $code], context()->withQuiet());
+    if (!$process->isSuccessful()) {
+        throw new ProblemException(\sprintf('PHP exits with %d in the stack "%s": %s', $process->getExitCode(), $stack->name, trim($process->getOutput() . $process->getErrorOutput())));
+    }
+
+    return rtrim($process->getOutput(), "\n");
 }

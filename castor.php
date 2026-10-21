@@ -5,6 +5,7 @@ namespace PhpWasm;
 use Castor\Attribute\AsArgument;
 use Castor\Attribute\AsOption;
 use Castor\Attribute\AsTask;
+use Castor\Exception\ProblemException;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Filesystem\Path;
@@ -13,7 +14,6 @@ use function Castor\context;
 use function Castor\import;
 use function Castor\io;
 use function Castor\notify;
-use function Castor\run;
 
 // The wasm:* tasks, that build the stacks of stacks.php, and of
 // stacks.override.php when there is one (it is not versioned: the stacks of
@@ -152,7 +152,7 @@ function sizes_task(): void
     io()->table(['Stack', 'File', 'Size', 'vs ' . DEFAULT_STACK], $rows);
 }
 
-#[AsTask(name: 'run', namespace: 'wasm', description: 'Runs a PHP file, or some code with -r, in a built stack (node target)')]
+#[AsTask(name: 'run', namespace: 'wasm', description: 'Runs a PHP file, or some code with -r, in a built stack')]
 function run_task(
     #[AsArgument(description: 'The PHP file to run')]
     ?string $file = null,
@@ -167,15 +167,12 @@ function run_task(
 
     // castor does not run it from where the command is run
     $arguments = null === $code ? [Path::makeAbsolute($file, getcwd() ?: project_root())] : ['-r', $code];
+    $selected = stack($stack);
 
-    // No pty: the output of PHP must not be altered, it may go through a pipe
-    return run(
-        ['node', builder_root() . '/run.mjs', '--build', stack($stack)->artifact('node', 'mjs'), ...$arguments],
-        context: context()->withPty(false)->withAllowFailure(),
-    )->getExitCode();
+    return node($selected->artifact($selected->targets[0], 'mjs'), $arguments, context())->getExitCode();
 }
 
-#[AsTask(name: 'test', namespace: 'wasm', description: 'Builds the stacks, then checks from node that each has the right PHP version and its extensions')]
+#[AsTask(name: 'test', namespace: 'wasm', description: 'Builds the stacks, then checks from node that what each built boots, with its PHP version and its extensions')]
 function test_task(
     #[AsArgument(description: 'The stacks to test, all by default', autocomplete: 'PhpWasm\complete_stacks')]
     array $stacks = [],
@@ -187,22 +184,17 @@ function test_task(
     $stacks = [] === $stacks ? array_values(stacks()) : array_map(stack(...), $stacks);
 
     if (!$noBuild) {
-        // The checks run on node, so every stack needs that target
-        build(array_map(static fn (Stack $stack): Stack => $stack->targets(...[...$stack->targets, 'node']), $stacks), $set);
+        build($stacks, $set);
     }
 
     $failed = 0;
     foreach ($stacks as $stack) {
-        $problems = check($stack);
-
-        if ([] === $problems) {
-            io()->writeln(\sprintf(' <info>✔</info> %s: %s', $stack->name, describe($stack)));
-            continue;
+        try {
+            check_stack($stack);
+        } catch (ProblemException $exception) {
+            ++$failed;
+            io()->listing(explode("\n", $exception->getMessage()));
         }
-
-        ++$failed;
-        io()->writeln(\sprintf(' <error>✘</error> %s', $stack->name));
-        io()->listing($problems);
     }
 
     if ($failed > 0) {
@@ -222,12 +214,4 @@ function test_task(
 function complete_stacks(): array
 {
     return array_keys(stacks());
-}
-
-/**
- * The PHP version and the extensions of a stack.
- */
-function describe(Stack $stack): string
-{
-    return \sprintf('PHP %s, %s', $stack->php ?? dockerfile_default('PHP_VERSION'), [] === $stack->extensions ? 'no extension' : implode(' ', $stack->extensions));
 }

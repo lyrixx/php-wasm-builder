@@ -3,15 +3,19 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
-// Runs some PHP code, or a PHP file, in a build for node (php-cli.mjs), and
-// exits with the exit status of PHP:
+// Runs some PHP code, or a PHP file, in a build, and exits with the exit
+// status of PHP:
 //
-//     node run.mjs [--build <php-cli.mjs>] (<file.php> | -r <code>)
+//     node run.mjs [--build <.mjs>] (<file.php> | -r <code>)
 //
-// --build  the php-cli.mjs of the stack to run, the default one by default
+// --build  the php-cli.mjs or the php-web.mjs to run, the php-cli.mjs of the
+//          default stack by default
 // -r       PHP code to run, without <?php ?>
+//
+// The build for the web runs in node too: what a browser would run can be
+// tested without a browser.
 
-const USAGE = 'Usage: node run.mjs [--build <php-cli.mjs>] (<file.php> | -r <code>)';
+const USAGE = 'Usage: node run.mjs [--build <.mjs>] (<file.php> | -r <code>)';
 
 let args;
 try {
@@ -44,6 +48,12 @@ const { default: createPhpModule } = await import(pathToFileURL(build));
 const stdout = lineWriter(process.stdout);
 const stderr = lineWriter(process.stderr);
 const { ccall } = await createPhpModule({
+    // The build for the web fetches its .wasm, which node can not do from a file
+    instantiateWasm: (imports, receive) => {
+        WebAssembly.instantiate(fs.readFileSync(build.replace(/\.mjs$/, '.wasm')), imports).then(({ instance }) => receive(instance));
+
+        return {};
+    },
     print: stdout.write,
     printErr: stderr.write,
 });

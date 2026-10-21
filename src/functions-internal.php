@@ -2,10 +2,11 @@
 
 namespace PhpWasm;
 
+use Castor\Context;
 use Castor\Helper\PathHelper;
 use Symfony\Component\Filesystem\Path;
+use Symfony\Component\Process\Process;
 
-use function Castor\context;
 use function Castor\run;
 
 // What build() and the tasks of castor.php are made of. Castor never knows how
@@ -119,46 +120,17 @@ function bake_definition(array $stacks): string
 }
 
 /**
- * Checks from node that a built stack has its PHP version and its extensions.
+ * Runs some PHP code, or a PHP file, in a build of a stack with run.mjs.
  *
- * @return list<string> what is wrong with the stack, nothing when it works
+ * @param string       $build     the .mjs file of the build
+ * @param list<string> $arguments the PHP file, or -r and some code
  *
  * @internal
  */
-function check(Stack $stack): array
+function node(string $build, array $arguments, Context $context): Process
 {
-    $runner = $stack->artifact('node', 'mjs');
-    if (!is_file($runner)) {
-        return [\sprintf('"%s" does not exist', relative($runner))];
-    }
-
-    // What is wrong when a PHP expression is false
-    $php = $stack->php ?? dockerfile_default('PHP_VERSION');
-    $problems = ["PHP_VERSION is not {$php}" => 'PHP_VERSION === ' . var_export($php, true)];
-    foreach ($stack->extensions as $extension) {
-        $problems["{$extension} is not loaded"] = 'extension_loaded(' . var_export($extension, true) . ')';
-    }
-    // intl loads without ICU's data, then it only knows locale codes
-    if (\in_array('intl', $stack->extensions, true)) {
-        $problems += 'none' === $stack->icuData
-            ? ['intl does not normalize, or has ICU\'s data' => 'extension_loaded("intl") && Normalizer::normalize("e\u{301}") === "\u{e9}" && Locale::getDisplayLanguage("fr", "en") === "fr"']
-            : ['intl does not have ICU\'s data' => 'extension_loaded("intl") && Locale::getDisplayLanguage("fr", "en") === "French"'];
-    }
-
-    // Prints the problems whose expression is false
-    $code = \sprintf('echo json_encode(array_keys(array_filter([%s])));', implode(', ', array_map(
-        static fn (string $problem, string $expression): string => var_export($problem, true) . " => !({$expression})",
-        array_keys($problems),
-        $problems,
-    )));
-
-    $process = run(
-        ['node', builder_root() . '/run.mjs', '--build', $runner, '-r', $code],
-        context: context()->withPty(false)->withQuiet()->withAllowFailure(),
-    );
-    $found = json_decode($process->getOutput(), true);
-
-    return $process->isSuccessful() && \is_array($found) ? $found : ['it does not run: ' . trim($process->getOutput() . $process->getErrorOutput())];
+    // No pty: the output of PHP must not be altered, it may go through a pipe
+    return run(['node', builder_root() . '/run.mjs', '--build', $build, ...$arguments], context: $context->withPty(false)->withAllowFailure());
 }
 
 /**
@@ -207,4 +179,14 @@ function build_dir(): string
 function relative(string $path): string
 {
     return Path::makeRelative($path, getcwd() ?: project_root());
+}
+
+/**
+ * The PHP version and the extensions of a stack.
+ *
+ * @internal
+ */
+function describe(Stack $stack): string
+{
+    return \sprintf('PHP %s, %s', $stack->php ?? dockerfile_default('PHP_VERSION'), [] === $stack->extensions ? 'no extension' : implode(' ', $stack->extensions));
 }

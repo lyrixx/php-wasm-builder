@@ -15,7 +15,8 @@ What is in here:
 - ``Dockerfile``: how PHP is compiled, everything else only drives it;
 - ``phpw.c``: the functions that JavaScript calls to run PHP (``phpw_run()``…);
 - ``examples/``: a few PHP scripts, embedded in what is built as ``/examples``;
-- ``run.mjs``: runs some PHP code, or a PHP file, in what is built, with node;
+- ``run.mjs``: runs some PHP code, or a PHP file, in what is built, with node
+  (the build for the web too);
 - ``stacks.php``, ``src/`` and ``castor.php``: named builds, a ``build()``
   function, and castor tasks to build, run and test them (see `Stacks, and
   castor`_).
@@ -39,6 +40,8 @@ them::
 ``node run.mjs examples/hello.php`` reads the file from your disk, so you can
 edit it and run it again without building anything. ``/examples/hello.php`` is
 the copy embedded in the ``.wasm`` file: it only changes with a new build.
+``--build build/default/php-web.mjs`` runs the build for the web instead, the
+one a browser loads.
 
 Everything else is a build argument (see `Options`_). By default, this builds
 PHP 8.5.11, with the extensions listed in `Supported Extensions`_::
@@ -261,10 +264,11 @@ need to declare a stack to try something::
 What is built with overrides goes to the directory of the stack
 (``build/default/``, ``build/playground/``), in place of what was there.
 
-``castor wasm:test`` is what tells that a stack works: once built, it runs each
-stack in node, and checks that ``PHP_VERSION`` is the one that was asked for,
-and that ``extension_loaded()`` is true for every extension that was asked for.
-It does not run what the stack embeds.
+``castor wasm:test`` is what tells that a stack works: once built, it runs
+every build of each stack in node, the one for the web too, and checks that
+``PHP_VERSION`` is the one that was asked for, and that ``extension_loaded()``
+is true for every extension that was asked for. It does not run what the stack
+embeds.
 
 Playing with it
 ---------------
@@ -341,6 +345,36 @@ the CI of this repository does (the cache needs
         '*.cache-from=type=gha',
         '*.cache-to=type=gha,mode=max,ignore-error=true',
     ]);
+
+What is built for the web runs in node too: a project can check that it boots
+and answers, in its CI, without a browser. ``PhpWasm\check_stack()`` does what
+``castor wasm:test`` does, and ``PhpWasm\run_wasm()`` runs some code in the
+build of the first target of a stack, the web one by default. Both throw a
+``ProblemException`` when something is wrong, as castor's ``check()`` does:
+
+.. code-block:: php
+
+    <?php
+    // castor.php
+
+    use Castor\Attribute\AsTask;
+
+    use function Castor\check;
+    use function PhpWasm\check_stack;
+    use function PhpWasm\run_wasm;
+
+    #[AsTask]
+    function smoke(): void
+    {
+        // The PHP version, and the extensions
+        check_stack(my_stack());
+
+        // The code of the project, as the page runs it
+        check('The page says hello', 'The page does not say hello.', fn (): bool => 'Hello!' === run_wasm(my_stack(), 'require "/app/hello.php";'));
+    }
+
+``run_wasm()`` returns what PHP prints, and throws when PHP does not exit with
+0: an uncaught exception, a fatal error or an ``exit(1)``.
 
 Credits
 -------
