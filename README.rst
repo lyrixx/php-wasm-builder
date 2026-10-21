@@ -15,7 +15,8 @@ What is in here:
 - ``Dockerfile``: how PHP is compiled, everything else only drives it;
 - ``phpw.c``: the functions that JavaScript calls to run PHP (``phpw_run()``…);
 - ``examples/``: a few PHP scripts, embedded in what is built as ``/examples``;
-- ``run.mjs``: runs some PHP code, or a PHP file, in what is built, with node;
+- ``run.mjs``: runs some PHP code, or a PHP file, in what is built, with node
+  (the build for the web too);
 - ``stacks.php``, ``src/`` and ``castor.php``: named builds, a ``build()``
   function, and castor tasks to build, run and test them (see `Stacks, and
   castor`_).
@@ -39,6 +40,8 @@ them::
 ``node run.mjs examples/hello.php`` reads the file from your disk, so you can
 edit it and run it again without building anything. ``/examples/hello.php`` is
 the copy embedded in the ``.wasm`` file: it only changes with a new build.
+``--build build/default/php-web.mjs`` runs the build for the web instead, the
+one a browser loads.
 
 Everything else is a build argument (see `Options`_). By default, this builds
 PHP 8.5.11, with the extensions listed in `Supported Extensions`_::
@@ -261,10 +264,11 @@ need to declare a stack to try something::
 What is built with overrides goes to the directory of the stack
 (``build/default/``, ``build/playground/``), in place of what was there.
 
-``castor wasm:test`` is what tells that a stack works: once built, it runs each
-stack in node, and checks that ``PHP_VERSION`` is the one that was asked for,
-and that ``extension_loaded()`` is true for every extension that was asked for.
-It does not run what the stack embeds.
+``castor wasm:test`` is what tells that a stack works: once built, it runs
+every build of each stack in node, the one for the web too, and checks that
+``PHP_VERSION`` is the one that was asked for, and that ``extension_loaded()``
+is true for every extension that was asked for. It does not run what the stack
+embeds.
 
 Playing with it
 ---------------
@@ -292,55 +296,199 @@ Using it from your own project
 
 The Dockerfile knows which emsdk works, how to cross-compile oniguruma and
 libxml2, which ``./configure`` flags PHP needs to link and which ``emcc``
-flags make it load. Any PHP project can reuse that, instead of copying the
-Dockerfile, by requiring this repository as a castor package::
+flags make it load. Any PHP project can reuse that with castor, instead of
+copying the Dockerfile. This is how a project runs its PHP code in a page,
+checks it, and deploys it. It needs Docker, castor, and node for the checks.
+
+Require the package
+~~~~~~~~~~~~~~~~~~~
+
+::
 
     castor composer require lyrixx/php-wasm-builder
 
-Then build your stacks from your own tasks, with ``PhpWasm\build()``. Declare
-them wherever suits your project:
+It writes ``castor.composer.json`` and ``castor.composer.lock``, to commit,
+and installs the package in ``.castor/vendor/``. The project gets
+``PhpWasm\build()`` and ``PhpWasm\Stack``, but no task: the tasks of this
+repository build its own stacks. Git ignores what is installed and what is
+built:
+
+.. code-block:: text
+
+    # .gitignore
+    /.castor/vendor/
+    /build/
+    /public/build/
+
+Declare the stack, and build it
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The stack is declared once, in a function: the build and the checks need the
+same one. What PHP runs in the page is a copy of the code of the project,
+without its dev dependencies, embedded at ``/app``:
 
 .. code-block:: php
 
     <?php
     // castor.php
 
+    use Castor\Attribute\AsOption;
     use Castor\Attribute\AsTask;
     use PhpWasm\Stack;
+    use Symfony\Component\Console\Input\InputOption;
 
+    use function Castor\context;
+    use function Castor\fs;
+    use function Castor\run;
     use function PhpWasm\build;
 
-    defined('CASTOR_USE_CHDIR') || define('CASTOR_USE_CHDIR', false);
+    defined('CASTOR_USE_CHDIR') || define('CASTOR_USE_CHDIR', true);
 
-    #[AsTask]
-    function wasm(): void
+    function wasm_stack(): Stack
     {
-        build([
-            Stack::named('my-app')
-                ->php('8.5.11')
-                ->extensions('ctype', 'mbstring', 'tokenizer')
-                // Relative to your project, like outputDir(): at /app in the WASM filesystem
-                ->embed('build/dist', 'app')
-                // build/my-app/ by default
-                ->outputDir('public/build'),
-        ]);
+        return Stack::named('app')
+            // Keep in sync with config.platform.php in composer.json
+            ->php('8.5.11')
+            // What the code needs, see "Supported Extensions"
+            ->extensions('ctype', 'mbstring')
+            // Relative to the project, at /app in the WASM filesystem
+            ->embed('build/app', 'app')
+            // Only php-web.mjs and php-web.wasm
+            ->targets('web')
+            // Next to the page that loads them
+            ->outputDir('public/build');
     }
 
-Several stacks given at once are built in a single buildx invocation: in
-parallel, and sharing the layers they have in common. Requiring the package
-does not add any task to your project: the tasks of this repository build its
-own stacks.
+    #[AsTask('build', namespace: 'wasm', description: 'Builds PHP as WebAssembly, with the code of the project')]
+    function wasm_build(
+        #[AsOption(description: 'Given to "docker buildx bake --set", for a cache', mode: InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY)]
+        array $set = [],
+    ): void {
+        $app = __DIR__ . '/build/app';
+        fs()->remove($app);
+        fs()->mirror(__DIR__ . '/src', "{$app}/src");
+        fs()->copy(__DIR__ . '/composer.json', "{$app}/composer.json");
+        fs()->copy(__DIR__ . '/composer.lock', "{$app}/composer.lock");
+        // What is embedded takes some of the memory of PHP: no dev dependencies
+        run(['composer', 'install', '--no-dev', '--classmap-authoritative'], context: context()->withWorkingDirectory($app));
 
-The second argument of ``build()`` is given to ``docker buildx bake --set``.
-On GitHub Actions, this keeps the layers in the cache of the repository, as
-the CI of this repository does (the cache needs
-`crazy-max/ghaction-github-runtime
-<https://github.com/crazy-max/ghaction-github-runtime>`_)::
+        build([wasm_stack()], $set);
+    }
 
-    build([$stack], [
-        '*.cache-from=type=gha',
-        '*.cache-to=type=gha,mode=max,ignore-error=true',
-    ]);
+``castor wasm:build`` writes ``public/build/php-web.mjs`` and
+``php-web.wasm``. ``build()`` takes several stacks too: they are built in a
+single buildx invocation, in parallel, and sharing the layers they have in
+common.
+
+Run it in the page
+~~~~~~~~~~~~~~~~~~
+
+The page gives PHP its input in the WASM filesystem, runs a file of ``/app``,
+and gets what PHP prints. Each call is a request of its own, the files of the
+WASM filesystem stay:
+
+.. code-block:: html
+
+    <!-- public/index.html -->
+    <pre id="output"></pre>
+    <script type="module">
+        import createPhpModule from './build/php-web.mjs';
+
+        let output = '';
+        const php = await createPhpModule({
+            print: (line) => output += line + '\n',
+        });
+
+        php.FS.writeFile('/tmp/input.txt', 'Hello...');
+        const status = php.ccall('phpw', 'number', ['string'], ['/app/src/page.php']);
+
+        document.getElementById('output').textContent = 0 === status ? output : 'PHP failed, see the console.';
+    </script>
+
+``phpw()`` returns the exit status of PHP (see `Quick start`_), and what PHP
+writes on stderr goes to the console.
+
+Check it, without a browser
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+What is built for the web runs in node too. ``PhpWasm\check_stack()`` checks
+that it boots, with its PHP version and its extensions, as ``castor
+wasm:test`` does, and ``PhpWasm\run_wasm()`` runs some code in it, as the page
+does. Both throw a ``ProblemException`` when something is wrong, as castor's
+``check()`` does:
+
+.. code-block:: php
+
+    use function Castor\check;
+    use function PhpWasm\check_stack;
+    use function PhpWasm\run_wasm;
+
+    #[AsTask('smoke', namespace: 'wasm', description: 'Checks that what is built boots, and answers')]
+    function wasm_smoke(): void
+    {
+        check_stack(wasm_stack());
+
+        check('The page answers', 'The page does not answer.', fn (): bool => 'Hello…' === run_wasm(wasm_stack(), <<<'PHP'
+            file_put_contents('/tmp/input.txt', 'Hello...');
+            require '/app/src/page.php';
+            PHP));
+    }
+
+``run_wasm()`` returns what PHP prints, and throws when PHP does not exit with
+0: an uncaught exception, a fatal error or an ``exit(1)``.
+
+Deploy it, from GitHub Actions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The layers of the build are kept in the cache of GitHub Actions, given to
+``docker buildx bake --set``: a push only compiles what changed. And nothing
+is deployed if it does not answer:
+
+.. code-block:: yaml
+
+    # .github/workflows/pages.yaml
+    name: Pages
+
+    on:
+        push:
+            branches: [main]
+
+    permissions:
+        contents: read
+        pages: write
+        id-token: write
+
+    jobs:
+        deploy:
+            runs-on: ubuntu-latest
+            environment:
+                name: github-pages
+                url: ${{ steps.deployment.outputs.page_url }}
+            steps:
+                - uses: actions/checkout@v7
+
+                - uses: shivammathur/setup-php@v2
+                  with:
+                      php-version: '8.5'
+                      tools: castor
+
+                # The cache needs the docker-container driver of buildx…
+                - uses: docker/setup-buildx-action@v4
+
+                # …and the runtime token and URLs of GitHub Actions, that only
+                # actions get
+                - uses: crazy-max/ghaction-github-runtime@v4
+
+                - run: castor wasm:build --set '*.cache-from=type=gha' --set '*.cache-to=type=gha,mode=max,ignore-error=true'
+
+                - run: castor wasm:smoke
+
+                - uses: actions/upload-pages-artifact@v5
+                  with:
+                      path: public
+
+                - id: deployment
+                  uses: actions/deploy-pages@v5
 
 Credits
 -------

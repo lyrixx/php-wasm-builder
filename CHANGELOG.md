@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0 (unreleased)
+
+* Add `PhpWasm\check_stack()` and `PhpWasm\run_wasm()`, to check in the CI
+  of a project that what it built boots and answers: they run the build for
+  the web in node, no browser is needed, and throw a `ProblemException` when
+  something is wrong, as castor's `check()` does.
+* `run.mjs` runs the build for the web too. `castor wasm:run` runs the build of
+  the first target of the stack, and `castor wasm:test` checks every build of
+  the stacks, without building the node target for them anymore.
+
 ## 0.5.0 (2026-10-21)
 
 * BC break: `PhpWasm\Build` is gone: `build()` returns the stacks it is given,
