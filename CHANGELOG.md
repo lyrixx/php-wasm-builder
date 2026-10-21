@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.7.0 (unreleased)
+## 0.7.0 (2026-10-21)
 
 * Add `PhpWasm\test_page()` and `page.mjs`, to test the JavaScript of a page
   in node: preloaded with `node --import`, `page.mjs` makes `fetch()` read the
