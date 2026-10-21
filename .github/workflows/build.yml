@@ -68,6 +68,11 @@ jobs:
 
       - uses: castor-php/setup-castor@v1
 
+      # The checks run on node, with page.mjs: the version they are made for
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
       # Builds the stack, then checks from node that the PHP version and the
       # extensions are the ones that were asked for. The layers (emsdk, PHP,
       # the libraries…) are cached: one scope per stack, the layers they share
@@ -140,3 +145,21 @@ jobs:
             } else {
               await github.rest.issues.createComment({ owner, repo, issue_number, body });
             }
+
+  page:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # page.mjs relies on what node does (--import, the resource timing): the
+      # version it is made for
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # page.mjs, that lets node run the modules of a page: it needs no build
+      - name: Test page.mjs
+        run: node --import ./page.mjs --test tests/page.test.mjs

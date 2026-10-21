@@ -17,6 +17,8 @@ What is in here:
 - ``examples/``: a few PHP scripts, embedded in what is built as ``/examples``;
 - ``run.mjs``: runs some PHP code, or a PHP file, in what is built, with node
   (the build for the web too);
+- ``page.mjs``: lets node run the modules of a page as a browser does, to test
+  them (see `Check it, without a browser`_);
 - ``stacks.php``, ``src/`` and ``castor.php``: named builds, a ``build()``
   function, and castor tasks to build, run and test them (see `Stacks, and
   castor`_).
@@ -436,6 +438,36 @@ does. Both throw a ``ProblemException`` when something is wrong, as castor's
 
 ``run_wasm()`` returns what PHP prints, and throws when PHP does not exit with
 0: an uncaught exception, a fatal error or an ``exit(1)``.
+
+``run_wasm()`` runs PHP, not the JavaScript of the page. When the page keeps
+it in a module, ``PhpWasm\test_page()`` runs its tests with the test runner of
+node, preloaded with ``page.mjs``: ``fetch()`` reads the files from the disk,
+where a server would serve them from, and records their resource timing, as a
+browser does. The module, and the ``php-web.mjs`` it loads, run as they are:
+
+.. code-block:: js
+
+    // tests/page.test.mjs
+    import assert from 'node:assert/strict';
+    import { test } from 'node:test';
+
+    // It loads ./build/php-web.mjs, and exports what the page calls
+    import { answer } from '../public/page.mjs';
+
+    test('the page answers', () => {
+        assert.equal(answer('Hello...'), 'Hello…');
+    });
+
+.. code-block:: php
+
+    use function PhpWasm\test_page;
+
+    // In wasm_smoke(), relative to the root of the project
+    test_page('tests/page.test.mjs');
+
+``test_page()`` throws a ``ProblemException`` when a test fails, and node says
+which one. The URLs that the page fetches are relative to ``import.meta.url``:
+in node, they are ``file:`` URLs.
 
 Deploy it, from GitHub Actions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
