@@ -94,8 +94,8 @@ function bake_definition(array $stacks): string
 
         $outputDirs[$stack->outputDir] = $stack->name;
         $targets[$target] = [
-            'dockerfile' => builder_root() . '/Dockerfile',
-            'context' => builder_root(),
+            'dockerfile' => builder_root() . '/docker/Dockerfile',
+            'context' => builder_root() . '/docker',
             // What is not set is the default of the Dockerfile
             'args' => array_filter([
                 'PHP_VERSION' => $stack->php,
@@ -104,7 +104,7 @@ function bake_definition(array $stacks): string
                 'MEMORY' => $stack->memory,
                 'ICU_DATA' => $stack->icuData,
                 // None if nothing is embedded
-                'EMBED_PATH' => $stack->embedPath ?? '',
+                'EMBED_AT' => $stack->embedAt ?? '',
             ], static fn (?string $value): bool => null !== $value),
             'output' => ['type=local,dest=' . $stack->outputDir],
         ];
@@ -120,7 +120,7 @@ function bake_definition(array $stacks): string
 }
 
 /**
- * Runs some PHP code, or a PHP file, in a build of a stack with run.mjs.
+ * Runs a PHP file, or some PHP code, in a build of a stack with node/run.mjs.
  *
  * @param string       $build     the .mjs file of the build
  * @param list<string> $arguments the PHP file, or -r and some code
@@ -130,7 +130,7 @@ function bake_definition(array $stacks): string
 function node(string $build, array $arguments, Context $context): Process
 {
     // No pty: the output of PHP must not be altered, it may go through a pipe
-    return run(['node', builder_root() . '/run.mjs', '--build', $build, ...$arguments], context: $context->withPty(false)->withAllowFailure());
+    return run(['node', builder_root() . '/node/run.mjs', '--build', $build, ...$arguments], context: $context->withPty(false)->withAllowFailure());
 }
 
 /**
@@ -140,13 +140,13 @@ function node(string $build, array $arguments, Context $context): Process
  */
 function dockerfile_default(string $argument): ?string
 {
-    $dockerfile = file_get_contents(builder_root() . '/Dockerfile');
+    $dockerfile = file_get_contents(builder_root() . '/docker/Dockerfile');
 
     return preg_match('/^ARG ' . preg_quote($argument, '/') . '=(\S+)/m', $dockerfile, $matches) ? trim($matches[1], '"') : null;
 }
 
 /**
- * Where the Dockerfile, the shim and the runner are.
+ * Where docker/ and node/ are.
  *
  * @internal
  */

@@ -61,52 +61,30 @@
     <p id="message">Loading PHP…</p>
 
     <script type="module">
+        import createPhp from './build/php-web.mjs';
+
         const message = document.getElementById('message');
         const notes = document.getElementById('notes');
         const search = document.getElementById('search');
 
-        let createPhpModule;
-        try {
-            ({ default: createPhpModule } = await import('./build/php-web.mjs'));
-        } catch (error) {
-            message.textContent = 'PHP is not built yet: run "castor wasm:build notes".';
-            throw error;
-        }
+        // /notes, where the database is, is kept in IndexedDB: the rest of the
+        // filesystem goes away with the page
+        const php = await createPhp({ persist: '/notes' });
 
-        let output = '';
-        const php = await createPhpModule({
-            print: (line) => output += line + '\n',
-            printErr: (line) => console.error(line),
-        });
-
-        // /data is kept in IndexedDB, the rest of the filesystem goes away
-        // with the page
-        php.FS.mkdir('/data');
-        php.FS.mount(php.IDBFS, {}, '/data');
-
-        const syncfs = (populate) => new Promise((resolve, reject) => {
-            php.FS.syncfs(populate, (error) => error ? reject(error) : resolve());
-        });
-
-        // One request at a time, across the tabs of the page: each one reads
-        // what the others wrote, and writes to IndexedDB before the next one
-        // reads. Without the lock, a tab writes over what another one wrote.
-        function request(action, data = {}) {
-            return navigator.locks.request('notes', async () => {
-                await syncfs(true);
-                php.FS.writeFile('/tmp/request.json', JSON.stringify({ action, search: search.value, ...data }));
-                output = '';
-                const status = php.ccall('phpw', 'number', ['string'], ['/app/notes.php']);
-                await syncfs(false);
-
-                if (0 !== status) {
-                    throw new Error('PHP failed, see the console.');
+        async function request(action, data = {}) {
+            try {
+                const { exitCode, stdout, stderr } = await php.runFile('/app/notes.php', {
+                    stdin: JSON.stringify({ action, search: search.value, ...data }),
+                });
+                if (0 !== exitCode) {
+                    throw new Error(`PHP exits with ${exitCode}: ${stdout}${stderr}`);
                 }
-                notes.innerHTML = output;
-            }).catch((error) => {
+
+                notes.innerHTML = stdout;
+            } catch (error) {
                 message.textContent = error.message;
                 throw error;
-            });
+            }
         }
 
         document.getElementById('add').addEventListener('submit', async (event) => {

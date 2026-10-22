@@ -1,4 +1,0 @@
-# The build context only needs the shim: everything else (examples, output,
-# .git, ...) is either not used by the Dockerfile or given as a named context.
-*
-!phpw.c

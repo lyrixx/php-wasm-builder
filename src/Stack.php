@@ -26,7 +26,7 @@ final readonly class Stack
      * The targets, and the name of the files they produce. Keep in sync with
      * the "resolve" stage of the Dockerfile.
      */
-    public const TARGETS = ['web' => 'php-web', 'node' => 'php-cli'];
+    public const TARGETS = ['web' => 'php-web', 'node' => 'php-node'];
 
     /**
      * Keep in sync with the "resolve" stage of the Dockerfile.
@@ -36,7 +36,7 @@ final readonly class Stack
     /**
      * @param list<string> $extensions
      * @param string|null  $embed      absolute path of the directory to embed
-     * @param string|null  $embedPath  the name of the embedded directory in the WASM filesystem
+     * @param string|null  $embedAt    where the embedded directory is in the WASM filesystem, as /app
      * @param list<string> $targets
      * @param string       $outputDir  absolute path of the directory the files are written to
      */
@@ -45,7 +45,7 @@ final readonly class Stack
         public ?string $php,
         public array $extensions,
         public ?string $embed,
-        public ?string $embedPath,
+        public ?string $embedAt,
         public array $targets,
         public ?string $memory,
         public ?string $icuData,
@@ -60,7 +60,7 @@ final readonly class Stack
             php: null,
             extensions: [],
             embed: null,
-            embedPath: null,
+            embedAt: null,
             targets: array_keys(self::TARGETS),
             memory: null,
             icuData: null,
@@ -93,17 +93,18 @@ final readonly class Stack
     }
 
     /**
-     * The directory to embed in the WASM filesystem, at /<path>: /<its name>
-     * by default.
+     * The directory to embed in the WASM filesystem, at /<its name> unless it
+     * is given where: ->embed('build/embed', at: '/app').
      */
-    public function embed(string $directory, ?string $path = null): self
+    public function embed(string $directory, ?string $at = null): self
     {
-        // A single name: it is a directory of the build, next to the sources of PHP
-        if (null !== $path && !preg_match('/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/', $path)) {
-            throw new \InvalidArgumentException(\sprintf('"%s" is not a valid path to embed the directory at, use a name made of letters, digits, ".", "-" and "_", as "app" for /app.', $path));
+        $at ??= '/' . basename($directory);
+        // What emcc takes: an "@" would separate it from the directory
+        if (!preg_match('{^(/[a-zA-Z0-9][a-zA-Z0-9._-]*)+$}', $at)) {
+            throw new \InvalidArgumentException(\sprintf('"%s" is not a valid path to embed the directory at, use an absolute path made of letters, digits, ".", "-" and "_", as "/app".', $at));
         }
 
-        return $this->with(embed: Path::makeAbsolute($directory, project_root()), embedPath: $path ?? basename($directory));
+        return $this->with(embed: Path::makeAbsolute($directory, project_root()), embedAt: $at);
     }
 
     public function targets(string ...$targets): self

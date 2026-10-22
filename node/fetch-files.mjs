@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 // Runs the modules of a page in node, as a browser runs them, once preloaded:
 //
-//     node --import ./page.mjs --test tests/page.test.mjs
+//     node --import ./node/fetch-files.mjs --test tests/fetch-files.test.mjs
 //
 // A module of the page loads php-web.mjs, which fetches its .wasm, and fetches
 // the files it needs next to it: with URLs relative to import.meta.url, that

@@ -1,16 +1,15 @@
 <?php
 
 // The PHP of the page of public/: notes in SQLite, searched with FTS5. The
-// notes stack embeds this directory, as /app. The page keeps /data in
-// IndexedDB, gives the request in /tmp/request.json, and shows the notes this
-// prints:
+// notes stack embeds this directory, as /app. The page keeps /notes in
+// IndexedDB, gives the request on stdin, and shows the notes this prints:
 //
 //     castor wasm:build notes
 //     castor wasm:serve notes
 
-$request = json_decode(file_get_contents('/tmp/request.json'), true, flags: \JSON_THROW_ON_ERROR);
+$request = json_decode(file_get_contents('php://stdin'), true, flags: \JSON_THROW_ON_ERROR);
 
-$pdo = new PDO('sqlite:/data/notes.sqlite');
+$pdo = new PDO('sqlite:/notes/notes.sqlite');
 // A full-text index: searched with MATCH, sorted by relevance with "rank"
 $pdo->exec('CREATE VIRTUAL TABLE IF NOT EXISTS notes USING fts5(text)');
 

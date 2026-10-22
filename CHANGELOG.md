@@ -2,14 +2,51 @@
 
 ## 0.8.0 (unreleased)
 
+* BC break: the JavaScript API is `createPhp()`, and the `runFile()` and
+  `runCode()` of what it returns, documented in the README ("JavaScript API"):
+  `createPhpModule()` and `ccall('phpw', …)` are gone. A run resolves with the
+  exit status of PHP, and with what it wrote on stdout and stderr, as it wrote
+  it: there is no `print()` to give, nor line break to remove. It gives PHP
+  arguments (`$argv`) and stdin (`php://stdin`), and the code is not copied on
+  the stack of the module anymore: a big one does not crash it.
+* BC break: `phpw.c` is `docker/run.c`, with `run_file()` and `run_code()`. The
+  module only exports what the API needs: `phpw()`, `phpw_run()`,
+  `phpw_exec()`, `phpw_flush()`, `ccall()`, `UTF8ToString()`… are gone.
+* BC break: the build for node is `php-node.mjs` and `php-node.wasm`, instead
+  of `php-cli.mjs` and `php-cli.wasm`: it is not the CLI of PHP.
+* BC break: `->embed('build/embed', 'app')` is `->embed('build/embed', at:
+  '/app')`, `Stack::$embedPath` is `$embedAt`, and the `EMBED_PATH` build
+  argument is `EMBED_AT`, with the `/`.
+* BC break: `PhpWasm\run_wasm()` is `run_code()`, as `runCode()`: it returns
+  what PHP prints, without removing the line breaks at the end, and takes what
+  PHP reads on stdin.
+* BC break: `castor wasm:test` is `castor wasm:check`, as `check_stack()`, and
+  it checks the JavaScript API too.
+* BC break: what Docker builds is in `docker/`, the build context:
+  `Dockerfile` is `docker/Dockerfile`. `run.mjs` and `page.mjs` are
+  `node/run.mjs` and `node/fetch-files.mjs`.
+* `node/run.mjs` gives PHP the arguments after the file, or after the code, and
+  what is piped to it on stdin.
 * Add the `pdo`, `pdo_sqlite` and `sqlite3` extensions, with SQLite 3.54.1
   (`SQLITE_VERSION` and `SQLITE_YEAR`), its full-text search (FTS5) and its
   math functions. `PhpWasm\check_stack()` checks that SQLite has them.
-* The build for the web links IDBFS, and exports it as `IDBFS`: a page keeps a
-  directory of the WASM filesystem in IndexedDB, across reloads, an SQLite
-  database too.
+* `createPhp({ persist: '/my-page' })` keeps a directory of the WASM filesystem
+  in IndexedDB, across the reloads of the page, an SQLite database too. One run
+  at a time, across the tabs of the page: no tab writes over what another one
+  wrote.
 * Add `examples/notes/`, a page that keeps notes in SQLite, its `notes` stack,
-  and `castor wasm:serve`, to serve it with the built-in server of PHP.
+  and `castor wasm:serve`, to serve it with the built-in server of PHP: it
+  lists the examples that have a page when none is given.
+* Add `examples/playground/`, a page that runs the scripts of
+  `examples/embed/`: the `playground` stack is built in it, for the web only.
+* The castor tasks say what they do, and what to do next. `castor wasm:run`
+  offers to build the stack when it is not built yet, and `castor wasm:serve`
+  builds the page every time (in a second when nothing changed), with the PHP
+  version and the extensions of another stack with `--stack`.
+* The scripts of `examples/embed/` say which stack they need when they do not
+  run in it.
+* The CI does not comment the sizes of the `.wasm` files on the pull requests
+  anymore.
 * In `examples/`, what an `embed/` directory has is embedded, what a `public/`
   directory has is served: the scripts are in `examples/embed/`, still at
   `/examples` in the WASM filesystem.

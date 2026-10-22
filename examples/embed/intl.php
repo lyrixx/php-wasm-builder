@@ -4,6 +4,11 @@
 //
 //     castor wasm:run examples/embed/intl.php --stack intl
 
+if (!extension_loaded('intl')) {
+    echo "This script needs intl: run it in the intl stack, with --stack intl.\n";
+    exit(1);
+}
+
 echo (new NumberFormatter('fr_FR', NumberFormatter::CURRENCY))->formatCurrency(1234.5, 'EUR'), "\n";
 echo (new NumberFormatter('en', NumberFormatter::SPELLOUT))->format(42), "\n";
 echo (new IntlDateFormatter('ja_JP', IntlDateFormatter::FULL, IntlDateFormatter::NONE, 'UTC'))->format(0), "\n";

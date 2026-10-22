@@ -127,27 +127,30 @@ function check_stack(Stack $stack): void
 }
 
 /**
- * Runs some PHP code in what a stack built, from node: in the build of its
- * first target, the web one by default, as a browser would run it.
+ * Runs some PHP code in what a stack built, as runCode() does in a page, from
+ * node: in the build of its first target, the web one by default, as a
+ * browser would run it.
  *
- * @return string what PHP prints, without the line breaks at the end
+ * @param string $stdin what PHP reads on php://stdin
+ *
+ * @return string what PHP prints
  *
  * @throws ProblemException when PHP does not exit with 0
  */
-function run_wasm(Stack $stack, string $code): string
+function run_code(Stack $stack, string $code, string $stdin = ''): string
 {
-    $process = node($stack->artifact($stack->targets[0], 'mjs'), ['-r', $code], context()->withQuiet());
+    $process = node($stack->artifact($stack->targets[0], 'mjs'), ['-r', $code], context()->withQuiet()->withInput($stdin));
     if (!$process->isSuccessful()) {
         throw new ProblemException(\sprintf('PHP exits with %d in the stack "%s": %s', $process->getExitCode(), $stack->name, trim($process->getOutput() . $process->getErrorOutput())));
     }
 
-    return rtrim($process->getOutput(), "\n");
+    return $process->getOutput();
 }
 
 /**
  * Runs the tests of the JavaScript of a page with the test runner of node,
- * preloaded with page.mjs: the modules of the page, and the php-web.mjs they
- * load, run as they are, as in a browser.
+ * preloaded with node/fetch-files.mjs: the modules of the page, and the
+ * php-web.mjs they load, run as they are, as in a browser.
  *
  * @param string $file     a test file, relative to the root of the project
  * @param string ...$files more of them
@@ -159,7 +162,7 @@ function test_page(string $file, string ...$files): void
     // At least one file: without, node runs every test it finds, the ones of
     // vendor/ too
     $process = run(
-        ['node', '--import', builder_root() . '/page.mjs', '--test', $file, ...$files],
+        ['node', '--import', builder_root() . '/node/fetch-files.mjs', '--test', $file, ...$files],
         context: context()->withWorkingDirectory(project_root())->withAllowFailure(),
     );
     if (!$process->isSuccessful()) {
