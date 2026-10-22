@@ -146,8 +146,8 @@ function run_wasm(Stack $stack, string $code): string
 
 /**
  * Runs the tests of the JavaScript of a page with the test runner of node,
- * preloaded with page.mjs: the modules of the page, and the php-web.mjs they
- * load, run as they are, as in a browser.
+ * preloaded with node/fetch-files.mjs: the modules of the page, and the
+ * php-web.mjs they load, run as they are, as in a browser.
  *
  * @param string $file     a test file, relative to the root of the project
  * @param string ...$files more of them
@@ -159,7 +159,7 @@ function test_page(string $file, string ...$files): void
     // At least one file: without, node runs every test it finds, the ones of
     // vendor/ too
     $process = run(
-        ['node', '--import', builder_root() . '/page.mjs', '--test', $file, ...$files],
+        ['node', '--import', builder_root() . '/node/fetch-files.mjs', '--test', $file, ...$files],
         context: context()->withWorkingDirectory(project_root())->withAllowFailure(),
     );
     if (!$process->isSuccessful()) {

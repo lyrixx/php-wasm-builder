@@ -1,4 +1,5 @@
 target "default" {
+  context = "docker"
   contexts = {
     embed = "./examples/embed"
   }

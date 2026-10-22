@@ -3,27 +3,27 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
-import './page.mjs';
+import './fetch-files.mjs';
 
 // Runs some PHP code, or a PHP file, in a build, and exits with the exit
 // status of PHP:
 //
-//     node run.mjs [--build <.mjs>] (<file.php> | -r <code>)
+//     node node/run.mjs [--build <.mjs>] (<file.php> | -r <code>)
 //
 // --build  the php-cli.mjs or the php-web.mjs to run, the php-cli.mjs of the
 //          default stack by default
 // -r       PHP code to run, without <?php ?>
 //
-// The build for the web runs in node too, with page.mjs: what a browser would
-// run can be tested without a browser.
+// The build for the web runs in node too, with fetch-files.mjs: what a
+// browser would run can be tested without a browser.
 
-const USAGE = 'Usage: node run.mjs [--build <.mjs>] (<file.php> | -r <code>)';
+const USAGE = 'Usage: node node/run.mjs [--build <.mjs>] (<file.php> | -r <code>)';
 
 let args;
 try {
     args = parseArgs({
         options: {
-            build: { type: 'string', default: fileURLToPath(new URL('build/default/php-cli.mjs', import.meta.url)) },
+            build: { type: 'string', default: fileURLToPath(new URL('../build/default/php-cli.mjs', import.meta.url)) },
             code: { type: 'string', short: 'r' },
         },
         allowPositionals: true,

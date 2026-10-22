@@ -68,7 +68,7 @@ jobs:
 
       - uses: castor-php/setup-castor@v1
 
-      # The checks run on node, with page.mjs: the version they are made for
+      # The checks run on node, with fetch-files.mjs: the version it is made for
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -149,7 +149,7 @@ jobs:
               await github.rest.issues.createComment({ owner, repo, issue_number, body });
             }
 
-  page:
+  fetch-files:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -157,12 +157,13 @@ jobs:
         with:
           persist-credentials: false
 
-      # page.mjs relies on what node does (--import, the resource timing): the
-      # version it is made for
+      # fetch-files.mjs relies on what node does (--import, the resource
+      # timing): the version it is made for
       - uses: actions/setup-node@v7
         with:
           node-version: 24
 
-      # page.mjs, that lets node run the modules of a page: it needs no build
-      - name: Test page.mjs
-        run: node --import ./page.mjs --test tests/page.test.mjs
+      # fetch-files.mjs, that lets node run the modules of a page: it needs no
+      # build
+      - name: Test fetch-files.mjs
+        run: node --import ./node/fetch-files.mjs --test tests/fetch-files.test.mjs

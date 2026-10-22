@@ -3,9 +3,9 @@ import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { test } from 'node:test';
 
-// The tests of page.mjs, that node preloads:
+// The tests of fetch-files.mjs, that node preloads:
 //
-//     node --import ./page.mjs --test tests/page.test.mjs
+//     node --import ./node/fetch-files.mjs --test tests/fetch-files.test.mjs
 
 test('fetch() reads a file from the disk', async () => {
     const response = await fetch(import.meta.url);
