@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.7.1 (unreleased)
+## 0.7.1 (2026-10-22)
 
 * Build PHP 8.5.12 by default.
 
