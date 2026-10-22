@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1 (unreleased)
+
+* Build PHP 8.5.12 by default.
+
 ## 0.7.0 (2026-10-21)
 
 * Add `PhpWasm\test_page()` and `page.mjs`, to test the JavaScript of a page
