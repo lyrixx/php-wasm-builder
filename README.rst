@@ -2,86 +2,171 @@ PHP WASM Builder
 ================
 
 Builds PHP as WebAssembly, for the browser and for node, with the PHP version
-and the extensions you ask for. Only Docker is needed to build it, and node to
-run what is built.
+and the extensions you ask for, and the code you embed.
 
 This repository started as a fork of `derickr/php-wasm-builder
 <https://github.com/derickr/php-wasm-builder>`_, the builder of the PHP WASM
 files of the php.net documentation, and it is where it is developed now (see
 `Credits`_).
 
-What is in here:
-
-- ``Dockerfile``: how PHP is compiled, everything else only drives it;
-- ``phpw.c``: the functions that JavaScript calls to run PHP (``phpw_run()``…);
-- ``examples/``: what an ``embed/`` directory has is embedded in what is
-  built, what a ``public/`` directory has is served. ``examples/embed/`` has a
-  few PHP scripts, embedded in every stack as ``/examples``, and
-  ``examples/notes/`` a page that runs PHP (see `Playing with it`_);
-- ``run.mjs``: runs some PHP code, or a PHP file, in what is built, with node
-  (the build for the web too);
-- ``page.mjs``: lets node run the modules of a page as a browser does, to test
-  them (see `Check it, without a browser`_);
-- ``stacks.php``, ``src/`` and ``castor.php``: named builds, a ``build()``
-  function, and castor tasks to build, run and test them (see `Stacks, and
-  castor`_).
-
 Quick start
 -----------
 
-With Docker only (`castor <https://castor.jolicode.com>`_ makes it simpler, see
-`Stacks, and castor`_), build PHP::
+Only Docker is needed to build PHP, node to run it, and a static server to
+serve it to a browser. `castor <https://castor.jolicode.com>`_ makes it
+simpler, once you know how it works (see `Stacks, and castor`_).
+
+Build PHP
+~~~~~~~~~
+
+::
 
     docker buildx bake
 
-The files end up in ``build/default/``: ``php-web.mjs`` and ``php-web.wasm``
-for the browser, ``php-cli.mjs`` and ``php-cli.wasm`` for node. Run PHP in
-them::
+This builds PHP 8.5.12, with the extensions listed in `Supported
+Extensions`_: another version, or other extensions, are build arguments (see
+`Options`_). The first build compiles everything, and takes a while: the
+next ones only compile again what changed. The files end up in
+``build/default/``:
 
-    node run.mjs -r 'echo PHP_VERSION;'
-    node run.mjs examples/embed/hello.php
-    node run.mjs -r 'require "/examples/hello.php";'
+- ``php-web.mjs`` and ``php-web.wasm``, for the browser;
+- ``php-node.mjs`` and ``php-node.wasm``, for node.
 
-``node run.mjs examples/embed/hello.php`` reads the file from your disk, so
-you can edit it and run it again without building anything.
-``/examples/hello.php`` is the copy embedded in the ``.wasm`` file: it only
-changes with a new build.
-``--build build/default/php-web.mjs`` runs the build for the web instead, the
-one a browser loads.
+Run it, in node
+~~~~~~~~~~~~~~~
 
-Everything else is a build argument (see `Options`_). By default, this builds
-PHP 8.5.12, with the extensions listed in `Supported Extensions`_::
+``node/run.mjs`` runs PHP in what is built, as the php command does::
 
-    docker buildx bake --set default.args.PHP_VERSION=8.4.26                    # another PHP version
-    docker buildx bake --set default.args.EXTENSIONS="ctype tokenizer bcmath"   # other extensions
-    docker buildx bake --set default.args.TARGETS=node                          # only php-cli.mjs and php-cli.wasm
+    node node/run.mjs -r 'echo PHP_VERSION;'
+    node node/run.mjs -r 'var_dump($argv);' one two
+    echo '{"a": 1}' | node node/run.mjs -r 'var_dump(json_decode(file_get_contents("php://stdin")));'
+    node node/run.mjs my-script.php     # a file of your disk
 
-In a browser, ``php-web.mjs`` is the same module, built for the web. Serve it
-next to its ``php-web.wasm``, from any static server:
+It writes what PHP writes, and exits with its exit status. ``--build
+build/default/php-web.mjs`` runs the build for the web instead, the one a
+browser loads.
+
+Run it, in a browser
+~~~~~~~~~~~~~~~~~~~~
+
+``php-web.mjs`` is a module, that a page imports. Save this page as
+``build/default/index.html``, next to it:
 
 .. code-block:: html
 
     <pre id="output"></pre>
     <script type="module">
-        import createPhpModule from './php-web.mjs';
+        import createPhp from './php-web.mjs';
 
-        const output = document.getElementById('output');
-        const php = await createPhpModule({
-            print: (line) => output.textContent += line + '\n',
-        });
+        const php = await createPhp();
+        const { stdout } = await php.runCode('echo "Hello from PHP ", PHP_VERSION;');
 
-        php.ccall('phpw_run', null, ['string'], ['echo "Hello from PHP ", PHP_VERSION;']);
+        document.getElementById('output').textContent = stdout;
     </script>
 
-``phpw_run()`` runs some code, ``phpw()`` a file of the WASM filesystem. Both
-return the exit status of PHP: the one given to ``exit()``, 255 on a fatal
-error or an uncaught exception, 0 otherwise. Ask ``ccall()`` for it with
-``'number'`` instead of ``null``.
+A browser does not load a module from a ``file:`` URL, so the directory must
+be served. Any static server does it, the one of PHP for example::
+
+    php -S 127.0.0.1:8000 -t build/default
+
+Then open http://127.0.0.1:8000/.
+
+What else the page can do is in `JavaScript API`_. The examples of this
+repository are pages too, try ``castor wasm:serve playground`` (see `Playing
+with it`_).
+
+Embed your code
+~~~~~~~~~~~~~~~
+
+PHP has a filesystem of its own, in memory: it does not see your disk. It
+runs what the page writes in it (``php.FS.writeFile()``), and what is embedded
+in the ``.wasm`` file when it is built. ``docker-bake.hcl`` embeds
+``examples/embed/``, a few scripts, at ``/examples``::
+
+    node node/run.mjs -r 'require "/examples/hello.php";'
+
+``node node/run.mjs my-script.php`` ran a file of your disk: ``run.mjs``
+copies it in the filesystem of PHP first. ``/examples/hello.php`` is the copy
+that was embedded: it only changes with a new build. To embed your code
+instead, at ``/app``::
+
+    docker buildx bake --set default.contexts.embed=./my-app --set default.args.EMBED_AT=/app
+    node node/run.mjs -r 'require "/app/index.php";'
+
+A page runs it with ``php.runFile('/app/index.php')``.
+
+JavaScript API
+--------------
+
+``php-web.mjs`` and ``php-node.mjs`` export a function, ``createPhp()``, that
+loads PHP from the ``.wasm`` file next to them:
+
+.. code-block:: js
+
+    import createPhp from './php-web.mjs';
+
+    const php = await createPhp();
+
+    const { exitCode, stdout, stderr } = await php.runFile('/app/page.php', {
+        args: ['--format=html'],
+        stdin: JSON.stringify(request),
+    });
+
+``php.runFile(file, { args, stdin })``
+    Runs a file of the WASM filesystem, as ``php <file> <args>...`` does.
+
+``php.runCode(code, { args, stdin })``
+    Runs some PHP code, without ``<?php``, as ``php -r <code> <args>...``
+    does: ``$argv[0]`` is ``Standard input code``.
+
+``args`` (strings) are in ``$argv``, after the file. ``stdin`` (a string, or a
+``Uint8Array``) is what PHP reads on ``php://stdin``. Both are optional.
+``STDIN``, ``STDOUT`` and ``STDERR`` are not defined: they are constants of
+the php command only.
+
+Both resolve once PHP is done, with what it gave:
+
+- ``exitCode``: the one given to ``exit()``, 255 on a fatal error or an
+  uncaught exception, 0 otherwise;
+- ``stdout`` and ``stderr``: what PHP wrote, as it wrote it, as strings
+  (UTF-8): something binary, as an image, is rather written in a file, and
+  read with ``php.FS``. As with the php command, the errors are on
+  ``stdout``: ``display_errors`` is on.
+
+Each run is a request of its own: PHP starts, runs, and stops, nothing is left
+of its variables. The files stay, until the page goes away.
+
+``php.FS``
+    The filesystem of emscripten (see `its API
+    <https://emscripten.org/docs/api_reference/Filesystem-API.html>`__), to
+    give files to PHP, or read the ones it writes:
+    ``php.FS.writeFile('/tmp/input.json', data)``,
+    ``php.FS.readFile('/tmp/output.png')``. What is embedded is there too, read
+    only.
+
+``createPhp({ persist })``
+    ``persist`` is a directory of the WASM filesystem to keep in IndexedDB,
+    across the reloads of the page, with the build for the web only (see `Keep
+    files across reloads`_).
+
+``createPhp()`` takes the options of the ``Module`` of emscripten too, for
+example ``locateFile`` to load the ``.wasm`` file from somewhere else.
+
+A run that takes all the memory of the module (``MEMORY``) aborts it, and the
+promise is rejected: what is in its memory can not be trusted anymore, create
+another one.
 
 Options
 -------
 
-The following options are available for the baker:
+Everything is a build argument, given to ``docker buildx bake`` with
+``--set``::
+
+    docker buildx bake --set default.args.PHP_VERSION=8.4.26                    # another PHP version
+    docker buildx bake --set default.args.EXTENSIONS="ctype tokenizer bcmath"   # other extensions
+    docker buildx bake --set default.args.TARGETS=node                          # only php-node.mjs and php-node.wasm
+
+These are the build arguments:
 
 PHP_VERSION
     Configures the PHP version to build.
@@ -95,7 +180,8 @@ EXTENSIONS
 
 TARGETS
     The files to build: ``web`` for ``php-web.mjs`` and ``php-web.wasm``, and
-    ``node`` for ``php-cli.mjs`` and ``php-cli.wasm``. Defaults to ``web node``.
+    ``node`` for ``php-node.mjs`` and ``php-node.wasm``. Defaults to ``web
+    node``.
 
 MEMORY
     The (initial and maximum) memory of the WASM module. Defaults to ``128mb``.
@@ -104,9 +190,9 @@ ICU_DATA
     The data of ICU that intl links (see `intl`_): ``all`` (the default) or
     ``none``.
 
-EMBED_PATH
-    The name that the embedded directory has in the WASM filesystem. Defaults
-    to ``examples``.
+EMBED_AT
+    Where the embedded directory is in the WASM filesystem. Defaults to
+    ``/examples``.
 
 LIBXML_VERSION
     The LibXML version to download and build.
@@ -136,7 +222,7 @@ The directory to embed in the WASM filesystem is the ``embed`` named build
 context. ``docker-bake.hcl`` sets it to ``examples/embed/``; anything can be
 used instead::
 
-    docker buildx bake --set default.contexts.embed=./my-app --set default.args.EMBED_PATH=my-app
+    docker buildx bake --set default.contexts.embed=./my-app --set default.args.EMBED_AT=/app
 
 Supported Extensions
 --------------------
@@ -176,8 +262,8 @@ They are always there, whatever ``EXTENSIONS`` says:
 - Zend OPcache (PHP 8.5 and later)
 
 To add an extension, add it to the ``case`` of the ``resolve`` stage of the
-``Dockerfile`` (and a stage for the library that it needs, if it needs one),
-and to ``Stack::EXTENSIONS``.
+``docker/Dockerfile`` (and a stage for the library that it needs, if it needs
+one), and to ``Stack::EXTENSIONS``.
 
 intl
 ~~~~
@@ -190,7 +276,7 @@ data takes 32 MB of the memory of the module. Add it to the extensions, with
 32 MB more memory::
 
     docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter intl" --set default.args.MEMORY=160mb
-    node run.mjs examples/embed/intl.php
+    node node/run.mjs examples/embed/intl.php
 
 The ``intl`` stack (see `Stacks, and castor`_) is the same build.
 
@@ -249,7 +335,7 @@ castor is a single binary, installed with ``curl
     $default = Stack::named('default')
         ->php('8.5.12')
         ->extensions('calendar', 'ctype', 'dom', 'mbstring', 'simplexml', 'xml', 'xmlreader', 'xmlwriter')
-        ->embed('examples/embed', 'examples')
+        ->embed('examples/embed', at: '/examples')
         ->targets('web', 'node');
 
     return [
@@ -264,8 +350,8 @@ from another one with ``renamed()``. ``extensions()`` adds to the extensions
 the stack already has, the other methods replace what it has. ``embed()`` is
 relative to the root of the project, the directory of ``castor.php``, and the
 directory shows up at ``/<its name>`` in the WASM filesystem, unless
-``embed()`` is given another name (``->embed('build/dist', 'app')`` for
-``/app``). ``outputDir()`` writes the files somewhere else than
+``embed()`` is told where (``->embed('build/dist', at: '/app')``).
+``outputDir()`` writes the files somewhere else than
 ``build/<stack>/``, also relative to the root of the project. ``memory()`` and
 ``icuData()`` set the ``MEMORY`` and ``ICU_DATA`` build arguments (see
 `Options`_).
@@ -281,30 +367,32 @@ Unless a stack says otherwise, everything is built in ``build/<stack>/``::
     castor wasm:build                          # builds the default stack
     castor wasm:build intl                     # builds another one
     castor wasm:build --all                    # builds all of them, in one buildx invocation (with the overrides below)
-    castor wasm:test                           # builds them all, and checks them
+    castor wasm:check                          # builds them all, and checks them
     castor wasm:sizes                          # compares the size of the .wasm files with the default stack
     castor wasm:run examples/embed/hello.php   # runs a file, in the default stack
     castor wasm:run -r 'echo PHP_VERSION;' --stack php-8.3
-    castor wasm:serve notes                    # serves the page of examples/notes/
+    castor wasm:serve                          # lists the examples that have a page
+    castor wasm:serve notes                    # builds the page of examples/notes/, and serves it
+    castor wasm:serve playground --stack intl  # another page, with the PHP version and the extensions of the intl stack
 
 Anything in a stack can be overridden from the command line, so there is no
 need to declare a stack to try something::
 
     castor wasm:build --php 8.3.35                      # the default stack, on PHP 8.3
-    castor wasm:build playground --target node          # only the node target
+    castor wasm:build php-8.3 --target node             # only the node target
     castor wasm:build --with tokenizer --with bcmath    # the default stack, and two more extensions
     castor wasm:build --memory 256mb --embed my-app     # more memory, another directory to embed
     castor wasm:build intl --icu-data none              # intl, without ICU's data
     castor wasm:build --print                           # only shows the bake file
 
 What is built with overrides goes to the directory of the stack
-(``build/default/``, ``build/playground/``), in place of what was there.
+(``build/default/``, ``build/php-8.3/``), in place of what was there.
 
-``castor wasm:test`` is what tells that a stack works: once built, it runs
+``castor wasm:check`` is what tells that a stack works: once built, it runs
 every build of each stack in node, the one for the web too, and checks that
-``PHP_VERSION`` is the one that was asked for, and that ``extension_loaded()``
-is true for every extension that was asked for. It does not run what the stack
-embeds.
+``PHP_VERSION`` is the one that was asked for, that ``extension_loaded()`` is
+true for every extension that was asked for, and that the JavaScript API
+works (``tests/api.test.mjs``). It does not run what the stack embeds.
 
 Playing with it
 ---------------
@@ -314,32 +402,41 @@ These are the stacks of ``stacks.php``:
 - ``default``: PHP 8.5, with the default extensions, what ``docker buildx
   bake`` builds too;
 - ``php-8.4`` and ``php-8.3``: the same thing, on older PHP versions;
-- ``playground``: adds bcmath, filter and tokenizer;
+- ``playground``: adds bcmath, filter and tokenizer, for the page of
+  ``examples/playground/`` (see below);
 - ``notes``: adds pdo_sqlite and sqlite3 (see `SQLite`_), for the page of
   ``examples/notes/`` (see below);
 - ``intl``: adds intl (see `intl`_);
 - ``intl-without-data``: adds intl, without ICU's data.
 
-Each script of ``examples/embed/`` says which stack it needs::
+Each script of ``examples/embed/`` says which stack it needs, and says so
+when it runs in another one. ``castor wasm:run`` offers to build the stack
+when it is not built yet::
 
     castor wasm:run examples/embed/hello.php
     castor wasm:run examples/embed/xml.php --stack php-8.3
-    castor wasm:build playground
     castor wasm:run examples/embed/playground.php --stack playground
-    castor wasm:build intl
     castor wasm:run examples/embed/intl.php --stack intl
 
-``examples/notes/`` is a page that runs PHP: it keeps notes in SQLite, that
-are still there after a reload, and searches them with FTS5. It is made as a
-project makes its page (see `Using it from your own project`_): the ``notes``
-stack embeds its ``embed/`` directory as ``/app``, and is built in its
-``public/`` directory, that ``castor wasm:serve`` serves on
-http://127.0.0.1:8000/, with the built-in server of PHP::
+The examples that have a page are built by the stack of the same name, in
+their ``public/`` directory. ``castor wasm:serve`` builds it, in a second when
+nothing changed, and serves it on http://127.0.0.1:8000/, with the built-in
+server of PHP. It lists them:
 
-    castor wasm:build notes
-    castor wasm:serve notes
+- ``examples/playground/`` runs the scripts of ``examples/embed/``, embedded at
+  ``/examples``: pick one, change it, and run it;
+- ``examples/notes/`` keeps notes in SQLite, that are still there after a
+  reload, and searches them with FTS5. It is made as a project makes its page
+  (see `Using it from your own project`_): the ``notes`` stack embeds its
+  ``embed/`` directory at ``/app``.
 
-The page changes with a reload, its PHP with a new build.
+``--stack`` builds the page with the PHP version and the extensions of another
+stack: the one of ``intl.php``, for example::
+
+    castor wasm:serve playground
+    castor wasm:serve playground --stack intl
+
+The page changes with a reload, its PHP when the server starts again.
 
 Using it from your own project
 ------------------------------
@@ -414,7 +511,7 @@ without its dev dependencies, embedded at ``/app``:
             // What the code needs, see "Supported Extensions"
             ->extensions('ctype', 'mbstring')
             // Relative to the project, at /app in the WASM filesystem
-            ->embed('build/embed', 'app')
+            ->embed('build/embed', at: '/app')
             // Only php-web.mjs and php-web.wasm
             ->targets('web')
             // Next to the page that loads them
@@ -445,61 +542,49 @@ common.
 Run it in the page
 ~~~~~~~~~~~~~~~~~~
 
-The page gives PHP its input in the WASM filesystem, runs a file of ``/app``,
-and gets what PHP prints. Each call is a request of its own, the files of the
-WASM filesystem stay:
+The page runs a file of ``/app``, gives PHP its input on stdin, and gets what
+PHP prints (see `JavaScript API`_):
 
 .. code-block:: html
 
     <!-- public/index.html -->
     <pre id="output"></pre>
     <script type="module">
-        import createPhpModule from './build/php-web.mjs';
+        import createPhp from './build/php-web.mjs';
 
-        let output = '';
-        const php = await createPhpModule({
-            print: (line) => output += line + '\n',
-        });
+        const php = await createPhp();
+        const { exitCode, stdout } = await php.runFile('/app/src/page.php', { stdin: 'Hello...' });
+        if (0 !== exitCode) {
+            throw new Error(`PHP exits with ${exitCode}: ${stdout}`);
+        }
 
-        php.FS.writeFile('/tmp/input.txt', 'Hello...');
-        const status = php.ccall('phpw', 'number', ['string'], ['/app/src/page.php']);
-
-        document.getElementById('output').textContent = 0 === status ? output : 'PHP failed, see the console.';
+        document.getElementById('output').textContent = stdout;
     </script>
-
-``phpw()`` returns the exit status of PHP (see `Quick start`_), and what PHP
-writes on stderr goes to the console.
 
 Keep files across reloads
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The WASM filesystem is in memory: what PHP writes is gone with the page. The
-build for the web comes with IDBFS, a filesystem of emscripten that keeps a
-directory in IndexedDB. The page mounts it, reads it before PHP runs, and
-writes it after:
+build for the web keeps a directory in IndexedDB, with IDBFS, a filesystem of
+emscripten, when it is given as ``persist``:
 
 .. code-block:: js
 
-    php.FS.mkdir('/data');
-    php.FS.mount(php.IDBFS, {}, '/data');
+    // What PHP writes in /my-page is still there after a reload
+    const php = await createPhp({ persist: '/my-page' });
 
-    const syncfs = (populate) => new Promise((resolve, reject) => {
-        php.FS.syncfs(populate, (error) => error ? reject(error) : resolve());
-    });
+Each tab has its own copy of the files. A run reads IndexedDB before PHP runs,
+what the other tabs wrote, and writes in it after, one run at a time across
+the tabs of the page (with a Web Lock): no tab writes over what another one
+wrote. ``php.FS`` sees the files as the last run of the tab left them: what
+another tab wrote since is only there once a run has read it. The page of
+``examples/notes/`` keeps an SQLite database this way (see `Playing with
+it`_).
 
-    // One call at a time, across the tabs of the page
-    const run = (file) => navigator.locks.request('php', async () => {
-        await syncfs(true);  // IndexedDB to /data: what the other tabs wrote
-        const status = php.ccall('phpw', 'number', ['string'], [file]);
-        await syncfs(false); // /data to IndexedDB
-
-        return status;
-    });
-
-Each tab has its own copy of the files: without the lock, and without reading
-IndexedDB before PHP runs, a tab writes over what another one wrote. An SQLite
-database in ``/data`` is kept this way, the page of ``examples/notes/`` does
-it (see `Playing with it`_). IDBFS keeps whole files, in memory:
+The directory names the IndexedDB database: two pages of the same origin that
+keep the same directory share its files. Name it after the page:
+``/composer-diff`` rather than ``/data``, when the pages of an organization
+are all on ``<organization>.github.io``. IDBFS keeps whole files, in memory:
 
 - a file that changes is written again in full: a row inserted in a 20 MB
   database writes the 20 MB again;
@@ -511,42 +596,42 @@ Emscripten reaches the Origin Private File System (OPFS) of the browser too,
 but only with WasmFS, in place of the filesystem the build has, and with
 threads (the page must then be served with the headers of cross-origin
 isolation, COOP and COEP, that GitHub Pages does not send) or with JSPI or
-Asyncify (each call to PHP is then asynchronous). The build does not do it.
+Asyncify (that let PHP wait for the browser in the middle of a run). The build
+does not do it.
 
 Check it, without a browser
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 What is built for the web runs in node too. ``PhpWasm\check_stack()`` checks
 that it boots, with its PHP version and its extensions, as ``castor
-wasm:test`` does, and ``PhpWasm\run_wasm()`` runs some code in it, as the page
-does. Both throw a ``ProblemException`` when something is wrong, as castor's
-``check()`` does:
+wasm:check`` does, and ``PhpWasm\run_code()`` runs some code in it, as
+``runCode()`` does in the page. Both throw a ``ProblemException`` when
+something is wrong, as castor's ``check()`` does:
 
 .. code-block:: php
 
     use function Castor\check;
     use function PhpWasm\check_stack;
-    use function PhpWasm\run_wasm;
+    use function PhpWasm\run_code;
 
     #[AsTask('smoke', namespace: 'wasm', description: 'Checks that what is built boots, and answers')]
     function wasm_smoke(): void
     {
         check_stack(wasm_stack());
 
-        check('The page answers', 'The page does not answer.', fn (): bool => 'Hello…' === run_wasm(wasm_stack(), <<<'PHP'
-            file_put_contents('/tmp/input.txt', 'Hello...');
-            require '/app/src/page.php';
-            PHP));
+        check('The page answers', 'The page does not answer.', fn (): bool => 'Hello…' === run_code(wasm_stack(), 'require "/app/src/page.php";', stdin: 'Hello...'));
     }
 
-``run_wasm()`` returns what PHP prints, and throws when PHP does not exit with
-0: an uncaught exception, a fatal error or an ``exit(1)``.
+``run_code()`` returns what PHP prints, and throws when PHP does not exit with
+0: an uncaught exception, a fatal error or an ``exit(1)``. Its ``stdin`` is
+what PHP reads on ``php://stdin``.
 
-``run_wasm()`` runs PHP, not the JavaScript of the page. When the page keeps
+``run_code()`` runs PHP, not the JavaScript of the page. When the page keeps
 it in a module, ``PhpWasm\test_page()`` runs its tests with the test runner of
-node, preloaded with ``page.mjs``: ``fetch()`` reads the files from the disk,
-where a server would serve them from, and records their resource timing, as a
-browser does. The module, and the ``php-web.mjs`` it loads, run as they are:
+node, preloaded with ``node/fetch-files.mjs``: ``fetch()`` reads the files from
+the disk, where a server would serve them from, and records their resource
+timing, as a browser does. The module, and the ``php-web.mjs`` it loads, run
+as they are:
 
 .. code-block:: js
 
@@ -557,8 +642,8 @@ browser does. The module, and the ``php-web.mjs`` it loads, run as they are:
     // It loads ./build/php-web.mjs, and exports what the page calls
     import { answer } from '../public/page.mjs';
 
-    test('the page answers', () => {
-        assert.equal(answer('Hello...'), 'Hello…');
+    test('the page answers', async () => {
+        assert.equal(await answer('Hello...'), 'Hello…');
     });
 
 .. code-block:: php
@@ -625,13 +710,34 @@ is deployed if it does not answer:
                 - id: deployment
                   uses: actions/deploy-pages@v5
 
+What is in this repository
+--------------------------
+
+- ``docker/``: how PHP is compiled, everything else only drives it. The
+  ``Dockerfile`` compiles PHP, ``run.c`` runs it, and ``api.js`` is the
+  JavaScript API of what is built (see `JavaScript API`_);
+- ``node/``: ``run.mjs`` runs a PHP file, or some PHP code, in what is built,
+  with node (the build for the web too), and ``fetch-files.mjs`` lets node run
+  the modules of a page as a browser does, to test them (see `Check it,
+  without a browser`_);
+- ``examples/``: what an ``embed/`` directory has is embedded in what is
+  built, what a ``public/`` directory has is served. ``examples/embed/`` has a
+  few PHP scripts, embedded in every stack at ``/examples``,
+  ``examples/playground/`` a page that runs them, and ``examples/notes/`` a
+  page that keeps notes in SQLite (see `Playing with it`_);
+- ``stacks.php``, ``src/`` and ``castor.php``: named builds, a ``build()``
+  function, and castor tasks to build, run and check them (see `Stacks, and
+  castor`_);
+- ``tests/``: the tests of the JavaScript API, and of ``fetch-files.mjs``.
+
 Credits
 -------
 
 This builder was created by `Derick Rethans <https://github.com/derickr>`__,
 for `The PHP Foundation <https://github.com/ThePHPF>`__, in
-`derickr/php-wasm-builder <https://github.com/derickr/php-wasm-builder>`__. Its
-shim, ``phpw.c``, comes from the work of `Antoine Bluchet
+`derickr/php-wasm-builder
+<https://github.com/derickr/php-wasm-builder>`__. What runs PHP,
+``docker/run.c`` (``phpw.c`` there), comes from the work of `Antoine Bluchet
 <https://github.com/soyuka>`__ on PHP in WebAssembly. Both are under the MIT
 license, see ``LICENSE``.
 
