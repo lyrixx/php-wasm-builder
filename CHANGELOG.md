@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.8.0 (unreleased)
+## 0.8.0 (2026-10-22)
 
 * BC break: the JavaScript API is `createPhp()`, and the `runFile()` and
   `runCode()` of what it returns, documented in the README ("JavaScript API"):
