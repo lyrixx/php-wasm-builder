@@ -2,7 +2,7 @@
 
 // Needs the playground stack, which adds bcmath, filter and tokenizer:
 //
-//     castor wasm:run examples/playground.php --stack playground
+//     castor wasm:run examples/embed/playground.php --stack playground
 
 echo '0.1 + 0.2 = ', bcadd('0.1', '0.2', 1), "\n";
 echo 'Valid e-mail: ', var_export(false !== filter_var('hello@example.com', FILTER_VALIDATE_EMAIL), true), "\n";

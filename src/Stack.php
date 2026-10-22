@@ -20,7 +20,7 @@ final readonly class Stack
     /**
      * Keep in sync with the "resolve" stage of the Dockerfile.
      */
-    public const EXTENSIONS = ['bcmath', 'calendar', 'ctype', 'dom', 'filter', 'intl', 'libxml', 'mbstring', 'simplexml', 'tokenizer', 'xml', 'xmlreader', 'xmlwriter'];
+    public const EXTENSIONS = ['bcmath', 'calendar', 'ctype', 'dom', 'filter', 'intl', 'libxml', 'mbstring', 'pdo', 'pdo_sqlite', 'simplexml', 'sqlite3', 'tokenizer', 'xml', 'xmlreader', 'xmlwriter'];
 
     /**
      * The targets, and the name of the files they produce. Keep in sync with

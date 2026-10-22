@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Notes, in SQLite</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+            font-family: system-ui, sans-serif;
+        }
+        body {
+            max-width: 40rem;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        form {
+            display: flex;
+            gap: 0.5rem;
+        }
+        input {
+            flex: 1;
+            padding: 0.4rem;
+            font: inherit;
+        }
+        #search {
+            width: 100%;
+            margin-top: 0.5rem;
+            box-sizing: border-box;
+        }
+        ul {
+            padding: 0;
+            list-style: none;
+        }
+        li {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid #8884;
+        }
+        #message {
+            color: GrayText;
+        }
+    </style>
+</head>
+<body>
+    <h1>Notes, in SQLite</h1>
+    <p>
+        PHP keeps the notes in SQLite, in a file that the page keeps in
+        IndexedDB: they are still here after a reload. The search is the
+        full-text search of SQLite, FTS5.
+    </p>
+
+    <form id="add">
+        <input name="text" placeholder="A new note" required autocomplete="off">
+        <button>Add</button>
+    </form>
+    <input id="search" type="search" placeholder="Search" autocomplete="off">
+    <ul id="notes"></ul>
+    <p id="message">Loading PHP…</p>
+
+    <script type="module">
+        const message = document.getElementById('message');
+        const notes = document.getElementById('notes');
+        const search = document.getElementById('search');
+
+        let createPhpModule;
+        try {
+            ({ default: createPhpModule } = await import('./build/php-web.mjs'));
+        } catch (error) {
+            message.textContent = 'PHP is not built yet: run "castor wasm:build notes".';
+            throw error;
+        }
+
+        let output = '';
+        const php = await createPhpModule({
+            print: (line) => output += line + '\n',
+            printErr: (line) => console.error(line),
+        });
+
+        // /data is kept in IndexedDB, the rest of the filesystem goes away
+        // with the page
+        php.FS.mkdir('/data');
+        php.FS.mount(php.IDBFS, {}, '/data');
+
+        const syncfs = (populate) => new Promise((resolve, reject) => {
+            php.FS.syncfs(populate, (error) => error ? reject(error) : resolve());
+        });
+
+        // One request at a time, across the tabs of the page: each one reads
+        // what the others wrote, and writes to IndexedDB before the next one
+        // reads. Without the lock, a tab writes over what another one wrote.
+        function request(action, data = {}) {
+            return navigator.locks.request('notes', async () => {
+                await syncfs(true);
+                php.FS.writeFile('/tmp/request.json', JSON.stringify({ action, search: search.value, ...data }));
+                output = '';
+                const status = php.ccall('phpw', 'number', ['string'], ['/app/notes.php']);
+                await syncfs(false);
+
+                if (0 !== status) {
+                    throw new Error('PHP failed, see the console.');
+                }
+                notes.innerHTML = output;
+            }).catch((error) => {
+                message.textContent = error.message;
+                throw error;
+            });
+        }
+
+        document.getElementById('add').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            await request('add', { text: event.target.elements.text.value });
+            event.target.reset();
+        });
+        search.addEventListener('input', () => request('list'));
+        notes.addEventListener('click', (event) => {
+            if (event.target.dataset.id !== undefined) {
+                request('delete', { id: Number(event.target.dataset.id) });
+            }
+        });
+        // What another tab wrote
+        document.addEventListener('visibilitychange', () => {
+            if ('visible' === document.visibilityState) {
+                request('list');
+            }
+        });
+
+        await request('list');
+        message.textContent = '';
+    </script>
+</body>
+</html>
