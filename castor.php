@@ -9,11 +9,14 @@ use Castor\Exception\ProblemException;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Filesystem\Path;
+use Symfony\Component\Finder\SplFileInfo;
 
 use function Castor\context;
+use function Castor\finder;
 use function Castor\import;
 use function Castor\io;
 use function Castor\notify;
+use function Castor\run;
 
 // The wasm:* tasks, that build the stacks of stacks.php, and of
 // stacks.override.php when there is one (it is not versioned: the stacks of
@@ -172,6 +175,21 @@ function run_task(
     return node($selected->artifact($selected->targets[0], 'mjs'), $arguments, context())->getExitCode();
 }
 
+#[AsTask(name: 'serve', namespace: 'wasm', description: 'Serves the page of an example, its public/ directory, on 127.0.0.1')]
+function serve_task(
+    #[AsArgument(description: 'The example to serve, a directory of examples/', autocomplete: 'PhpWasm\examples')]
+    string $example,
+    #[AsOption(description: 'The port to listen to')]
+    int $port = 8000,
+): int {
+    if (!\in_array($example, examples(), true)) {
+        throw new \InvalidArgumentException(\sprintf('Unknown example "%s", the examples with a page are: %s.', $example, implode(', ', examples())));
+    }
+
+    // The built-in server of the PHP of the host
+    return run(['php', '-S', "127.0.0.1:{$port}", '-t', builder_root() . "/examples/{$example}/public"], context: context()->withAllowFailure())->getExitCode();
+}
+
 #[AsTask(name: 'test', namespace: 'wasm', description: 'Builds the stacks, then checks from node that what each built boots, with its PHP version and its extensions')]
 function test_task(
     #[AsArgument(description: 'The stacks to test, all by default', autocomplete: 'PhpWasm\complete_stacks')]
@@ -214,4 +232,17 @@ function test_task(
 function complete_stacks(): array
 {
     return array_keys(stacks());
+}
+
+/**
+ * The examples that have a page: the directories of examples/ that have a
+ * public/ directory.
+ *
+ * @return list<string>
+ */
+function examples(): array
+{
+    $publics = finder()->directories()->in(builder_root() . '/examples')->depth(1)->name('public')->sortByName();
+
+    return array_map(static fn (SplFileInfo $public): string => $public->getRelativePath(), iterator_to_array($publics, false));
 }

@@ -86,6 +86,14 @@ function check_stack(Stack $stack): void
             ? ['intl does not normalize, or has ICU\'s data' => 'extension_loaded("intl") && Normalizer::normalize("e\u{301}") === "\u{e9}" && Locale::getDisplayLanguage("fr", "en") === "fr"']
             : ['intl does not have ICU\'s data' => 'extension_loaded("intl") && Locale::getDisplayLanguage("fr", "en") === "French"'];
     }
+    // SQLite is compiled by the Dockerfile, with options
+    $sqlite = "SELECT sqlite_compileoption_used('ENABLE_FTS5') AND sqlite_compileoption_used('ENABLE_MATH_FUNCTIONS')";
+    if (\in_array('pdo_sqlite', $stack->extensions, true)) {
+        $problems['SQLite does not have FTS5, or the math functions (pdo_sqlite)'] = \sprintf('extension_loaded("pdo_sqlite") && (new PDO("sqlite::memory:"))->query(%s)->fetchColumn() === 1', var_export($sqlite, true));
+    }
+    if (\in_array('sqlite3', $stack->extensions, true)) {
+        $problems['SQLite does not have FTS5, or the math functions (sqlite3)'] = \sprintf('extension_loaded("sqlite3") && (new SQLite3(":memory:"))->querySingle(%s) === 1', var_export($sqlite, true));
+    }
 
     // Prints the problems whose expression is false
     $code = \sprintf('echo json_encode(array_keys(array_filter([%s])));', implode(', ', array_map(

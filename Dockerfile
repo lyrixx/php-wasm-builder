@@ -9,6 +9,7 @@
 #   oniguruma   third-party libraries, each one only built when the plan says
 #   libxml2     an extension needs it (the others do nothing and stay tiny)
 #   icu
+#   sqlite
 #   php         configures and compiles PHP
 #   link        compiles the shim and links the .mjs/.wasm files
 #
@@ -32,6 +33,8 @@ flags=""
 libxml2=0
 oniguruma=0
 icu=0
+pdo=0
+sqlite=0
 # Sorted, so that the same extensions always give the same ./configure flags.
 # Keep in sync with Stack::EXTENSIONS, in src/Stack.php
 for extension in $(printf '%s\n' $EXTENSIONS | sort -u); do
@@ -41,17 +44,27 @@ for extension in $(printf '%s\n' $EXTENSIONS | sort -u); do
         libxml)                                 libxml2=1 ;;
         mbstring)                               flags="$flags --enable-mbstring"; oniguruma=1 ;;
         intl)                                   flags="$flags --enable-intl"; icu=1 ;;
+        pdo)                                    pdo=1 ;;
+        pdo_sqlite)                             flags="$flags --with-pdo-sqlite"; pdo=1; sqlite=1 ;;
+        sqlite3)                                flags="$flags --with-sqlite3"; sqlite=1 ;;
         *) echo "Unknown extension '$extension'" >&2; exit 1 ;;
     esac
 done
 
 link=""
+# The PDO drivers need PDO
+if [ $pdo = 1 ]; then
+    flags=" --enable-pdo$flags"
+fi
 if [ $libxml2 = 1 ]; then
     flags="--with-libxml$flags"
     link="$link /local/install/lib/libxml2.a"
 fi
 if [ $oniguruma = 1 ]; then
     link="$link /local/install/lib/libonig.a"
+fi
+if [ $sqlite = 1 ]; then
+    link="$link /local/install/lib/libsqlite3.a"
 fi
 if [ $icu = 1 ]; then
     # The icu stage builds both: libicudata.a is the empty stub that ICU
@@ -66,12 +79,13 @@ if [ $icu = 1 ]; then
     link="$link /local/install/lib/libicui18n.a /local/install/lib/libicuio.a /local/install/lib/libicuuc.a /local/install/lib/$icudata -sDEFAULT_TO_CXX"
 fi
 
-# <output file name> <emscripten environment>, by target. Keep in sync with
-# Stack::TARGETS, in src/Stack.php
+# <output file name> <emscripten environment> [<filesystem, besides MEMFS>],
+# by target. IDBFS keeps files in IndexedDB, across the reloads of a page. Keep
+# in sync with Stack::TARGETS, in src/Stack.php
 : > /plan/targets
 for target in $TARGETS; do
     case $target in
-        web)  echo "php-web web" >> /plan/targets ;;
+        web)  echo "php-web web IDBFS" >> /plan/targets ;;
         node) echo "php-cli node" >> /plan/targets ;;
         *)    echo "Unknown target '$target', supported targets: web node" >&2; exit 1 ;;
     esac
@@ -82,6 +96,7 @@ echo "$link" > /plan/link
 echo "$libxml2" > /plan/libxml2
 echo "$oniguruma" > /plan/oniguruma
 echo "$icu" > /plan/icu
+echo "$sqlite" > /plan/sqlite
 
 echo "./configure:$flags"
 echo "link:$link"
@@ -182,11 +197,38 @@ emcc -std=c23 -c icudata.c -o icudata.o
 emar rcs /local/install/lib/libicudata-all.a icudata.o
 EOF
 
+# Compile SQLite, for sqlite3 and pdo_sqlite
+FROM base AS sqlite
+ARG SQLITE_VERSION=3.54.1
+# The year of the release, that is in its URL
+ARG SQLITE_YEAR=2026
+COPY --from=resolve /plan/sqlite /plan/sqlite
+RUN <<EOF
+set -eu
+[ "$(cat /plan/sqlite)" = 1 ] || exit 0
+# 3.54.1 is 3540100 in the name of the file
+release=$(printf '%d%02d%02d00' $(echo $SQLITE_VERSION | tr . ' '))
+curl -fsSL --retry 3 --connect-timeout 30 -o sqlite.zip \
+    https://www.sqlite.org/$SQLITE_YEAR/sqlite-amalgamation-$release.zip
+unzip -q sqlite.zip
+cd sqlite-amalgamation-$release
+# No threads, and no extension to load: there is no dlopen() in a static build.
+# FTS5 (full-text search) and the math functions, as the SQLite of the
+# distributions has them.
+emcc -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION \
+    -DSQLITE_ENABLE_FTS5 -DSQLITE_ENABLE_MATH_FUNCTIONS \
+    -c sqlite3.c -o sqlite3.o
+mkdir -p /local/install/include /local/install/lib
+emar rcs /local/install/lib/libsqlite3.a sqlite3.o
+cp sqlite3.h sqlite3ext.h /local/install/include/
+EOF
+
 # Configure and compile PHP
 FROM php-src AS php
 COPY --from=oniguruma /local/install /local/install
 COPY --from=libxml2 /local/install /local/install
 COPY --from=icu /local/install /local/install
+COPY --from=sqlite /local/install /local/install
 COPY --from=resolve /plan/configure /plan/configure
 COPY --from=resolve /plan/icu /plan/icu
 
@@ -194,6 +236,9 @@ ENV ONIG_LIBS="-L/local/install"
 ENV ONIG_CFLAGS="-I/local/install/include"
 ENV LIBXML_LIBS="-L/local/install"
 ENV LIBXML_CFLAGS="-I/local/install/include/libxml2"
+# What pkg-config would give, SQLite is not installed with its .pc file
+ENV SQLITE_CFLAGS="-I/local/install/include"
+ENV SQLITE_LIBS="-L/local/install/lib -lsqlite3"
 
 # intl finds ICU, and its version, with pkg-config
 RUN cd php-src && \
@@ -229,11 +274,19 @@ RUN <<EOF
 set -eu
 mkdir -p /build
 [ -z "$EMBED_PATH" ] || mkdir -p "$EMBED_PATH"
-while read -r output environment; do
+while read -r output environment filesystem; do
+    # The filesystem is linked, and exported for the page to mount it
+    exported='"ccall", "UTF8ToString", "lengthBytesUTF8", "FS"'
+    library=""
+    if [ -n "$filesystem" ]; then
+        exported="$exported, \"$filesystem\""
+        library="-l$(echo $filesystem | tr A-Z a-z).js"
+    fi
     emcc -o /build/$output.mjs \
     -O2 \
     -s EXPORTED_FUNCTIONS='["_phpw", "_phpw_flush", "_phpw_exec", "_phpw_run", "_chdir", "_setenv", "_php_embed_init", "_php_embed_shutdown", "_zend_eval_string"]' \
-    -s EXPORTED_RUNTIME_METHODS='["ccall", "UTF8ToString", "lengthBytesUTF8", "FS"]' \
+    -s EXPORTED_RUNTIME_METHODS="[$exported]" \
+    $library \
     -s ENVIRONMENT=$environment \
     -s INITIAL_MEMORY=$MEMORY -s ALLOW_MEMORY_GROWTH=0 \
     -s ASSERTIONS=0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s MODULARIZE=1 -s INVOKE_RUN=0 -s LZ4=1 -s EXPORT_ES6=1 \

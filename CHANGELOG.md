@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.8.0 (unreleased)
+
+* Add the `pdo`, `pdo_sqlite` and `sqlite3` extensions, with SQLite 3.54.1
+  (`SQLITE_VERSION` and `SQLITE_YEAR`), its full-text search (FTS5) and its
+  math functions. `PhpWasm\check_stack()` checks that SQLite has them.
+* The build for the web links IDBFS, and exports it as `IDBFS`: a page keeps a
+  directory of the WASM filesystem in IndexedDB, across reloads, an SQLite
+  database too.
+* Add `examples/notes/`, a page that keeps notes in SQLite, its `notes` stack,
+  and `castor wasm:serve`, to serve it with the built-in server of PHP.
+* In `examples/`, what an `embed/` directory has is embedded, what a `public/`
+  directory has is served: the scripts are in `examples/embed/`, still at
+  `/examples` in the WASM filesystem.
+* The README embeds `build/embed/` in place of `build/app/`, still at `/app`.
+
 ## 0.7.1 (2026-10-22)
 
 * Build PHP 8.5.12 by default.

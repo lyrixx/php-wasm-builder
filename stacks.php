@@ -8,7 +8,7 @@ use PhpWasm\Stack;
 $default = Stack::named('default')
     ->php('8.5.12')
     ->extensions('calendar', 'ctype', 'dom', 'mbstring', 'simplexml', 'xml', 'xmlreader', 'xmlwriter')
-    ->embed('examples')
+    ->embed('examples/embed', 'examples')
     ->targets('web', 'node');
 
 return [
@@ -23,6 +23,14 @@ return [
     $default->renamed('playground')
         ->extensions('tokenizer', 'bcmath', 'filter')
         ->memory('256mb'),
+
+    // SQLite, with PDO and with the SQLite3 class, for the page of
+    // examples/notes/: what it embeds, and where it is served from.
+    $default->renamed('notes')
+        ->extensions('pdo_sqlite', 'sqlite3')
+        ->embed('examples/notes/embed', 'app')
+        ->targets('web')
+        ->outputDir('examples/notes/public/build'),
 
     // intl, with all of ICU's data linked in the .wasm file. The data takes
     // 32 MB of the memory: this leaves PHP as much of it as the default stack.

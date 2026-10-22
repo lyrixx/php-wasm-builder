@@ -2,7 +2,7 @@
 
 // Needs the intl stack, with ICU and all of its data:
 //
-//     castor wasm:run examples/intl.php --stack intl
+//     castor wasm:run examples/embed/intl.php --stack intl
 
 echo (new NumberFormatter('fr_FR', NumberFormatter::CURRENCY))->formatCurrency(1234.5, 'EUR'), "\n";
 echo (new NumberFormatter('en', NumberFormatter::SPELLOUT))->format(42), "\n";

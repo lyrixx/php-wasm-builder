@@ -1,6 +1,6 @@
 target "default" {
   contexts = {
-    embed = "./examples"
+    embed = "./examples/embed"
   }
   args = {
     EMBED_PATH = "examples"

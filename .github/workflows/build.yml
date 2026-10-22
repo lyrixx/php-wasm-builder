@@ -85,11 +85,14 @@ jobs:
             --set "*.cache-from=type=gha,scope=$STACK" \
             --set "*.cache-to=type=gha,scope=$STACK,mode=max,ignore-error=true"
 
+      # Two directories: the artifact keeps their path from the root of the
+      # repository
       - uses: actions/upload-artifact@v7
         with:
           name: php-wasm-${{ matrix.stack }}
           path: |
             build/
+            examples/*/public/build/
             !build/**/bake.json
           if-no-files-found: error
 
@@ -107,11 +110,11 @@ jobs:
 
       - uses: castor-php/setup-castor@v1
 
-      # Each artifact is the build/ directory of a job: build/<stack>/
+      # Each artifact is what a job built: build/<stack>/, or the public/build/
+      # directory of an example
       - uses: actions/download-artifact@v8
         with:
           pattern: php-wasm-*
-          path: build
           merge-multiple: true
 
       - name: Sizes

@@ -2,7 +2,7 @@
 
 // The xml extensions and mbstring are in every stack.
 //
-//     node run.mjs examples/xml.php
+//     node run.mjs examples/embed/xml.php
 
 $books = simplexml_load_string(<<<'XML'
     <books>
