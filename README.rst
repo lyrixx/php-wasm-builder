@@ -46,7 +46,7 @@ the copy embedded in the ``.wasm`` file: it only changes with a new build.
 one a browser loads.
 
 Everything else is a build argument (see `Options`_). By default, this builds
-PHP 8.5.11, with the extensions listed in `Supported Extensions`_::
+PHP 8.5.12, with the extensions listed in `Supported Extensions`_::
 
     docker buildx bake --set default.args.PHP_VERSION=8.4.26                    # another PHP version
     docker buildx bake --set default.args.EXTENSIONS="ctype tokenizer bcmath"   # other extensions
@@ -214,7 +214,7 @@ no PHP is needed on the host: castor is a single binary, installed with
     use PhpWasm\Stack;
 
     $default = Stack::named('default')
-        ->php('8.5.11')
+        ->php('8.5.12')
         ->extensions('calendar', 'ctype', 'dom', 'mbstring', 'simplexml', 'xml', 'xmlreader', 'xmlwriter')
         ->embed('examples')
         ->targets('web', 'node');
@@ -350,7 +350,7 @@ without its dev dependencies, embedded at ``/app``:
     {
         return Stack::named('app')
             // Keep in sync with config.platform.php in composer.json
-            ->php('8.5.11')
+            ->php('8.5.12')
             // What the code needs, see "Supported Extensions"
             ->extensions('ctype', 'mbstring')
             // Relative to the project, at /app in the WASM filesystem

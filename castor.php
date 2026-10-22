@@ -31,7 +31,7 @@ function build_task(
     ?string $stack = null,
     #[AsOption(description: 'Build every stack, in one buildx invocation')]
     bool $all = false,
-    #[AsOption(description: 'Override the PHP version, for example 8.5.11')]
+    #[AsOption(description: 'Override the PHP version, for example 8.5.12')]
     ?string $php = null,
     #[AsOption(description: 'Add an extension, can be repeated', mode: InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, autocomplete: Stack::EXTENSIONS)]
     array $with = [],
