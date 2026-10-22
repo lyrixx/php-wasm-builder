@@ -6,7 +6,7 @@ use PhpWasm\Stack;
 // buildx bake` builds: its PHP version and its extensions are the defaults of
 // the Dockerfile, keep them in sync.
 $default = Stack::named('default')
-    ->php('8.5.11')
+    ->php('8.5.12')
     ->extensions('calendar', 'ctype', 'dom', 'mbstring', 'simplexml', 'xml', 'xmlreader', 'xmlwriter')
     ->embed('examples')
     ->targets('web', 'node');
