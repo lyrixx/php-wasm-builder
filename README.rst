@@ -9,6 +9,22 @@ This repository started as a fork of `derickr/php-wasm-builder
 files of the php.net documentation, and it is where it is developed now (see
 `Credits`_).
 
+See it live
+-----------
+
+These pages run PHP in the browser, built by this repository. Between
+parentheses, the module of each page that runs PHP:
+
+- `composer-diff <https://lyrixx.github.io/composer-diff/>`__ compares two
+  ``composer.lock`` (`public/page.mjs
+  <https://github.com/lyrixx/composer-diff/blob/main/public/page.mjs>`__);
+- `emoji-converter <https://jolicode.github.io/emoji-converter/>`__ turns 🐘
+  into ``:elephant:`` and back (`website/public/js/php.js
+  <https://github.com/jolicode/emoji-converter/blob/main/website/public/js/php.js>`__);
+- `JoliTypo <https://jolitypo.jolicode.com/>`__ fixes the microtypography of
+  an HTML text (`website/public/js/php.js
+  <https://github.com/jolicode/JoliTypo/blob/main/website/public/js/php.js>`__).
+
 Quick start
 -----------
 
@@ -446,18 +462,7 @@ libxml2, which ``./configure`` flags PHP needs to link and which ``emcc``
 flags make it load. Any PHP project can reuse that with castor, instead of
 copying the Dockerfile. This is how a project runs its PHP code in a page,
 checks it, and deploys it. It needs Docker, castor, and node for the checks.
-
-These projects do it, their pages run PHP in the browser:
-
-- `composer-diff <https://lyrixx.github.io/composer-diff/>`__ (`sources
-  <https://github.com/lyrixx/composer-diff>`__): compares two
-  ``composer.lock``;
-- `emoji-converter <https://jolicode.github.io/emoji-converter/>`__ (`sources
-  <https://github.com/jolicode/emoji-converter>`__): turns 🐘 into
-  ``:elephant:`` and back;
-- `JoliTypo <https://jolitypo.jolicode.com/>`__ (`sources
-  <https://github.com/jolicode/JoliTypo>`__): fixes the microtypography of an
-  HTML text.
+The pages of `See it live`_ are made this way.
 
 Require the package
 ~~~~~~~~~~~~~~~~~~~
