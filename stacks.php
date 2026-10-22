@@ -19,10 +19,13 @@ return [
     $default->renamed('php-8.3')->php('8.3.35'),
 
     // A playground: tools built on PHP-Parser need tokenizer, and there is
-    // no reason 0.1 + 0.2 should not be 0.3 in a browser.
+    // no reason 0.1 + 0.2 should not be 0.3 in a browser. Built in the page of
+    // examples/playground/, that runs the scripts it embeds.
     $default->renamed('playground')
         ->extensions('tokenizer', 'bcmath', 'filter')
-        ->memory('256mb'),
+        ->memory('256mb')
+        ->targets('web')
+        ->outputDir('examples/playground/public/build'),
 
     // SQLite, with PDO and with the SQLite3 class, for the page of
     // examples/notes/: what it embeds, and where it is served from.

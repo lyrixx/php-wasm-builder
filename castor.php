@@ -81,6 +81,8 @@ function build_task(
         return;
     }
 
+    io()->title(1 === \count($stacks) ? \sprintf('Building the stack "%s"', $stacks[0]->name) : \sprintf('Building %d stacks', \count($stacks)));
+
     foreach ($stacks as $selected) {
         io()->writeln(\sprintf(' // Stack "%s": %s', $selected->name, describe($selected)));
     }
@@ -89,6 +91,10 @@ function build_task(
 
     foreach ($stacks as $selected) {
         io()->success(array_map(relative(...), $selected->artifacts()));
+    }
+
+    if (1 === \count($stacks)) {
+        io()->text(next_step($stacks[0]));
     }
 
     notify(1 === \count($stacks) ? \sprintf('Stack "%s" is built', $stacks[0]->name) : \sprintf('%d stacks are built', \count($stacks)));
@@ -117,12 +123,16 @@ function stacks_task(
         ];
     }
 
+    io()->title('Stacks');
     io()->table(['Stack', 'PHP', 'Extensions', 'Memory', 'ICU data', 'Targets'], $rows);
+    io()->text('Build one with "castor wasm:build <stack>", or all of them with "castor wasm:build --all".');
 }
 
 #[AsTask(name: 'sizes', namespace: 'wasm', description: 'Compares the size of what is built with the default stack')]
 function sizes_task(): void
 {
+    io()->title('Size of the .wasm files');
+
     $size = static fn (Stack $stack, string $target): ?int => is_file($path = $stack->artifact($target, 'wasm')) ? filesize($path) : null;
 
     $rows = [];
@@ -136,7 +146,6 @@ function sizes_task(): void
         $reference = $size(stack(DEFAULT_STACK), $target);
         $rows[] = [
             $stack->name,
-            basename($stack->artifact($target, 'wasm')),
             \sprintf('%.1f MB', $bytes / 1024 / 1024),
             match (true) {
                 DEFAULT_STACK === $stack->name => '-',
@@ -152,7 +161,7 @@ function sizes_task(): void
         return;
     }
 
-    io()->table(['Stack', 'File', 'Size', 'vs ' . DEFAULT_STACK], $rows);
+    io()->table(['Stack', 'Size', 'vs ' . DEFAULT_STACK], $rows);
 }
 
 #[AsTask(name: 'run', namespace: 'wasm', description: 'Runs a PHP file, or some code with -r, in a built stack')]
@@ -172,19 +181,83 @@ function run_task(
     $arguments = null === $code ? [Path::makeAbsolute($file, getcwd() ?: project_root())] : ['-r', $code];
     $selected = stack($stack);
 
-    return node($selected->artifact($selected->targets[0], 'mjs'), $arguments, context())->getExitCode();
+    // On stderr: what PHP prints may go through a pipe
+    $stderr = io()->getErrorStyle();
+    $stderr->title(\sprintf('Running %s in the stack "%s"', null === $code ? relative($arguments[0]) : 'some code', $selected->name));
+    build_if_missing($selected);
+
+    $process = node($selected->artifact($selected->targets[0], 'mjs'), $arguments, context());
+
+    // For the prompt of the shell
+    if ('' !== $process->getOutput() && !str_ends_with($process->getOutput(), "\n")) {
+        $stderr->newLine();
+    }
+    if (!$process->isSuccessful()) {
+        $stderr->newLine();
+        $stderr->error(\sprintf('PHP exits with %d.', $process->getExitCode()));
+    }
+
+    return $process->getExitCode();
 }
 
-#[AsTask(name: 'serve', namespace: 'wasm', description: 'Serves the page of an example, its public/ directory, on 127.0.0.1')]
+#[AsTask(name: 'serve', namespace: 'wasm', description: 'Builds the page of an example, then serves its public/ directory on 127.0.0.1: lists them when none is given')]
 function serve_task(
     #[AsArgument(description: 'The example to serve, a directory of examples/', autocomplete: 'PhpWasm\examples')]
-    string $example,
+    ?string $example = null,
+    #[AsOption(description: 'Build the page with the PHP version and the extensions of another stack, intl for example', autocomplete: 'PhpWasm\complete_stacks')]
+    ?string $stack = null,
     #[AsOption(description: 'The port to listen to')]
     int $port = 8000,
 ): int {
+    if (null === $example) {
+        $rows = [];
+        foreach (examples() as $name) {
+            // What the page says it is
+            $page = file_get_contents(builder_root() . "/examples/{$name}/public/index.html");
+            $rows[] = [$name, preg_match('{<title>(.*?)</title>}s', $page, $matches) ? trim($matches[1]) : ''];
+        }
+
+        io()->title('Examples that have a page');
+        io()->table(['Example', 'Page'], $rows);
+        io()->text([
+            'Serve one with "castor wasm:serve <example>": its stack is built first, in a second when nothing changed.',
+            'With "--stack <stack>", the page gets the PHP version and the extensions of another stack.',
+        ]);
+
+        return 0;
+    }
+
     if (!\in_array($example, examples(), true)) {
         throw new \InvalidArgumentException(\sprintf('Unknown example "%s", the examples with a page are: %s.', $example, implode(', ', examples())));
     }
+
+    io()->title(\sprintf('Serving the example "%s"', $example) . (null !== $stack ? \sprintf(', with the stack "%s"', $stack) : ''));
+
+    // The built-in server only says it once started
+    if (false !== $socket = @fsockopen('127.0.0.1', $port, timeout: 1)) {
+        fclose($socket);
+
+        throw new ProblemException(\sprintf('Something already listens to the port %d: give another one, with --port %d for example.', $port, $port + 1));
+    }
+
+    // Built every time: what the page embeds may have changed, or it may have
+    // been built with another stack
+    $page = example_stack($example);
+    if (null !== $page) {
+        if (null !== $stack) {
+            // What the page needs, but the PHP version and the extensions
+            $other = stack($stack)->targets(...$page->targets)->outputDir($page->outputDir);
+            $page = null === $page->embed ? $other : $other->embed($page->embed, at: $page->embedAt);
+        }
+
+        build([$page]);
+    }
+
+    // After what buildx prints: it must stand out
+    io()->success([
+        "The page is on http://127.0.0.1:{$port}/",
+        'It changes with a reload, its PHP when the server starts again. Ctrl+C stops the server.',
+    ]);
 
     // The built-in server of the PHP of the host
     return run(['php', '-S', "127.0.0.1:{$port}", '-t', builder_root() . "/examples/{$example}/public"], context: context()->withAllowFailure())->getExitCode();
@@ -200,6 +273,8 @@ function check_task(
     array $set = [],
 ): int {
     $stacks = [] === $stacks ? array_values(stacks()) : array_map(stack(...), $stacks);
+
+    io()->title(1 === \count($stacks) ? \sprintf('Checking the stack "%s"', $stacks[0]->name) : \sprintf('Checking %d stacks', \count($stacks)));
 
     if (!$noBuild) {
         build($stacks, $set);
@@ -222,7 +297,7 @@ function check_task(
         return 1;
     }
 
-    io()->success(\sprintf('%d stacks work.', \count($stacks)));
+    io()->success(1 === \count($stacks) ? \sprintf('The stack "%s" works.', $stacks[0]->name) : \sprintf('The %d stacks work.', \count($stacks)));
 
     return 0;
 }
@@ -254,6 +329,39 @@ function check_api(Stack $stack): void
 }
 
 /**
+ * Builds a stack if it is not built yet, once asked: what a run needs first.
+ *
+ * @throws ProblemException when it is not built, and should not be
+ */
+function build_if_missing(Stack $stack): void
+{
+    if ([] === array_filter($stack->artifacts(), static fn (string $file): bool => !is_file($file))) {
+        return;
+    }
+
+    // On stderr, as what run_task() says
+    if (!io()->getErrorStyle()->confirm(\sprintf('The stack "%s" is not built yet. Build it now? It takes a few minutes the first time.', $stack->name))) {
+        throw new ProblemException(\sprintf('Build it first, with "castor wasm:build %s".', $stack->name));
+    }
+
+    build([$stack]);
+}
+
+/**
+ * What to do with a stack once it is built.
+ */
+function next_step(Stack $stack): string
+{
+    foreach (examples() as $example) {
+        if ($stack->name === example_stack($example)?->name) {
+            return \sprintf('Serve the page it is built for with "castor wasm:serve %s".', $example);
+        }
+    }
+
+    return \sprintf('Run PHP in it with "castor wasm:run -r \'echo PHP_VERSION;\' --stack %s".', $stack->name);
+}
+
+/**
  * @return list<string>
  */
 function complete_stacks(): array
@@ -272,4 +380,19 @@ function examples(): array
     $publics = finder()->directories()->in(builder_root() . '/examples')->depth(1)->name('public')->sortByName();
 
     return array_map(static fn (SplFileInfo $public): string => $public->getRelativePath(), iterator_to_array($publics, false));
+}
+
+/**
+ * The stack that is built in the public/ directory of an example, if one is.
+ */
+function example_stack(string $example): ?Stack
+{
+    $public = builder_root() . "/examples/{$example}/public/";
+    foreach (stacks() as $stack) {
+        if (str_starts_with($stack->outputDir . '/', $public)) {
+            return $stack;
+        }
+    }
+
+    return null;
 }

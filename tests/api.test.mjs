@@ -10,11 +10,11 @@ import { pathToFileURL } from 'node:url';
 //
 // persist needs a browser: IndexedDB, and the Web Locks.
 
-const build = process.env.BUILD ?? new URL('../build/default/php-node.mjs', import.meta.url);
+const build = process.env.BUILD ? pathToFileURL(path.resolve(process.env.BUILD)) : new URL('../build/default/php-node.mjs', import.meta.url);
 
 let php;
 before(async () => {
-    const { default: createPhp } = await import(build instanceof URL ? build : pathToFileURL(path.resolve(build)));
+    const { default: createPhp } = await import(build);
     php = await createPhp();
 });
 

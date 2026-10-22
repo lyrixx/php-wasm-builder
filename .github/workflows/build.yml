@@ -2,8 +2,7 @@ name: Build
 
 # Builds every stack of stacks.php, one job each, and checks that it works: the
 # PHP version and the extensions are the ones that were asked for, and the
-# JavaScript API works. The sizes of the .wasm files are then compared with the
-# default stack.
+# JavaScript API works. What each job built is kept as an artifact.
 
 on:
   pull_request:
@@ -96,59 +95,6 @@ jobs:
             examples/*/public/build/
             !build/**/bake.json
           if-no-files-found: error
-
-  sizes:
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      - uses: castor-php/setup-castor@v1
-
-      # Each artifact is what a job built: build/<stack>/, or the public/build/
-      # directory of an example
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: php-wasm-*
-          merge-multiple: true
-
-      - name: Sizes
-        run: |
-          {
-            echo '<!-- php-wasm-builder-sizes -->'
-            echo '### Sizes'
-            echo
-            echo '```'
-            castor --no-ansi wasm:sizes
-            echo '```'
-          } | tee "$RUNNER_TEMP/sizes.md" >> "$GITHUB_STEP_SUMMARY"
-
-      # The token of a pull request from a fork can not write
-      - name: Comment the sizes
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const fs = require('fs');
-            const body = fs.readFileSync(`${process.env.RUNNER_TEMP}/sizes.md`, 'utf8');
-            const marker = body.split('\n')[0];
-            const { owner, repo } = context.repo;
-            const issue_number = context.issue.number;
-
-            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
-            const previous = comments.find((comment) => comment.body.startsWith(marker));
-
-            if (previous) {
-              await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
-            } else {
-              await github.rest.issues.createComment({ owner, repo, issue_number, body });
-            }
 
   fetch-files:
     runs-on: ubuntu-latest

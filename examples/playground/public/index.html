@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PHP playground</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+            font-family: system-ui, sans-serif;
+        }
+        body {
+            max-width: 50rem;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        nav button[aria-pressed="true"] {
+            font-weight: bold;
+        }
+        textarea, pre {
+            box-sizing: border-box;
+            width: 100%;
+            margin: 0.5rem 0;
+            padding: 0.5rem;
+            font: 0.9rem ui-monospace, monospace;
+        }
+        pre {
+            min-height: 4rem;
+            white-space: pre-wrap;
+            border: 1px solid #8884;
+        }
+        #message {
+            color: GrayText;
+        }
+    </style>
+</head>
+<body>
+    <h1>PHP playground</h1>
+    <p>
+        PHP runs in the page. These are the scripts of
+        <code>examples/embed/</code>, embedded in the build at
+        <code>/examples</code>: pick one, change it, and run it.
+    </p>
+
+    <nav id="scripts"></nav>
+    <form id="run">
+        <textarea name="code" rows="16" spellcheck="false" autocomplete="off"></textarea>
+        <button>Run</button>
+    </form>
+    <pre id="output"></pre>
+    <p id="message">Loading PHP…</p>
+
+    <script type="module">
+        import createPhp from './build/php-web.mjs';
+
+        const scripts = document.getElementById('scripts');
+        const form = document.getElementById('run');
+        const output = document.getElementById('output');
+        const message = document.getElementById('message');
+
+        const php = await createPhp();
+
+        // What is embedded is read only: the script runs from /tmp, under its
+        // name
+        let name;
+
+        async function run() {
+            php.FS.writeFile(`/tmp/${name}`, form.elements.code.value);
+            const { exitCode, stdout, stderr } = await php.runFile(`/tmp/${name}`);
+
+            output.textContent = stdout + stderr;
+            message.textContent = `PHP exits with ${exitCode}.`;
+        }
+
+        function pick(script) {
+            name = script;
+            form.elements.code.value = php.FS.readFile(`/examples/${name}`, { encoding: 'utf8' });
+            for (const button of scripts.children) {
+                button.setAttribute('aria-pressed', String(button.textContent === name));
+            }
+
+            return run();
+        }
+
+        for (const script of php.FS.readdir('/examples').filter((file) => file.endsWith('.php')).sort()) {
+            const button = document.createElement('button');
+            button.textContent = script;
+            button.addEventListener('click', () => pick(script));
+            scripts.append(button);
+        }
+
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            run();
+        });
+
+        await pick('hello.php');
+    </script>
+</body>
+</html>

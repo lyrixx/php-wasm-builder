@@ -61,17 +61,11 @@
     <p id="message">Loading PHP…</p>
 
     <script type="module">
+        import createPhp from './build/php-web.mjs';
+
         const message = document.getElementById('message');
         const notes = document.getElementById('notes');
         const search = document.getElementById('search');
-
-        let createPhp;
-        try {
-            ({ default: createPhp } = await import('./build/php-web.mjs'));
-        } catch (error) {
-            message.textContent = 'PHP is not built yet: run "castor wasm:build notes".';
-            throw error;
-        }
 
         // /notes, where the database is, is kept in IndexedDB: the rest of the
         // filesystem goes away with the page
