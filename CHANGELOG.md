@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.0 (unreleased)
+
+* Add the `fileinfo` extension, with the libmagic and the database that come
+  with PHP.
+* Add the `iconv` extension, with GNU libiconv 1.19 (`LIBICONV_VERSION`), that
+  knows `//TRANSLIT` and `//IGNORE`.
+* Add the `openssl` extension, with OpenSSL 3.5.9 (`OPENSSL_VERSION`) and its
+  configuration, embedded at `/etc/ssl/openssl.cnf`.
+* Add the `session` extension. `headers_sent()` is false: the headers are still
+  never sent, but sessions start.
+* Add the `full-without-intl-data` stack: every extension, intl without ICU's
+  data. `PhpWasm\check_stack()` checks that iconv transliterates, that OpenSSL
+  has its configuration, and that sessions start.
+
 ## 0.8.0 (2026-10-22)
 
 * BC break: the JavaScript API is `createPhp()`, and the `runFile()` and

@@ -48,6 +48,12 @@ static void start(int argc, char **argv)
     /* Not reset by php_embed_init(), it would keep the status of a previous call */
     EG(exit_status) = 0;
     PG(during_request_startup) = 0;
+    /*
+     * php_embed_init() says the headers are already sent, and sessions do not
+     * start then. They are never sent (no_headers): header() and setcookie()
+     * only add to headers_list().
+     */
+    SG(headers_sent) = 0;
 }
 
 static int stop(void)

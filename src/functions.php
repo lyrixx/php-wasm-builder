@@ -94,6 +94,18 @@ function check_stack(Stack $stack): void
     if (\in_array('sqlite3', $stack->extensions, true)) {
         $problems['SQLite does not have FTS5, or the math functions (sqlite3)'] = \sprintf('extension_loaded("sqlite3") && (new SQLite3(":memory:"))->querySingle(%s) === 1', var_export($sqlite, true));
     }
+    // GNU libiconv: the iconv of emscripten does not transliterate
+    if (\in_array('iconv', $stack->extensions, true)) {
+        $problems['iconv does not transliterate'] = 'extension_loaded("iconv") && @iconv("UTF-8", "ASCII//TRANSLIT", "€") === "EUR"';
+    }
+    // The size of the key is in the configuration of OpenSSL, that is embedded
+    if (\in_array('openssl', $stack->extensions, true)) {
+        $problems['OpenSSL does not have its configuration'] = 'extension_loaded("openssl") && @openssl_pkey_new() !== false';
+    }
+    // run.c says the headers are not sent, or sessions do not start
+    if (\in_array('session', $stack->extensions, true)) {
+        $problems['sessions do not start'] = 'extension_loaded("session") && @session_start()';
+    }
 
     // Prints the problems whose expression is false
     $code = \sprintf('echo json_encode(array_keys(array_filter([%s])));', implode(', ', array_map(
