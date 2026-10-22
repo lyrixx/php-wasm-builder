@@ -221,6 +221,14 @@ ICU_VERSION
     The ICU library (used by intl) version to download and build, for example
     ``78.3``.
 
+LIBICONV_VERSION
+    The GNU libiconv library (used by iconv) version to download and build,
+    for example ``1.19``.
+
+OPENSSL_VERSION
+    The OpenSSL library (used by openssl) version to download and build, for
+    example ``3.5.9``.
+
 SQLITE_VERSION
     The SQLite library (used by pdo_sqlite and sqlite3) version to download and
     build, for example ``3.54.1``.
@@ -249,12 +257,16 @@ These are the extensions that can be listed in ``EXTENSIONS``:
 - calendar
 - ctype
 - dom
+- fileinfo (see `fileinfo`_)
 - filter
+- iconv (see `iconv`_)
 - intl (see `intl`_)
 - libxml
 - mbstring
+- openssl (see `OpenSSL`_)
 - PDO
 - pdo_sqlite (see `SQLite`_)
+- session (see `session`_)
 - SimpleXML
 - sqlite3 (see `SQLite`_)
 - tokenizer
@@ -281,6 +293,28 @@ To add an extension, add it to the ``case`` of the ``resolve`` stage of the
 ``docker/Dockerfile`` (and a stage for the library that it needs, if it needs
 one), and to ``Stack::EXTENSIONS``.
 
+fileinfo
+~~~~~~~~
+
+fileinfo needs no library: PHP comes with libmagic and its database, compiled
+in the ``.wasm`` file, there is no magic file to fetch. ``finfo`` and
+``mime_content_type()`` work on strings and on the files of the WASM
+filesystem. The ``.wasm`` file is about 1.6 MB bigger (600 KB gzipped)::
+
+    docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter fileinfo"
+
+iconv
+~~~~~
+
+iconv links GNU libiconv: the iconv of the C library of emscripten (musl, as
+on Alpine) does not know ``//TRANSLIT`` nor ``//IGNORE``. ``//TRANSLIT``
+transliterates as GNU libiconv does, not as glibc does on Linux: ``Crème
+brûlée`` gives ``Cr`eme br^ul'ee``, and a character it can not transliterate,
+Greek or Japanese for example, fails the conversion, unless ``//IGNORE`` is
+given too. The ``.wasm`` file is about 900 KB bigger (650 KB gzipped)::
+
+    docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter iconv"
+
 intl
 ~~~~
 
@@ -305,6 +339,30 @@ Everything else fails: ``Locale::getDisplayLanguage('fr', 'en')`` gives
 functions do not work. The ``intl-without-data`` stack is this build::
 
     docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter intl" --set default.args.ICU_DATA=none
+
+OpenSSL
+~~~~~~~
+
+openssl links OpenSSL 3.5, its long-term support release, without threads.
+Its configuration, the one the distributions install, is embedded at
+``/etc/ssl/openssl.cnf``: ``openssl_pkey_new()`` and ``openssl_csr_new()``
+take their defaults from it. Ciphers, digests, keys, signatures and
+certificates work, but there is no network: ``https://`` URLs and ``ssl://``
+streams do not connect. The ``.wasm`` file is about 2.6 MB bigger (1 MB
+gzipped)::
+
+    docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter openssl"
+
+session
+~~~~~~~
+
+session needs no library: the ``.wasm`` file is about 70 KB bigger. There is
+no HTTP response, so the headers are never sent: the cookie of the session,
+as what ``header()`` and ``setcookie()`` give, is only in ``headers_list()``,
+and ``headers_sent()`` is false. The sessions are files of ``/tmp``, in the
+memory of the module::
+
+    docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter session"
 
 SQLite
 ~~~~~~
@@ -423,7 +481,9 @@ These are the stacks of ``stacks.php``:
 - ``notes``: adds pdo_sqlite and sqlite3 (see `SQLite`_), for the page of
   ``examples/notes/`` (see below);
 - ``intl``: adds intl (see `intl`_);
-- ``intl-without-data``: adds intl, without ICU's data.
+- ``intl-without-data``: adds intl, without ICU's data;
+- ``full-without-intl-data``: every extension of `Supported Extensions`_, intl
+  without ICU's data.
 
 Each script of ``examples/embed/`` says which stack it needs, and says so
 when it runs in another one. ``castor wasm:run`` offers to build the stack

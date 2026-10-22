@@ -46,4 +46,9 @@ return [
     $default->renamed('intl-without-data')
         ->extensions('intl')
         ->icuData('none'),
+
+    // Every extension, intl without ICU's data.
+    $default->renamed('full-without-intl-data')
+        ->extensions(...Stack::EXTENSIONS)
+        ->icuData('none'),
 ];

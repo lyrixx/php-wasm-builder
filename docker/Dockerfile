@@ -9,6 +9,8 @@
 #   oniguruma   third-party libraries, each one only built when the plan says
 #   libxml2     an extension needs it (the others do nothing and stay tiny)
 #   icu
+#   libiconv
+#   openssl
 #   sqlite
 #   php         configures and compiles PHP
 #   link        compiles run.c, and links the .mjs/.wasm files with api.js
@@ -30,23 +32,27 @@ set -eu
 mkdir -p /plan
 
 flags=""
+libiconv=0
 libxml2=0
 oniguruma=0
 icu=0
+openssl=0
 pdo=0
 sqlite=0
 # Sorted, so that the same extensions always give the same ./configure flags.
 # Keep in sync with Stack::EXTENSIONS, in src/Stack.php
 for extension in $(printf '%s\n' $EXTENSIONS | sort -u); do
     case $extension in
-        bcmath|calendar|ctype|filter|tokenizer) flags="$flags --enable-$extension" ;;
-        dom|simplexml|xml|xmlreader|xmlwriter)  flags="$flags --enable-$extension"; libxml2=1 ;;
-        libxml)                                 libxml2=1 ;;
-        mbstring)                               flags="$flags --enable-mbstring"; oniguruma=1 ;;
-        intl)                                   flags="$flags --enable-intl"; icu=1 ;;
-        pdo)                                    pdo=1 ;;
-        pdo_sqlite)                             flags="$flags --with-pdo-sqlite"; pdo=1; sqlite=1 ;;
-        sqlite3)                                flags="$flags --with-sqlite3"; sqlite=1 ;;
+        bcmath|calendar|ctype|fileinfo|filter|session|tokenizer) flags="$flags --enable-$extension" ;;
+        dom|simplexml|xml|xmlreader|xmlwriter)                   flags="$flags --enable-$extension"; libxml2=1 ;;
+        iconv)                                                   flags="$flags --with-iconv=/local/install"; libiconv=1 ;;
+        libxml)                                                  libxml2=1 ;;
+        mbstring)                                                flags="$flags --enable-mbstring"; oniguruma=1 ;;
+        intl)                                                    flags="$flags --enable-intl"; icu=1 ;;
+        openssl)                                                 flags="$flags --with-openssl"; openssl=1 ;;
+        pdo)                                                     pdo=1 ;;
+        pdo_sqlite)                                              flags="$flags --with-pdo-sqlite"; pdo=1; sqlite=1 ;;
+        sqlite3)                                                 flags="$flags --with-sqlite3"; sqlite=1 ;;
         *) echo "Unknown extension '$extension'" >&2; exit 1 ;;
     esac
 done
@@ -62,6 +68,14 @@ if [ $libxml2 = 1 ]; then
 fi
 if [ $oniguruma = 1 ]; then
     link="$link /local/install/lib/libonig.a"
+fi
+if [ $libiconv = 1 ]; then
+    link="$link /local/install/lib/libiconv.a"
+fi
+if [ $openssl = 1 ]; then
+    # libssl needs libcrypto: it comes first. The configuration of OpenSSL is
+    # where it looks for it: keep in sync with the openssl stage.
+    link="$link /local/install/lib/libssl.a /local/install/lib/libcrypto.a --embed-file /local/install/ssl/openssl.cnf@/etc/ssl/openssl.cnf"
 fi
 if [ $sqlite = 1 ]; then
     link="$link /local/install/lib/libsqlite3.a"
@@ -93,9 +107,11 @@ done
 
 echo "$flags" > /plan/configure
 echo "$link" > /plan/link
+echo "$libiconv" > /plan/libiconv
 echo "$libxml2" > /plan/libxml2
 echo "$oniguruma" > /plan/oniguruma
 echo "$icu" > /plan/icu
+echo "$openssl" > /plan/openssl
 echo "$sqlite" > /plan/sqlite
 
 echo "./configure:$flags"
@@ -197,6 +213,51 @@ emcc -std=c23 -c icudata.c -o icudata.o
 emar rcs /local/install/lib/libicudata-all.a icudata.o
 EOF
 
+# Compile GNU libiconv, for iconv: the iconv of the C library of emscripten
+# (musl) does not know //TRANSLIT nor //IGNORE
+FROM base AS libiconv
+ARG LIBICONV_VERSION=1.19
+COPY --from=resolve /plan/libiconv /plan/libiconv
+RUN <<EOF
+set -eu
+[ "$(cat /plan/libiconv)" = 1 ] || exit 0
+curl -fsSL --retry 3 --connect-timeout 30 -o libiconv.tgz \
+    https://ftp.gnu.org/pub/gnu/libiconv/libiconv-$LIBICONV_VERSION.tar.gz
+tar -xzf libiconv.tgz
+cd libiconv-$LIBICONV_VERSION
+emconfigure ./configure --prefix=/local/install --enable-static --disable-shared --disable-nls
+emmake make -j`nproc`
+emmake make install
+EOF
+
+# Compile OpenSSL, for openssl
+FROM base AS openssl
+ARG OPENSSL_VERSION=3.5.9
+COPY --from=resolve /plan/openssl /plan/openssl
+RUN <<EOF
+set -eu
+[ "$(cat /plan/openssl)" = 1 ] || exit 0
+curl -fsSL --retry 3 --connect-timeout 30 -o openssl.tgz \
+    https://github.com/openssl/openssl/releases/download/openssl-$OPENSSL_VERSION/openssl-$OPENSSL_VERSION.tar.gz
+tar -xzf openssl.tgz
+cd openssl-$OPENSSL_VERSION
+# The generic 32-bit target, without assembly: WASM is neither x86 nor ARM. No
+# threads, and nothing to load: there is no dlopen() in a static build. Not
+# with emconfigure: OpenSSL would prefix emcc with the CROSS_COMPILE it sets.
+# Its configuration is in /etc/ssl, in the WASM filesystem: keep in sync with
+# the "resolve" stage.
+./Configure linux-generic32 CC=emcc AR=emar RANLIB=emranlib \
+    --prefix=/local/install --libdir=lib --openssldir=/etc/ssl \
+    no-asm no-threads no-shared no-dso no-module no-engine no-afalgeng no-tests
+# Only the libraries, with their headers and pkg-config files
+make -j`nproc` build_libs
+make install_dev
+# The configuration that the distributions install: openssl_pkey_new() and
+# openssl_csr_new() take their defaults from it
+mkdir -p /local/install/ssl
+cp apps/openssl.cnf /local/install/ssl/
+EOF
+
 # Compile SQLite, for sqlite3 and pdo_sqlite
 FROM base AS sqlite
 ARG SQLITE_VERSION=3.54.1
@@ -228,9 +289,10 @@ FROM php-src AS php
 COPY --from=oniguruma /local/install /local/install
 COPY --from=libxml2 /local/install /local/install
 COPY --from=icu /local/install /local/install
+COPY --from=libiconv /local/install /local/install
+COPY --from=openssl /local/install /local/install
 COPY --from=sqlite /local/install /local/install
 COPY --from=resolve /plan/configure /plan/configure
-COPY --from=resolve /plan/icu /plan/icu
 
 ENV ONIG_LIBS="-L/local/install"
 ENV ONIG_CFLAGS="-I/local/install/include"
@@ -239,10 +301,10 @@ ENV LIBXML_CFLAGS="-I/local/install/include/libxml2"
 # What pkg-config would give, SQLite is not installed with its .pc file
 ENV SQLITE_CFLAGS="-I/local/install/include"
 ENV SQLITE_LIBS="-L/local/install/lib -lsqlite3"
+# intl finds ICU, and its version, with pkg-config, and openssl finds OpenSSL
+ENV EM_PKG_CONFIG_PATH=/local/install/lib/pkgconfig
 
-# intl finds ICU, and its version, with pkg-config
 RUN cd php-src && \
-    if [ "$(cat /plan/icu)" = 1 ]; then export EM_PKG_CONFIG_PATH=/local/install/lib/pkgconfig; fi && \
     emconfigure ./configure --host=$(emcc -dumpmachine) --enable-embed=static \
     --disable-all --without-pcre-jit --disable-fiber-asm --disable-cgi --disable-cli --disable-phpdbg \
     $(cat /plan/configure)
