@@ -86,7 +86,7 @@ fi
 for target in $TARGETS; do
     case $target in
         web)  echo "php-web web IDBFS" >> /plan/targets ;;
-        node) echo "php-cli node" >> /plan/targets ;;
+        node) echo "php-node node" >> /plan/targets ;;
         *)    echo "Unknown target '$target', supported targets: web node" >&2; exit 1 ;;
     esac
 done
@@ -252,12 +252,12 @@ RUN \
     emmake make -j`nproc`
 
 # The directory to embed in the WASM filesystem is the named build context
-# "embed" (empty unless given, see docker-bake.hcl), it shows up as /$EMBED_PATH
+# "embed" (empty unless given, see docker-bake.hcl), it shows up at $EMBED_AT
 FROM scratch AS embed
 
 # Compile the WASM shim, and link everything
 FROM php AS link
-ARG EMBED_PATH=examples
+ARG EMBED_AT=/examples
 ARG MEMORY=128mb
 
 # Compile WASM shim
@@ -265,15 +265,14 @@ COPY phpw.c /local/src/phpw.c
 RUN \
     emcc -O2 -I php-src/. -I php-src/Zend -I php-src/main -I php-src/TSRM -c phpw.c -o phpw.o
 
-COPY --from=embed / /local/src/$EMBED_PATH
+COPY --from=embed / /embed
 COPY --from=resolve /plan/link /plan/link
 COPY --from=resolve /plan/targets /plan/targets
 
 # Create PHP-WASM
 RUN <<EOF
 set -eu
-mkdir -p /build
-[ -z "$EMBED_PATH" ] || mkdir -p "$EMBED_PATH"
+mkdir -p /build /embed
 while read -r output environment filesystem; do
     # The filesystem is linked, and exported for the page to mount it
     exported='"ccall", "UTF8ToString", "lengthBytesUTF8", "FS"'
@@ -291,7 +290,7 @@ while read -r output environment filesystem; do
     -s INITIAL_MEMORY=$MEMORY -s ALLOW_MEMORY_GROWTH=0 \
     -s ASSERTIONS=0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s MODULARIZE=1 -s INVOKE_RUN=0 -s LZ4=1 -s EXPORT_ES6=1 \
     -s EXPORT_NAME=createPhpModule \
-    ${EMBED_PATH:+--embed-file "$EMBED_PATH"} \
+    ${EMBED_AT:+--embed-file "/embed@$EMBED_AT"} \
     phpw.o php-src/.libs/libphp.a \
     $(cat /plan/link) \
     php-src/.libs/libphp.a < /dev/null

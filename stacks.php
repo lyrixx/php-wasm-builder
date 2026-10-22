@@ -8,7 +8,7 @@ use PhpWasm\Stack;
 $default = Stack::named('default')
     ->php('8.5.12')
     ->extensions('calendar', 'ctype', 'dom', 'mbstring', 'simplexml', 'xml', 'xmlreader', 'xmlwriter')
-    ->embed('examples/embed', 'examples')
+    ->embed('examples/embed', at: '/examples')
     ->targets('web', 'node');
 
 return [
@@ -28,7 +28,7 @@ return [
     // examples/notes/: what it embeds, and where it is served from.
     $default->renamed('notes')
         ->extensions('pdo_sqlite', 'sqlite3')
-        ->embed('examples/notes/embed', 'app')
+        ->embed('examples/notes/embed', at: '/app')
         ->targets('web')
         ->outputDir('examples/notes/public/build'),
 

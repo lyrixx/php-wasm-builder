@@ -134,7 +134,7 @@ function check_stack(Stack $stack): void
  *
  * @throws ProblemException when PHP does not exit with 0
  */
-function run_wasm(Stack $stack, string $code): string
+function run_code(Stack $stack, string $code): string
 {
     $process = node($stack->artifact($stack->targets[0], 'mjs'), ['-r', $code], context()->withQuiet());
     if (!$process->isSuccessful()) {

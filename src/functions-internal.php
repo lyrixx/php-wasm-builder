@@ -104,7 +104,7 @@ function bake_definition(array $stacks): string
                 'MEMORY' => $stack->memory,
                 'ICU_DATA' => $stack->icuData,
                 // None if nothing is embedded
-                'EMBED_PATH' => $stack->embedPath ?? '',
+                'EMBED_AT' => $stack->embedAt ?? '',
             ], static fn (?string $value): bool => null !== $value),
             'output' => ['type=local,dest=' . $stack->outputDir],
         ];

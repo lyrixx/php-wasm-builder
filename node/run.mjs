@@ -10,8 +10,8 @@ import './fetch-files.mjs';
 //
 //     node node/run.mjs [--build <.mjs>] (<file.php> | -r <code>)
 //
-// --build  the php-cli.mjs or the php-web.mjs to run, the php-cli.mjs of the
-//          default stack by default
+// --build  the php-node.mjs or the php-web.mjs to run, the php-node.mjs of
+//          the default stack by default
 // -r       PHP code to run, without <?php ?>
 //
 // The build for the web runs in node too, with fetch-files.mjs: what a
@@ -23,7 +23,7 @@ let args;
 try {
     args = parseArgs({
         options: {
-            build: { type: 'string', default: fileURLToPath(new URL('../build/default/php-cli.mjs', import.meta.url)) },
+            build: { type: 'string', default: fileURLToPath(new URL('../build/default/php-node.mjs', import.meta.url)) },
             code: { type: 'string', short: 'r' },
         },
         allowPositionals: true,

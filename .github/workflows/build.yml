@@ -77,11 +77,11 @@ jobs:
       # extensions are the ones that were asked for. The layers (emsdk, PHP,
       # the libraries…) are cached: one scope per stack, the layers they share
       # are only stored once.
-      - name: Test
+      - name: Check
         env:
           STACK: ${{ matrix.stack }}
         run: |
-          castor wasm:test "$STACK" \
+          castor wasm:check "$STACK" \
             --set "*.cache-from=type=gha,scope=$STACK" \
             --set "*.cache-to=type=gha,scope=$STACK,mode=max,ignore-error=true"
 

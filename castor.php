@@ -190,9 +190,9 @@ function serve_task(
     return run(['php', '-S', "127.0.0.1:{$port}", '-t', builder_root() . "/examples/{$example}/public"], context: context()->withAllowFailure())->getExitCode();
 }
 
-#[AsTask(name: 'test', namespace: 'wasm', description: 'Builds the stacks, then checks from node that what each built boots, with its PHP version and its extensions')]
-function test_task(
-    #[AsArgument(description: 'The stacks to test, all by default', autocomplete: 'PhpWasm\complete_stacks')]
+#[AsTask(name: 'check', namespace: 'wasm', description: 'Builds the stacks, then checks from node that what each built boots, with its PHP version and its extensions')]
+function check_task(
+    #[AsArgument(description: 'The stacks to check, all by default', autocomplete: 'PhpWasm\complete_stacks')]
     array $stacks = [],
     #[AsOption(description: 'Check what is already built')]
     bool $noBuild = false,
