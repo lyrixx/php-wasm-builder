@@ -5,19 +5,20 @@ import { parseArgs } from 'node:util';
 
 import './fetch-files.mjs';
 
-// Runs some PHP code, or a PHP file, in a build, and exits with the exit
-// status of PHP:
+// Runs a PHP file, or some PHP code, in a build, as the php command does:
 //
-//     node node/run.mjs [--build <.mjs>] (<file.php> | -r <code>)
+//     node node/run.mjs [--build <.mjs>] (<file.php> | -r <code>) [--] [<args>...]
 //
 // --build  the php-node.mjs or the php-web.mjs to run, the php-node.mjs of
 //          the default stack by default
 // -r       PHP code to run, without <?php ?>
 //
-// The build for the web runs in node too, with fetch-files.mjs: what a
-// browser would run can be tested without a browser.
+// PHP gets the arguments in $argv, and what is piped or redirected to the
+// command on php://stdin. The command writes what PHP writes, and exits with
+// its exit status. The build for the web runs in node too, with
+// fetch-files.mjs: what a browser would run can be tested without a browser.
 
-const USAGE = 'Usage: node node/run.mjs [--build <.mjs>] (<file.php> | -r <code>)';
+const USAGE = 'Usage: node node/run.mjs [--build <.mjs>] (<file.php> | -r <code>) [--] [<args>...]';
 
 let args;
 try {
@@ -34,57 +35,42 @@ try {
 
 const build = path.resolve(args.values.build);
 const code = args.values.code;
-const [file, ...more] = args.positionals;
-if (more.length > 0 || (file === undefined) === (code === undefined)) {
+const [file, ...rest] = undefined === code ? args.positionals : [undefined, ...args.positionals];
+if ((undefined === file) === (undefined === code)) {
     fail(USAGE);
 }
 if (!fs.existsSync(build)) {
-    fail(`${build} does not exist: build PHP for node first, with "castor wasm:build [<stack>]" or "docker buildx bake".`);
+    fail(`${build} does not exist: build PHP first, with "castor wasm:build [<stack>]" or "docker buildx bake".`);
 }
-if (file !== undefined && !fs.existsSync(file)) {
+if (undefined !== file && !fs.existsSync(file)) {
     fail(`${file} does not exist.`);
 }
 
-const { default: createPhpModule } = await import(pathToFileURL(build));
+const { default: createPhp } = await import(pathToFileURL(build));
+const php = await createPhp();
 
-const stdout = lineWriter(process.stdout);
-const stderr = lineWriter(process.stderr);
-const { ccall } = await createPhpModule({
-    print: stdout.write,
-    printErr: stderr.write,
-});
+// Read before PHP runs: not from a terminal, nor from a socket, that may never
+// end
+const stdin = fs.fstatSync(0);
+const options = {
+    args: rest,
+    stdin: stdin.isFIFO() || stdin.isFile() ? fs.readFileSync(0) : '',
+};
 
-// The code of a file starts in HTML mode, the one of -r in PHP mode
-process.exitCode = ccall('phpw_run', 'number', ['string'], [code ?? '?>' + fs.readFileSync(file, 'utf8')]);
-
-stdout.end();
-stderr.end();
-
-/**
- * print() and printErr() get what PHP writes line by line, without the line
- * breaks. phpw_run() then writes one more line break on both, to flush what is
- * left: when the output of PHP ends with a line break, the last line is an
- * empty one that PHP did not write.
- */
-function lineWriter(stream) {
-    let previous = null;
-
-    return {
-        write(line) {
-            if (previous !== null) {
-                stream.write(previous + '\n');
-            }
-            previous = line;
-        },
-        end() {
-            // A line break after the output, if PHP did not write one, for the
-            // shell prompt
-            if (previous) {
-                stream.write(previous + '\n');
-            }
-        },
-    };
+let result;
+if (undefined === code) {
+    // The file is read from the disk, at the same path in the WASM filesystem
+    const script = path.resolve(file);
+    php.FS.mkdirTree(path.dirname(script));
+    php.FS.writeFile(script, fs.readFileSync(script));
+    result = await php.runFile(script, options);
+} else {
+    result = await php.runCode(code, options);
 }
+
+process.stdout.write(result.stdout);
+process.stderr.write(result.stderr);
+process.exitCode = result.exitCode;
 
 function fail(...lines) {
     console.error(lines.join('\n'));

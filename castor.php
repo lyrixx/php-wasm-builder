@@ -190,7 +190,7 @@ function serve_task(
     return run(['php', '-S', "127.0.0.1:{$port}", '-t', builder_root() . "/examples/{$example}/public"], context: context()->withAllowFailure())->getExitCode();
 }
 
-#[AsTask(name: 'check', namespace: 'wasm', description: 'Builds the stacks, then checks from node that what each built boots, with its PHP version and its extensions')]
+#[AsTask(name: 'check', namespace: 'wasm', description: 'Builds the stacks, then checks from node that what each built boots, with its PHP version, its extensions and its JavaScript API')]
 function check_task(
     #[AsArgument(description: 'The stacks to check, all by default', autocomplete: 'PhpWasm\complete_stacks')]
     array $stacks = [],
@@ -209,6 +209,7 @@ function check_task(
     foreach ($stacks as $stack) {
         try {
             check_stack($stack);
+            check_api($stack);
         } catch (ProblemException $exception) {
             ++$failed;
             io()->listing(explode("\n", $exception->getMessage()));
@@ -224,6 +225,32 @@ function check_task(
     io()->success(\sprintf('%d stacks work.', \count($stacks)));
 
     return 0;
+}
+
+/**
+ * Runs the tests of the JavaScript API, tests/api.test.mjs, on every build of
+ * a stack.
+ *
+ * @throws ProblemException with the tests that fail
+ */
+function check_api(Stack $stack): void
+{
+    io()->write(\sprintf('Stack "%s": the JavaScript API', $stack->name));
+
+    foreach ($stack->targets as $target) {
+        $build = $stack->artifact($target, 'mjs');
+        $process = run(
+            ['node', '--import', builder_root() . '/node/fetch-files.mjs', '--test', builder_root() . '/tests/api.test.mjs'],
+            context: context()->withEnvironment(['BUILD' => $build])->withQuiet()->withAllowFailure(),
+        );
+        if (!$process->isSuccessful()) {
+            io()->writeln(' ❌');
+
+            throw new ProblemException(\sprintf('%s: %s', basename($build), trim($process->getOutput())));
+        }
+    }
+
+    io()->writeln(' ✅');
 }
 
 /**

@@ -1,8 +1,9 @@
 name: Build
 
 # Builds every stack of stacks.php, one job each, and checks that it works: the
-# PHP version and the extensions are the ones that were asked for. The sizes of
-# the .wasm files are then compared with the default stack.
+# PHP version and the extensions are the ones that were asked for, and the
+# JavaScript API works. The sizes of the .wasm files are then compared with the
+# default stack.
 
 on:
   pull_request:
@@ -74,9 +75,9 @@ jobs:
           node-version: 24
 
       # Builds the stack, then checks from node that the PHP version and the
-      # extensions are the ones that were asked for. The layers (emsdk, PHP,
-      # the libraries…) are cached: one scope per stack, the layers they share
-      # are only stored once.
+      # extensions are the ones that were asked for, and that the JavaScript
+      # API works. The layers (emsdk, PHP, the libraries…) are cached: one
+      # scope per stack, the layers they share are only stored once.
       - name: Check
         env:
           STACK: ${{ matrix.stack }}

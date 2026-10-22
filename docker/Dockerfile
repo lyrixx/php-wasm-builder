@@ -11,7 +11,7 @@
 #   icu
 #   sqlite
 #   php         configures and compiles PHP
-#   link        compiles the shim and links the .mjs/.wasm files
+#   link        compiles run.c, and links the .mjs/.wasm files with api.js
 #
 # Every stage only reads the parts of the plan it needs, and the plan is made
 # of small files: changing EXTENSIONS, TARGETS, ... only rebuilds what actually
@@ -79,13 +79,13 @@ if [ $icu = 1 ]; then
     link="$link /local/install/lib/libicui18n.a /local/install/lib/libicuio.a /local/install/lib/libicuuc.a /local/install/lib/$icudata -sDEFAULT_TO_CXX"
 fi
 
-# <output file name> <emscripten environment> [<filesystem, besides MEMFS>],
-# by target. IDBFS keeps files in IndexedDB, across the reloads of a page. Keep
-# in sync with Stack::TARGETS, in src/Stack.php
+# <output file name> <emscripten environment> [<libraries>], by target. IDBFS
+# keeps files in IndexedDB, across the reloads of a page (the persist option of
+# createPhp()). Keep in sync with Stack::TARGETS, in src/Stack.php
 : > /plan/targets
 for target in $TARGETS; do
     case $target in
-        web)  echo "php-web web IDBFS" >> /plan/targets ;;
+        web)  echo "php-web web -lidbfs.js" >> /plan/targets ;;
         node) echo "php-node node" >> /plan/targets ;;
         *)    echo "Unknown target '$target', supported targets: web node" >&2; exit 1 ;;
     esac
@@ -255,43 +255,37 @@ RUN \
 # "embed" (empty unless given, see docker-bake.hcl), it shows up at $EMBED_AT
 FROM scratch AS embed
 
-# Compile the WASM shim, and link everything
+# Compile run.c, and link everything
 FROM php AS link
 ARG EMBED_AT=/examples
 ARG MEMORY=128mb
 
-# Compile WASM shim
-COPY phpw.c /local/src/phpw.c
+COPY run.c api.js /local/src/
 RUN \
-    emcc -O2 -I php-src/. -I php-src/Zend -I php-src/main -I php-src/TSRM -c phpw.c -o phpw.o
+    emcc -O2 -I php-src/. -I php-src/Zend -I php-src/main -I php-src/TSRM -c run.c -o run.o
 
 COPY --from=embed / /embed
 COPY --from=resolve /plan/link /plan/link
 COPY --from=resolve /plan/targets /plan/targets
 
-# Create PHP-WASM
+# The functions of run.c and what api.js needs are exported from the .wasm
+# file. createPhp() is what the .mjs file exports.
 RUN <<EOF
 set -eu
 mkdir -p /build /embed
-while read -r output environment filesystem; do
-    # The filesystem is linked, and exported for the page to mount it
-    exported='"ccall", "UTF8ToString", "lengthBytesUTF8", "FS"'
-    library=""
-    if [ -n "$filesystem" ]; then
-        exported="$exported, \"$filesystem\""
-        library="-l$(echo $filesystem | tr A-Z a-z).js"
-    fi
+while read -r output environment libraries; do
     emcc -o /build/$output.mjs \
     -O2 \
-    -s EXPORTED_FUNCTIONS='["_phpw", "_phpw_flush", "_phpw_exec", "_phpw_run", "_chdir", "_setenv", "_php_embed_init", "_php_embed_shutdown", "_zend_eval_string"]' \
-    -s EXPORTED_RUNTIME_METHODS="[$exported]" \
-    $library \
+    -s EXPORTED_FUNCTIONS=_free,_malloc,_run_code,_run_file \
+    -s EXPORTED_RUNTIME_METHODS=FS \
+    --pre-js api.js \
+    $libraries \
     -s ENVIRONMENT=$environment \
     -s INITIAL_MEMORY=$MEMORY -s ALLOW_MEMORY_GROWTH=0 \
     -s ASSERTIONS=0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s MODULARIZE=1 -s INVOKE_RUN=0 -s LZ4=1 -s EXPORT_ES6=1 \
-    -s EXPORT_NAME=createPhpModule \
+    -s EXPORT_NAME=createPhp \
     ${EMBED_AT:+--embed-file "/embed@$EMBED_AT"} \
-    phpw.o php-src/.libs/libphp.a \
+    run.o php-src/.libs/libphp.a \
     $(cat /plan/link) \
     php-src/.libs/libphp.a < /dev/null
 done < /plan/targets

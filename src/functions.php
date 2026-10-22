@@ -127,21 +127,24 @@ function check_stack(Stack $stack): void
 }
 
 /**
- * Runs some PHP code in what a stack built, from node: in the build of its
- * first target, the web one by default, as a browser would run it.
+ * Runs some PHP code in what a stack built, as runCode() does in a page, from
+ * node: in the build of its first target, the web one by default, as a
+ * browser would run it.
  *
- * @return string what PHP prints, without the line breaks at the end
+ * @param string $stdin what PHP reads on php://stdin
+ *
+ * @return string what PHP prints
  *
  * @throws ProblemException when PHP does not exit with 0
  */
-function run_code(Stack $stack, string $code): string
+function run_code(Stack $stack, string $code, string $stdin = ''): string
 {
-    $process = node($stack->artifact($stack->targets[0], 'mjs'), ['-r', $code], context()->withQuiet());
+    $process = node($stack->artifact($stack->targets[0], 'mjs'), ['-r', $code], context()->withQuiet()->withInput($stdin));
     if (!$process->isSuccessful()) {
         throw new ProblemException(\sprintf('PHP exits with %d in the stack "%s": %s', $process->getExitCode(), $stack->name, trim($process->getOutput() . $process->getErrorOutput())));
     }
 
-    return rtrim($process->getOutput(), "\n");
+    return $process->getOutput();
 }
 
 /**
