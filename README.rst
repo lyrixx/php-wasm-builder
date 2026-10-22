@@ -302,6 +302,18 @@ flags make it load. Any PHP project can reuse that with castor, instead of
 copying the Dockerfile. This is how a project runs its PHP code in a page,
 checks it, and deploys it. It needs Docker, castor, and node for the checks.
 
+These projects do it, their pages run PHP in the browser:
+
+- `composer-diff <https://lyrixx.github.io/composer-diff/>`__ (`sources
+  <https://github.com/lyrixx/composer-diff>`__): compares two
+  ``composer.lock``;
+- `emoji-converter <https://jolicode.github.io/emoji-converter/>`__ (`sources
+  <https://github.com/jolicode/emoji-converter>`__): turns 🐘 into
+  ``:elephant:`` and back;
+- `JoliTypo <https://jolitypo.jolicode.com/>`__ (`sources
+  <https://github.com/jolicode/JoliTypo>`__): fixes the microtypography of an
+  HTML text.
+
 Require the package
 ~~~~~~~~~~~~~~~~~~~
 
