@@ -34,8 +34,24 @@
 
 static bool running = false;
 
+/* The file that runs, empty for some code: $_SERVER["SCRIPT_FILENAME"] */
+static const char *script_filename = "";
+
+/* What the php command adds to the environment in $_SERVER */
+static void register_variables(zval *track_vars_array)
+{
+    const char *self = SG(request_info).argv[0];
+
+    php_import_environment_variables(track_vars_array);
+    php_register_variable("PHP_SELF", self, track_vars_array);
+    php_register_variable("SCRIPT_NAME", self, track_vars_array);
+    php_register_variable("SCRIPT_FILENAME", script_filename, track_vars_array);
+    php_register_variable("PATH_TRANSLATED", script_filename, track_vars_array);
+    php_register_variable("DOCUMENT_ROOT", "", track_vars_array);
+}
+
 /* argv is $argv */
-static void start(int argc, char **argv)
+static void start(int argc, char **argv, const char *filename)
 {
     /* A previous call did not get to the end, a JavaScript exception went through it */
     if (running) {
@@ -43,6 +59,8 @@ static void start(int argc, char **argv)
     }
 
     setenv("USE_ZEND_ALLOC", "0", 1);
+    script_filename = filename;
+    php_embed_module.register_server_variables = register_variables;
     php_embed_init(argc, argv);
     running = true;
     /* Not reset by php_embed_init(), it would keep the status of a previous call */
@@ -54,6 +72,8 @@ static void start(int argc, char **argv)
      * only add to headers_list().
      */
     SG(headers_sent) = 0;
+    /* The "#!" line of a script (artisan, bin/console) is not printed, nor of what it includes */
+    CG(skip_shebang) = 1;
 }
 
 static int stop(void)
@@ -69,7 +89,7 @@ static int stop(void)
 /* php <argv[0]> <argv[1]>... */
 int run_file(int argc, char **argv)
 {
-    start(argc, argv);
+    start(argc, argv, argv[0]);
     zend_first_try {
         zend_file_handle file_handle;
         zend_stream_init_filename(&file_handle, argv[0]);
@@ -83,7 +103,7 @@ int run_file(int argc, char **argv)
 /* php -r <code> <argv[1]>... */
 int run_code(char *code, int argc, char **argv)
 {
-    start(argc, argv);
+    start(argc, argv, "");
     zend_first_try {
         zend_eval_string(code, NULL, "Command line code");
         if (EG(exception)) {
