@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.0 (unreleased)
+## 0.9.0 (2026-11-02)
 
 * Add the `fileinfo` extension, with the libmagic and the database that come
   with PHP.
