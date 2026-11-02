@@ -21,6 +21,8 @@
   script (`artisan`, `bin/console`) is not printed anymore, nor the one of what
   it includes, and `$_SERVER` has `PHP_SELF`, `SCRIPT_NAME`,
   `SCRIPT_FILENAME`, `PATH_TRANSLATED` and `DOCUMENT_ROOT`.
+* The README says that a Fiber aborts the module, and that integers are 32
+  bits: PHP 8.5 warns when a float out of their range is cast to an int.
 
 ## 0.8.0 (2026-10-22)
 
