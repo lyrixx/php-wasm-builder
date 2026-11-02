@@ -13,7 +13,8 @@
 #   openssl
 #   sqlite
 #   php         configures and compiles PHP
-#   link        compiles run.c, and links the .mjs/.wasm files with api.js
+#   link        compiles run.c and spawn.c, and links the .mjs/.wasm files
+#               with api.js
 #
 # Every stage only reads the parts of the plan it needs, and the plan is made
 # of small files: changing EXTENSIONS, TARGETS, ... only rebuilds what actually
@@ -317,14 +318,15 @@ RUN \
 # "embed" (empty unless given, see docker-bake.hcl), it shows up at $EMBED_AT
 FROM scratch AS embed
 
-# Compile run.c, and link everything
+# Compile run.c and spawn.c, and link everything
 FROM php AS link
 ARG EMBED_AT=/examples
 ARG MEMORY=128mb
 
-COPY run.c api.js /local/src/
+COPY run.c spawn.c api.js /local/src/
 RUN \
-    emcc -O2 -I php-src/. -I php-src/Zend -I php-src/main -I php-src/TSRM -c run.c -o run.o
+    emcc -O2 -I php-src/. -I php-src/Zend -I php-src/main -I php-src/TSRM -c run.c -o run.o && \
+    emcc -O2 -c spawn.c -o spawn.o
 
 COPY --from=embed / /embed
 COPY --from=resolve /plan/link /plan/link
@@ -347,7 +349,7 @@ while read -r output environment libraries; do
     -s ASSERTIONS=0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s MODULARIZE=1 -s INVOKE_RUN=0 -s LZ4=1 -s EXPORT_ES6=1 \
     -s EXPORT_NAME=createPhp \
     ${EMBED_AT:+--embed-file "/embed@$EMBED_AT"} \
-    run.o php-src/.libs/libphp.a \
+    run.o spawn.o php-src/.libs/libphp.a \
     $(cat /plan/link) \
     php-src/.libs/libphp.a < /dev/null
 done < /plan/targets

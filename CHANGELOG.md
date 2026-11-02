@@ -13,6 +13,16 @@
 * Add the `full-without-intl-data` stack: every extension, intl without ICU's
   data. `PhpWasm\check_stack()` checks that iconv transliterates, that OpenSSL
   has its configuration, and that sessions start.
+* `proc_open()` fails with a warning (`posix_spawn() failed: Function not
+  implemented`), as `exec()` and `popen()` do. With an array, as Symfony
+  Process gives, it aborted the module: the C library of emscripten has no
+  `posix_spawnp()`.
+* `runFile()` and `runCode()` run as the php command does: the `#!` line of a
+  script (`artisan`, `bin/console`) is not printed anymore, nor the one of what
+  it includes, and `$_SERVER` has `PHP_SELF`, `SCRIPT_NAME`,
+  `SCRIPT_FILENAME`, `PATH_TRANSLATED` and `DOCUMENT_ROOT`.
+* The README says that a Fiber aborts the module, and that integers are 32
+  bits: PHP 8.5 warns when a float out of their range is cast to an int.
 
 ## 0.8.0 (2026-10-22)
 
