@@ -388,6 +388,11 @@ Limitations
     WebAssembly cannot pause and resume code the way Fibers require, so the
     build uses ``--disable-fiber-asm``.
 
+- Processes
+    There is no other program to run: ``proc_open()`` (and Symfony Process),
+    ``exec()``, ``system()``, ``shell_exec()`` and ``popen()`` fail, with a
+    warning.
+
 Stacks, and castor
 ------------------
 

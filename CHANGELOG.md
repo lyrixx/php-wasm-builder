@@ -13,6 +13,10 @@
 * Add the `full-without-intl-data` stack: every extension, intl without ICU's
   data. `PhpWasm\check_stack()` checks that iconv transliterates, that OpenSSL
   has its configuration, and that sessions start.
+* `proc_open()` fails with a warning (`posix_spawn() failed: Function not
+  implemented`), as `exec()` and `popen()` do. With an array, as Symfony
+  Process gives, it aborted the module: the C library of emscripten has no
+  `posix_spawnp()`.
 
 ## 0.8.0 (2026-10-22)
 

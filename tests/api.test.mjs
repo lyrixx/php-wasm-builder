@@ -58,6 +58,16 @@ test('runCode() takes more code than the stack of the module', async () => {
     assert.equal((await php.runCode(`echo strlen('${string}');`)).stdout, String(string.length));
 });
 
+test('proc_open() fails, there is no other process to run: the module goes on', async () => {
+    // An array of arguments, as Symfony Process gives, then a shell command
+    const code = 'echo json_encode(array_map(fn ($command) => [@proc_open($command, [], $pipes), error_get_last()["message"]], [["ls"], "ls"]));';
+
+    assert.deepEqual(JSON.parse((await php.runCode(code)).stdout), [
+        [false, 'proc_open(): posix_spawn() failed: Function not implemented'],
+        [false, 'proc_open(): posix_spawn() failed: Function not implemented'],
+    ]);
+});
+
 test('each run is a request of its own, the files stay', async () => {
     await php.runCode('$GLOBALS["previous"] = true; file_put_contents("/tmp/previous.txt", "kept");');
 
