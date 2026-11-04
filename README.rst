@@ -629,9 +629,9 @@ relative to the root of the project, the directory of ``castor.php``, and the
 directory shows up at ``/<its name>`` in the WASM filesystem, unless
 ``embed()`` is told where (``->embed('build/dist', at: '/app')``).
 ``outputDir()`` writes the files somewhere else than
-``build/<stack>/``, also relative to the root of the project. ``memory()`` and
-``icuData()`` set the ``MEMORY`` and ``ICU_DATA`` build arguments,
-``opcache(Opcache::Precompiled)`` sets ``OPCACHE``, and
+``build/<stack>/``, also relative to the root of the project. ``memory()`` sets
+the ``MEMORY`` build argument, ``icuData(IcuData::None)`` ``ICU_DATA``,
+``opcache(Opcache::Precompiled)`` ``OPCACHE``, and
 ``warmup('bin/console', 'cache:warmup')`` ``WARMUP`` (see `Options`_).
 
 To build your own stacks with this repository as it is, declare them in a

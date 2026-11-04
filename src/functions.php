@@ -82,7 +82,7 @@ function check_stack(Stack $stack): void
     }
     // intl loads without ICU's data, then it only knows locale codes
     if (\in_array('intl', $stack->extensions, true)) {
-        $problems += 'none' === $stack->icuData
+        $problems += IcuData::None === $stack->icuData
             ? ['intl does not normalize, or has ICU\'s data' => 'extension_loaded("intl") && Normalizer::normalize("e\u{301}") === "\u{e9}" && Locale::getDisplayLanguage("fr", "en") === "fr"']
             : ['intl does not have ICU\'s data' => 'extension_loaded("intl") && Locale::getDisplayLanguage("fr", "en") === "French"'];
     }

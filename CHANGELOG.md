@@ -37,6 +37,8 @@
 * The `symfony` stack makes the cache of Symfony when it is built: the page
   starts in 0.2 s, instead of 0.6 s. The `symfony-runtime` and
   `symfony-precompiled` stacks have opcache too.
+* BC break: `icuData()` of a stack takes an `IcuData`,
+  `->icuData(IcuData::None)`, instead of a string.
 
 ## 0.9.0 (2026-11-02)
 

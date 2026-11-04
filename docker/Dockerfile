@@ -86,7 +86,7 @@ if [ $sqlite = 1 ]; then
 fi
 if [ $icu = 1 ]; then
     # The icu stage builds both: libicudata.a is the empty stub that ICU
-    # installs. Keep in sync with Stack::ICU_DATA, in src/Stack.php
+    # installs. Keep in sync with the IcuData enum, in src/IcuData.php
     case $ICU_DATA in
         all)  icudata=libicudata-all.a ;;
         none) icudata=libicudata.a ;;

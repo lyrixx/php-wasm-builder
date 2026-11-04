@@ -1,5 +1,6 @@
 <?php
 
+use PhpWasm\IcuData;
 use PhpWasm\Opcache;
 use PhpWasm\Stack;
 
@@ -64,10 +65,10 @@ return [
     // the character properties of IntlChar work. It needs no more memory.
     $default->renamed('intl-without-data')
         ->extensions('intl')
-        ->icuData('none'),
+        ->icuData(IcuData::None),
 
     // Every extension, intl without ICU's data.
     $default->renamed('full-without-intl-data')
         ->extensions(...Stack::EXTENSIONS)
-        ->icuData('none'),
+        ->icuData(IcuData::None),
 ];

@@ -102,7 +102,7 @@ function bake_definition(array $stacks): string
                 'EXTENSIONS' => implode(' ', $stack->extensions),
                 'TARGETS' => implode(' ', $stack->targets),
                 'MEMORY' => $stack->memory,
-                'ICU_DATA' => $stack->icuData,
+                'ICU_DATA' => $stack->icuData?->value,
                 // None if nothing is embedded
                 'EMBED_AT' => $stack->embedAt ?? '',
                 'WARMUP' => [] === $stack->warmup ? null : implode(' ', $stack->warmup),

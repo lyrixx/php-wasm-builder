@@ -29,11 +29,6 @@ final readonly class Stack
     public const TARGETS = ['web' => 'php-web', 'node' => 'php-node'];
 
     /**
-     * Keep in sync with the "resolve" stage of the Dockerfile.
-     */
-    public const ICU_DATA = ['all', 'none'];
-
-    /**
      * @param list<string> $extensions
      * @param string|null  $embed      absolute path of the directory to embed
      * @param string|null  $embedAt    where the embedded directory is in the WASM filesystem, as /app
@@ -51,7 +46,7 @@ final readonly class Stack
         public ?Opcache $opcache,
         public array $targets,
         public ?string $memory,
-        public ?string $icuData,
+        public ?IcuData $icuData,
         public string $outputDir,
     ) {
     }
@@ -151,13 +146,10 @@ final readonly class Stack
     }
 
     /**
-     * The data of ICU that intl links: "all" of it (the default, every locale),
-     * or "none" (intl is loaded, but it only knows locale codes).
+     * The data of ICU that intl links.
      */
-    public function icuData(string $icuData): self
+    public function icuData(IcuData $icuData): self
     {
-        self::validate('ICU data', [$icuData], self::ICU_DATA);
-
         return $this->with(icuData: $icuData);
     }
 
