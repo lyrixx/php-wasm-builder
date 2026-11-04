@@ -135,12 +135,16 @@ loads PHP from the ``.wasm`` file next to them:
     Runs some PHP code, without ``<?php``, as ``php -r <code> <args>...``
     does: ``$argv[0]`` is ``Standard input code``.
 
+``php.request(request, { documentRoot, basePath })``
+    Runs PHP as a web server does, for an HTTP request, and resolves with the
+    response (see `HTTP requests`_).
+
 ``args`` (strings) are in ``$argv``, after the file. ``stdin`` (a string, or a
 ``Uint8Array``) is what PHP reads on ``php://stdin``. Both are optional.
 ``STDIN``, ``STDOUT`` and ``STDERR`` are not defined: they are constants of
 the php command only.
 
-Both resolve once PHP is done, with what it gave:
+``runFile()`` and ``runCode()`` resolve once PHP is done, with what it gave:
 
 - ``exitCode``: the one given to ``exit()``, 255 on a fatal error or an
   uncaught exception, 0 otherwise;
@@ -171,6 +175,57 @@ example ``locateFile`` to load the ``.wasm`` file from somewhere else.
 A run that takes all the memory of the module (``MEMORY``), or all of its
 stack (see `Limitations`_), aborts it, and the promise is rejected: what is in
 its memory can not be trusted anymore, create another one.
+
+HTTP requests
+-------------
+
+``php.request()`` runs PHP as a web server does: the code gets ``$_GET``,
+``$_POST``, ``$_COOKIE``, ``$_FILES`` and ``php://input``, and what it sends
+with ``header()``, ``setcookie()`` or ``http_response_code()`` makes the
+response. A framework runs as it is, from its front controller:
+
+.. code-block:: js
+
+    const response = await php.request({
+        method: 'POST',
+        url: 'https://example.com/blog/comments?page=2',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: 'PHPSESSID=…' },
+        body: 'comment=Hello',
+    }, { documentRoot: '/app/public' });
+
+    // { status: 302, headers: [['Location', '/blog'], ['Set-Cookie', '…'], …], body: Uint8Array, stderr: '' }
+
+The request is data, not a ``Request`` of ``fetch()``: a browser drops the
+``Cookie`` header of a ``Request``, and the ``Set-Cookie`` headers of a
+``Response``. It is what ``postMessage()`` takes, too. ``headers`` is an
+object, a list of names and values, or ``Headers``, and ``body`` a string or
+bytes (``ArrayBuffer``, ``Uint8Array``…), for any method. Both are optional,
+as ``method`` (``GET``).
+
+The URL asks for a file of ``documentRoot``, as with a web server: a ``.php``
+file runs, any other file is the response, as it is (a stylesheet, an
+image…), and a URL that is not a file runs ``index.php``, the front
+controller. ``..`` never goes out of ``documentRoot``. ``basePath`` is where
+``documentRoot`` is in the URLs, nowhere by default: with ``/app``, ``/app/blog``
+runs ``index.php`` with ``$_SERVER['SCRIPT_NAME']`` at ``/app/index.php``, that
+Symfony builds its URLs from, and a URL out of ``/app`` is a 404.
+
+``$_SERVER`` has what a web server gives with CGI: ``REQUEST_METHOD``,
+``REQUEST_URI``, ``QUERY_STRING``, ``SCRIPT_NAME``, ``SCRIPT_FILENAME``,
+``HTTP_HOST``, an ``HTTP_*`` for each header… ``PHP_SAPI`` is ``wasm``, not
+``embed`` as with ``runFile()``: Symfony takes ``embed`` for the command line
+(its errors in plain text, ``display_errors`` on, no flush…).
+
+It resolves with the response:
+
+- ``status``: the HTTP status, 200 unless PHP says otherwise;
+- ``headers``: the names and values that PHP sends, in a list, as there may be
+  several ``Set-Cookie``;
+- ``body``: what PHP wrote, as bytes (a ``Uint8Array``);
+- ``stderr``: what PHP wrote on stderr, the logs of Symfony for example.
+
+``request()`` is the web server, not the browser: it keeps no cookie, and
+follows no redirection.
 
 Options
 -------

@@ -345,7 +345,7 @@ while read -r output environment libraries; do
     emcc -o /build/$output.mjs \
     -O2 \
     -s STACK_SIZE=1mb -s STACK_OVERFLOW_CHECK=2 \
-    -s EXPORTED_FUNCTIONS=_free,_malloc,_run_code,_run_file \
+    -s EXPORTED_FUNCTIONS=_free,_malloc,_run_code,_run_file,_run_request \
     -s EXPORTED_RUNTIME_METHODS=FS \
     --pre-js api.js \
     $libraries \

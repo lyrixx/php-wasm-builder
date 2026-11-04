@@ -96,3 +96,124 @@ test('each run is a request of its own, the files stay', async () => {
 
     assert.equal((await php.runCode('echo isset($GLOBALS["previous"]) ? "kept" : "gone", " ", file_get_contents("/tmp/previous.txt");')).stdout, 'gone kept');
 });
+
+// A small site: index.php, its front controller, prints what PHP got
+const site = { documentRoot: '/site/public', basePath: '/site' };
+const utf8Decoder = new TextDecoder();
+
+function writeSite() {
+    php.FS.mkdirTree('/site/public/assets');
+    php.FS.writeFile('/site/public/index.php', '<?php echo json_encode(["sapi" => PHP_SAPI, "server" => array_intersect_key($_SERVER, array_flip(["REQUEST_METHOD", "REQUEST_URI", "QUERY_STRING", "SCRIPT_NAME", "SCRIPT_FILENAME", "PHP_SELF", "DOCUMENT_ROOT", "HTTP_HOST", "HTTP_X_CUSTOM", "HTTPS", "SERVER_PORT"])), "get" => $_GET, "post" => $_POST, "cookie" => $_COOKIE, "input" => file_get_contents("php://input")]);');
+    php.FS.writeFile('/site/public/assets/style.css', 'body {}');
+    php.FS.writeFile('/site/public/other.php', '<?php echo $_SERVER["SCRIPT_NAME"];');
+    php.FS.writeFile('/site/secret.txt', 'secret');
+}
+
+async function requestJson(request) {
+    writeSite();
+    const response = await php.request(request, site);
+
+    return JSON.parse(utf8Decoder.decode(response.body));
+}
+
+test('request() runs the front controller with the request, as a web server does', async () => {
+    const got = await requestJson({
+        method: 'POST',
+        url: 'https://example.com/site/blog/été?page=2&tags[]=php',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Custom': 'yes', Cookie: 'theme=dark; lang=fr' },
+        body: 'title=Hello&tags[]=wasm',
+    });
+
+    assert.deepEqual(got, {
+        sapi: 'wasm',
+        server: {
+            REQUEST_METHOD: 'POST',
+            REQUEST_URI: '/site/blog/%C3%A9t%C3%A9?page=2&tags[]=php',
+            QUERY_STRING: 'page=2&tags[]=php',
+            SCRIPT_NAME: '/site/index.php',
+            SCRIPT_FILENAME: '/site/public/index.php',
+            PHP_SELF: '/site/index.php',
+            DOCUMENT_ROOT: '/site/public',
+            HTTP_HOST: 'example.com',
+            HTTP_X_CUSTOM: 'yes',
+            HTTPS: 'on',
+            SERVER_PORT: '443',
+        },
+        get: { page: '2', tags: ['php'] },
+        post: { title: 'Hello', tags: ['wasm'] },
+        cookie: { theme: 'dark', lang: 'fr' },
+        input: 'title=Hello&tags[]=wasm',
+    });
+});
+
+test('request() gives PHP the body of any method on php://input, a string or bytes', async () => {
+    const json = await requestJson({ method: 'PUT', url: 'http://localhost/site/', headers: { 'Content-Type': 'application/json' }, body: '{"a":"é"}' });
+    assert.equal(json.input, '{"a":"é"}');
+    assert.deepEqual(json.post, []);
+
+    const bytes = await requestJson({ method: 'PATCH', url: 'http://localhost/site/', body: new Uint8Array([0x61, 0x62]).buffer });
+    assert.equal(bytes.input, 'ab');
+});
+
+test('request() returns the status, the headers and the body that PHP sends', async () => {
+    php.FS.mkdirTree('/site/public');
+    php.FS.writeFile('/site/public/index.php', '<?php http_response_code(201); header("X-Answer: 42"); setcookie("visited", "yes"); echo "\\0created";');
+    const response = await php.request({ url: 'http://localhost/site/' }, site);
+
+    assert.equal(response.status, 201);
+    assert.deepEqual(response.headers.filter(([name]) => 'X-Powered-By' !== name), [
+        ['X-Answer', '42'],
+        ['Set-Cookie', 'visited=yes'],
+        ['Content-type', 'text/html; charset=UTF-8'],
+    ]);
+    // Bytes, as they are
+    assert.deepEqual(response.body, new Uint8Array([0, ...new TextEncoder().encode('created')]));
+
+    // Even when PHP writes nothing
+    php.FS.writeFile('/site/public/index.php', '<?php header("Location: /site/elsewhere", true, 302);');
+    const redirection = await php.request({ url: 'http://localhost/site/' }, site);
+    assert.equal(redirection.status, 302);
+    assert.ok(redirection.headers.some(([name, value]) => 'Location' === name && '/site/elsewhere' === value));
+    assert.equal(redirection.body.length, 0);
+});
+
+test('request() runs an uploaded file through PHP, as $_FILES', async () => {
+    php.FS.mkdirTree('/site/public');
+    php.FS.writeFile('/site/public/index.php', '<?php $file = $_FILES["document"]; echo json_encode([$file["name"], $file["size"], is_uploaded_file($file["tmp_name"]), file_get_contents($file["tmp_name"]), $_POST]);');
+    const body = new FormData();
+    body.append('title', 'Report');
+    body.append('document', new Blob(['%PDF…'], { type: 'application/pdf' }), 'report.pdf');
+    // What a browser sends for the form
+    const request = new Request('http://localhost/site/', { method: 'POST', body });
+
+    const response = await php.request({ method: 'POST', url: request.url, headers: request.headers, body: await request.arrayBuffer() }, site);
+
+    assert.deepEqual(JSON.parse(utf8Decoder.decode(response.body)), ['report.pdf', 7, true, '%PDF…', { title: 'Report' }]);
+});
+
+test('request() serves the files of documentRoot, PHP or not, and nothing out of it', async () => {
+    writeSite();
+    const get = async (path) => php.request({ url: `http://localhost${path}` }, site);
+
+    const style = await get('/site/assets/style.css');
+    assert.equal(style.status, 200);
+    assert.deepEqual(style.headers, [['Content-Type', 'text/css']]);
+    assert.equal(utf8Decoder.decode(style.body), 'body {}');
+
+    assert.equal(utf8Decoder.decode((await get('/site/other.php')).body), '/site/other.php');
+
+    // The front controller, not the file out of documentRoot
+    assert.equal(JSON.parse(utf8Decoder.decode((await get('/site/assets/..%2F..%2Fsecret.txt')).body)).server.SCRIPT_NAME, '/site/index.php');
+
+    // Not under basePath
+    assert.equal((await get('/elsewhere/')).status, 404);
+});
+
+test('a run of the php command after a request is not a request', async () => {
+    writeSite();
+    await php.request({ url: 'http://localhost/site/?a=1' }, site);
+
+    const { stdout } = await php.runCode('echo json_encode([PHP_SAPI, $_GET, isset($_SERVER["REQUEST_METHOD"]), headers_sent()]); header("X-Not: sent"); var_dump(headers_list());');
+    assert.match(stdout, /^\["embed",\[\],false,false\]/);
+    assert.match(stdout, /X-Not: sent/);
+});

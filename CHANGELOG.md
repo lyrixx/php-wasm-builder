@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+* Add `request()` to the JavaScript API: it runs PHP as a web server does,
+  for an HTTP request (`$_GET`, `$_POST`, `$_COOKIE`, `$_FILES`,
+  `php://input`), and resolves with the status, the headers and the body of
+  the response. The file of `documentRoot` that the URL asks for runs, or is
+  the response as it is, `index.php` otherwise. `PHP_SAPI` is then `wasm`,
+  not `embed`, that Symfony takes for the command line.
 * Fix: the C stack is 1 MB, and checked. It was the 64 KB of emscripten: PHP
   overflowed it without a word through the callbacks of its functions
   (Symfony, when it compiles its container), and wrote over its own memory.
