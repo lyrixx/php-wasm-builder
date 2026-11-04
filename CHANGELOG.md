@@ -23,6 +23,10 @@
   A stack that overflows aborts the module now.
 * The README says that PHP can write over what is embedded, in memory: it is
   not read only.
+* Add the `WARMUP` build argument, `warmup()` of a stack: a file of the
+  embedded directory, that runs in PHP when it is built, and whose output in
+  the directory is embedded too. For a cache made with the paths of the WASM
+  filesystem: `bin/console cache:warmup`.
 
 ## 0.9.0 (2026-11-02)
 

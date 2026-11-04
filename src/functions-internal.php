@@ -105,6 +105,7 @@ function bake_definition(array $stacks): string
                 'ICU_DATA' => $stack->icuData,
                 // None if nothing is embedded
                 'EMBED_AT' => $stack->embedAt ?? '',
+                'WARMUP' => [] === $stack->warmup ? null : implode(' ', $stack->warmup),
             ], static fn (?string $value): bool => null !== $value),
             'output' => ['type=local,dest=' . $stack->outputDir],
         ];

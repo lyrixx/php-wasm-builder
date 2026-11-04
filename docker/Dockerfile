@@ -13,8 +13,9 @@
 #   openssl
 #   sqlite
 #   php         configures and compiles PHP
-#   link        compiles run.c and spawn.c, and links the .mjs/.wasm files
-#               with api.js
+#   objects     compiles run.c and spawn.c
+#   warm        runs WARMUP in node, with warm.mjs
+#   link        links the .mjs/.wasm files with api.js, and what is embedded
 #
 # Every stage only reads the parts of the plan it needs, and the plan is made
 # of small files: changing EXTENSIONS, TARGETS, ... only rebuilds what actually
@@ -320,20 +321,16 @@ RUN \
 # "embed" (empty unless given, see docker-bake.hcl), it shows up at $EMBED_AT
 FROM scratch AS embed
 
-# Compile run.c and spawn.c, and link everything
-FROM php AS link
-ARG EMBED_AT=/examples
-ARG MEMORY=128mb
-
-COPY run.c spawn.c api.js worker.js /local/src/
+# Compile run.c and spawn.c
+FROM php AS objects
+COPY run.c spawn.c /local/src/
 RUN \
     emcc -O2 -I php-src/. -I php-src/Zend -I php-src/main -I php-src/TSRM -c run.c -o run.o && \
     emcc -O2 -c spawn.c -o spawn.o
 
-COPY --from=embed / /embed
-COPY --from=resolve /plan/link /plan/link
-COPY --from=resolve /plan/targets /plan/targets
-
+# link.sh <output .mjs> <environment> [<emcc arguments>...]: links PHP, run.c
+# and api.js.
+#
 # The functions of run.c and what api.js needs are exported from the .wasm
 # file. createPhp() is what the .mjs file exports, and createPhpInWorker() for
 # the web. The C stack is 64 KB by default: PHP goes deeper, through the
@@ -341,25 +338,61 @@ COPY --from=resolve /plan/targets /plan/targets
 # stack then overflows on the memory of PHP, its objects call null functions.
 # It is checked: a stack that overflows aborts the module, as one that takes
 # all the memory does.
-RUN <<EOF
+COPY <<'EOF' /local/src/link.sh
 set -eu
-mkdir -p /build /embed
-while read -r output environment flags; do
-    emcc -o /build/$output.mjs \
-    -O2 \
+output=$1
+environment=$2
+shift 2
+emcc -o "$output" \
     -s STACK_SIZE=1mb -s STACK_OVERFLOW_CHECK=2 \
     -s EXPORTED_FUNCTIONS=_free,_malloc,_run_code,_run_file,_run_request \
-    -s EXPORTED_RUNTIME_METHODS=FS \
     --pre-js api.js \
-    $flags \
     -s ENVIRONMENT=$environment \
     -s INITIAL_MEMORY=$MEMORY -s ALLOW_MEMORY_GROWTH=0 \
     -s ASSERTIONS=0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s MODULARIZE=1 -s INVOKE_RUN=0 -s LZ4=1 -s EXPORT_ES6=1 \
     -s EXPORT_NAME=createPhp \
-    ${EMBED_AT:+--embed-file "/embed@$EMBED_AT"} \
+    "$@" \
     run.o spawn.o php-src/.libs/libphp.a \
     $(cat /plan/link) \
     php-src/.libs/libphp.a < /dev/null
+EOF
+COPY --from=resolve /plan/link /plan/link
+
+# Runs WARMUP in node, before PHP is linked with what it embeds. This build of
+# PHP sees the directory to embed out of the WASM filesystem (NODEFS): what it
+# writes in it is embedded. Nothing happens without WARMUP.
+FROM objects AS warm
+ARG EMBED_AT=/examples
+ARG MEMORY=128mb
+ARG WARMUP=""
+COPY api.js warm.mjs /local/src/
+COPY --from=embed / /embed
+RUN <<EOF
+set -eu
+mkdir -p /embed /warm
+[ -n "$WARMUP" ] || exit 0
+if [ -z "$EMBED_AT" ]; then
+    echo "WARMUP needs something embedded, at EMBED_AT" >&2
+    exit 1
+fi
+# -O0: only the code of emscripten is not optimized, it runs once
+sh link.sh /warm/php.mjs node -O0 -lnodefs.js -s EXPORTED_RUNTIME_METHODS=FS,NODEFS
+node warm.mjs /warm/php.mjs "$EMBED_AT" $WARMUP
+EOF
+
+# Link everything, with what is embedded, as the warm stage left it
+FROM objects AS link
+ARG EMBED_AT=/examples
+ARG MEMORY=128mb
+COPY api.js worker.js /local/src/
+COPY --from=warm /embed /embed
+COPY --from=resolve /plan/targets /plan/targets
+RUN <<EOF
+set -eu
+mkdir -p /build
+while read -r output environment flags; do
+    sh link.sh /build/$output.mjs $environment -O2 -s EXPORTED_RUNTIME_METHODS=FS $flags \
+        ${EMBED_AT:+--embed-file "/embed@$EMBED_AT"}
 done < /plan/targets
 EOF
 

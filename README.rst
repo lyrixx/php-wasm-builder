@@ -335,6 +335,12 @@ EMBED_AT
     Where the embedded directory is in the WASM filesystem. Defaults to
     ``/examples``.
 
+WARMUP
+    A PHP file of the embedded directory, relative to it, and its arguments,
+    separated by spaces: it runs when PHP is built, and what it writes in the
+    directory is embedded too. For a cache that a framework makes with the
+    paths of the WASM filesystem: ``bin/console cache:warmup``.
+
 LIBXML_VERSION
     The LibXML version to download and build.
 
@@ -575,8 +581,8 @@ directory shows up at ``/<its name>`` in the WASM filesystem, unless
 ``embed()`` is told where (``->embed('build/dist', at: '/app')``).
 ``outputDir()`` writes the files somewhere else than
 ``build/<stack>/``, also relative to the root of the project. ``memory()`` and
-``icuData()`` set the ``MEMORY`` and ``ICU_DATA`` build arguments (see
-`Options`_).
+``icuData()`` set the ``MEMORY`` and ``ICU_DATA`` build arguments,
+``warmup('bin/console', 'cache:warmup')`` sets ``WARMUP`` (see `Options`_).
 
 To build your own stacks with this repository as it is, declare them in a
 ``stacks.override.php`` file next to ``stacks.php``, with the same format (git
@@ -934,8 +940,9 @@ What is in this repository
 
 - ``docker/``: how PHP is compiled, everything else only drives it. The
   ``Dockerfile`` compiles PHP, ``run.c`` runs it, ``api.js`` is the
-  JavaScript API of what is built (see `JavaScript API`_), and ``worker.js``
-  runs it in a worker (see `PHP in a worker`_);
+  JavaScript API of what is built (see `JavaScript API`_), ``worker.js`` runs
+  it in a worker (see `PHP in a worker`_), and ``warm.mjs`` runs ``WARMUP``
+  when PHP is built (see `Options`_);
 - ``node/``: ``run.mjs`` runs a PHP file, or some PHP code, in what is built,
   with node (the build for the web too), and ``fetch-files.mjs`` lets node run
   the modules of a page as a browser does, to test them (see `Check it,
