@@ -1,5 +1,6 @@
 <?php
 
+use PhpWasm\Opcache;
 use PhpWasm\Stack;
 
 // What `castor wasm:build` builds when no stack is given, and what `docker
@@ -39,12 +40,19 @@ return [
     // what the framework needs (filter, tokenizer for the routes of its
     // controllers, iconv), and sessions. It embeds the application, and its
     // vendor/, that castor installs before it builds the stack: 19 MB of the
-    // memory, it runs with 80 MB.
-    $default->renamed('symfony')
+    // memory, it runs with 80 MB. Symfony makes its cache when it is built.
+    $symfony = $default->renamed('symfony')
         ->extensions('filter', 'iconv', 'pdo_sqlite', 'session', 'tokenizer')
         ->embed('examples/symfony/app', at: '/app')
+        ->warmup('bin/console', 'cache:warmup')
         ->targets('web')
         ->outputDir('examples/symfony/public/build'),
+
+    // The same application, with opcache: it compiles the files as they run,
+    // or when it is built.
+    // castor wasm:serve symfony --stack symfony-precompiled
+    $symfony->renamed('symfony-runtime')->opcache(Opcache::Runtime),
+    $symfony->renamed('symfony-precompiled')->opcache(Opcache::Precompiled),
 
     // intl, with all of ICU's data linked in the .wasm file. The data takes
     // 32 MB of the memory: this leaves PHP as much of it as the default stack.

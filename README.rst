@@ -275,11 +275,12 @@ page is where everything that is not Symfony is.
 - The memory: the application is embedded, with its ``vendor/`` (19 MB), and
   takes as much of the memory of the module. It runs with 80 MB, the 128 MB by
   default leave room.
-- The cache: Symfony makes it in the page, in ``/app/var/``, where its paths
-  are the ones of the WASM filesystem. The page runs ``bin/console
-  doctrine:schema:update`` first, with ``runFile()``: it creates the
-  database, and compiles the container, in half a second. A request takes
-  about 100 ms then.
+- The cache: the ``symfony`` stack makes it when it is built (``WARMUP``, see
+  `Options`_), in ``/app/var/``, with the paths of the WASM filesystem. The
+  page runs ``bin/console doctrine:schema:update`` first, with ``runFile()``:
+  it creates the database, in 0.2 s. A request takes about 100 ms then. The
+  ``symfony-runtime`` and ``symfony-precompiled`` stacks have opcache too (see
+  `opcache`_): ``castor wasm:serve symfony --stack symfony-precompiled``.
 - What stays: the database and the sessions are in ``/symfony``, that the page
   keeps in IndexedDB (see `Keep files across reloads`_), and the cookies are in
   its ``localStorage``.
