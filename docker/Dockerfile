@@ -333,14 +333,19 @@ COPY --from=resolve /plan/link /plan/link
 COPY --from=resolve /plan/targets /plan/targets
 
 # The functions of run.c and what api.js needs are exported from the .wasm
-# file. createPhp() is what the .mjs file exports.
+# file. createPhp() is what the .mjs file exports. The C stack is 64 KB by
+# default: PHP goes deeper, through the callbacks of its functions (Symfony
+# when it compiles its container), and the stack then overflows on the memory
+# of PHP, its objects call null functions. It is checked: a stack that
+# overflows aborts the module, as one that takes all the memory does.
 RUN <<EOF
 set -eu
 mkdir -p /build /embed
 while read -r output environment libraries; do
     emcc -o /build/$output.mjs \
     -O2 \
-    -s EXPORTED_FUNCTIONS=_free,_malloc,_run_code,_run_file \
+    -s STACK_SIZE=1mb -s STACK_OVERFLOW_CHECK=2 \
+    -s EXPORTED_FUNCTIONS=_free,_malloc,_run_code,_run_file,_run_request \
     -s EXPORTED_RUNTIME_METHODS=FS \
     --pre-js api.js \
     $libraries \

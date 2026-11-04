@@ -135,12 +135,16 @@ loads PHP from the ``.wasm`` file next to them:
     Runs some PHP code, without ``<?php``, as ``php -r <code> <args>...``
     does: ``$argv[0]`` is ``Standard input code``.
 
+``php.request(request, { documentRoot, basePath })``
+    Runs PHP as a web server does, for an HTTP request, and resolves with the
+    response (see `HTTP requests`_).
+
 ``args`` (strings) are in ``$argv``, after the file. ``stdin`` (a string, or a
 ``Uint8Array``) is what PHP reads on ``php://stdin``. Both are optional.
 ``STDIN``, ``STDOUT`` and ``STDERR`` are not defined: they are constants of
 the php command only.
 
-Both resolve once PHP is done, with what it gave:
+``runFile()`` and ``runCode()`` resolve once PHP is done, with what it gave:
 
 - ``exitCode``: the one given to ``exit()``, 255 on a fatal error or an
   uncaught exception, 0 otherwise;
@@ -157,8 +161,8 @@ of its variables. The files stay, until the page goes away.
     <https://emscripten.org/docs/api_reference/Filesystem-API.html>`__), to
     give files to PHP, or read the ones it writes:
     ``php.FS.writeFile('/tmp/input.json', data)``,
-    ``php.FS.readFile('/tmp/output.png')``. What is embedded is there too, read
-    only.
+    ``php.FS.readFile('/tmp/output.png')``. What is embedded is there too: PHP
+    can write over it, in memory, as over the other files.
 
 ``createPhp({ persist })``
     ``persist`` is a directory of the WASM filesystem to keep in IndexedDB,
@@ -168,9 +172,97 @@ of its variables. The files stay, until the page goes away.
 ``createPhp()`` takes the options of the ``Module`` of emscripten too, for
 example ``locateFile`` to load the ``.wasm`` file from somewhere else.
 
-A run that takes all the memory of the module (``MEMORY``) aborts it, and the
-promise is rejected: what is in its memory can not be trusted anymore, create
-another one.
+A run that takes all the memory of the module (``MEMORY``), or all of its
+stack (see `Limitations`_), aborts it, and the promise is rejected: what is in
+its memory can not be trusted anymore, create another one.
+
+HTTP requests
+-------------
+
+``php.request()`` runs PHP as a web server does: the code gets ``$_GET``,
+``$_POST``, ``$_COOKIE``, ``$_FILES`` and ``php://input``, and what it sends
+with ``header()``, ``setcookie()`` or ``http_response_code()`` makes the
+response. A framework runs as it is, from its front controller:
+
+.. code-block:: js
+
+    const response = await php.request({
+        method: 'POST',
+        url: 'https://example.com/blog/comments?page=2',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: 'PHPSESSID=…' },
+        body: 'comment=Hello',
+    }, { documentRoot: '/app/public' });
+
+    // { status: 302, headers: [['Location', '/blog'], ['Set-Cookie', '…'], …], body: Uint8Array, stderr: '' }
+
+The request is data, not a ``Request`` of ``fetch()``: a browser drops the
+``Cookie`` header of a ``Request``, and the ``Set-Cookie`` headers of a
+``Response``. It is what ``postMessage()`` takes, too. ``headers`` is an
+object, a list of names and values, or ``Headers``, and ``body`` a string or
+bytes (``ArrayBuffer``, ``Uint8Array``…), for any method. Both are optional,
+as ``method`` (``GET``).
+
+The URL asks for a file of ``documentRoot``, as with a web server: a ``.php``
+file runs, any other file is the response, as it is (a stylesheet, an
+image…), and a URL that is not a file runs ``index.php``, the front
+controller. ``..`` never goes out of ``documentRoot``. ``basePath`` is where
+``documentRoot`` is in the URLs, nowhere by default: with ``/app``, ``/app/blog``
+runs ``index.php`` with ``$_SERVER['SCRIPT_NAME']`` at ``/app/index.php``, that
+Symfony builds its URLs from, and a URL out of ``/app`` is a 404.
+
+``$_SERVER`` has what a web server gives with CGI: ``REQUEST_METHOD``,
+``REQUEST_URI``, ``QUERY_STRING``, ``SCRIPT_NAME``, ``SCRIPT_FILENAME``,
+``HTTP_HOST``, an ``HTTP_*`` for each header… ``PHP_SAPI`` is ``wasm``, not
+``embed`` as with ``runFile()``: Symfony takes ``embed`` for the command line
+(its errors in plain text, ``display_errors`` on, no flush…).
+
+It resolves with the response:
+
+- ``status``: the HTTP status, 200 unless PHP says otherwise;
+- ``headers``: the names and values that PHP sends, in a list, as there may be
+  several ``Set-Cookie``;
+- ``body``: what PHP wrote, as bytes (a ``Uint8Array``);
+- ``stderr``: what PHP wrote on stderr, the logs of Symfony for example.
+
+``request()`` is the web server, not the browser: it keeps no cookie, and
+follows no redirection.
+
+Symfony
+~~~~~~~
+
+The ``symfony`` example runs a Symfony 8 application in a page: a guestbook,
+with Doctrine and SQLite, Twig, forms, CSRF and a session (see `Playing with
+it`_). The application, in ``examples/symfony/app/``, is a usual one: the
+page is where everything that is not Symfony is.
+
+- The extensions: ``ctype``, ``iconv``, ``mbstring`` and ``xml``, that
+  Symfony, Doctrine and their polyfills require, ``filter``, that Symfony
+  calls everywhere (``filter_var()``), ``tokenizer``, without which the routes
+  of the controllers are not found, ``session`` and ``pdo_sqlite``. The
+  ``symfony`` stack has them.
+- The memory: the application is embedded, with its ``vendor/`` (19 MB), and
+  takes as much of the memory of the module. It runs with 80 MB, the 128 MB by
+  default leave room.
+- The cache: Symfony makes it in the page, in ``/app/var/``, where its paths
+  are the ones of the WASM filesystem. The page runs ``bin/console
+  doctrine:schema:update`` first, with ``runFile()``: it creates the
+  database, and compiles the container, in half a second. A request takes
+  about 100 ms then.
+- What stays: the database and the sessions are in ``/symfony``, that the page
+  keeps in IndexedDB (see `Keep files across reloads`_), and the cookies are in
+  its ``localStorage``.
+- The frame: the application is in an ``<iframe>``, where links, forms,
+  redirections and the history work as anywhere. A service worker,
+  ``public/sw.js``, hands what the frame asks for to the page, that runs
+  ``php.request()``, and keeps the cookies: the browser drops the ones of a
+  response that a service worker makes. PHP does not run in the service
+  worker: the browser stops it when it has nothing to do, and PHP would forget
+  its files. The service worker gives PHP the ``Referer`` too, that it does
+  not see as a header: the stateless CSRF protection, that the recipes of
+  Symfony enable, checks it when there is no ``Origin``.
+
+What there is not: the network, for an HTTP client or a database server, nor
+another process (see `Limitations`_).
 
 Options
 -------
@@ -402,6 +494,14 @@ Limitations
     ``exec()``, ``system()``, ``shell_exec()`` and ``popen()`` fail, with a
     warning.
 
+- Stack
+    PHP calls itself back in C through the callbacks of its functions
+    (``array_map()``, ``usort()``…). The C stack of the module is 1 MB, and
+    the one of the JavaScript engine about as big: a recursion goes about
+    2,000 callbacks deep, in node. Deeper, one of them overflows, and the
+    promise is rejected. PHP does not know where the stack ends, there is no
+    ``zend.max_allowed_stack_size``.
+
 Stacks, and castor
 ------------------
 
@@ -494,6 +594,8 @@ These are the stacks of ``stacks.php``:
   ``examples/playground/`` (see below);
 - ``notes``: adds pdo_sqlite and sqlite3 (see `SQLite`_), for the page of
   ``examples/notes/`` (see below);
+- ``symfony``: what Symfony needs (see `Symfony`_), for the page of
+  ``examples/symfony/`` (see below);
 - ``intl``: adds intl (see `intl`_);
 - ``intl-without-data``: adds intl, without ICU's data;
 - ``full-without-intl-data``: every extension of `Supported Extensions`_, intl
@@ -518,7 +620,11 @@ server of PHP. It lists them:
 - ``examples/notes/`` keeps notes in SQLite, that are still there after a
   reload, and searches them with FTS5. It is made as a project makes its page
   (see `Using it from your own project`_): the ``notes`` stack embeds its
-  ``embed/`` directory at ``/app``.
+  ``embed/`` directory at ``/app``;
+- ``examples/symfony/`` runs a Symfony application, a guestbook, in a frame
+  (see `Symfony`_). The ``symfony`` stack embeds its ``app/`` directory at
+  ``/app``, once castor installed its ``vendor/``, with the composer of
+  Docker.
 
 ``--stack`` builds the page with the PHP version and the extensions of another
 stack: the one of ``intl.php``, for example::
@@ -802,8 +908,9 @@ What is in this repository
 - ``examples/``: what an ``embed/`` directory has is embedded in what is
   built, what a ``public/`` directory has is served. ``examples/embed/`` has a
   few PHP scripts, embedded in every stack at ``/examples``,
-  ``examples/playground/`` a page that runs them, and ``examples/notes/`` a
-  page that keeps notes in SQLite (see `Playing with it`_);
+  ``examples/playground/`` a page that runs them, ``examples/notes/`` a
+  page that keeps notes in SQLite, and ``examples/symfony/`` a page that runs
+  a Symfony application (see `Playing with it`_);
 - ``stacks.php``, ``src/`` and ``castor.php``: named builds, a ``build()``
   function, and castor tasks to build, run and check them (see `Stacks, and
   castor`_);

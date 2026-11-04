@@ -87,7 +87,7 @@ function build_task(
         io()->writeln(\sprintf(' // Stack "%s": %s', $selected->name, describe($selected)));
     }
 
-    build($stacks);
+    build_with_dependencies($stacks);
 
     foreach ($stacks as $selected) {
         io()->success(array_map(relative(...), $selected->artifacts()));
@@ -250,7 +250,7 @@ function serve_task(
             $page = null === $page->embed ? $other : $other->embed($page->embed, at: $page->embedAt);
         }
 
-        build([$page]);
+        build_with_dependencies([$page]);
     }
 
     // After what buildx prints: it must stand out
@@ -277,7 +277,7 @@ function check_task(
     io()->title(1 === \count($stacks) ? \sprintf('Checking the stack "%s"', $stacks[0]->name) : \sprintf('Checking %d stacks', \count($stacks)));
 
     if (!$noBuild) {
-        build($stacks, $set);
+        build_with_dependencies($stacks, $set);
     }
 
     $failed = 0;
@@ -329,6 +329,32 @@ function check_api(Stack $stack): void
 }
 
 /**
+ * Builds stacks, once the dependencies of what they embed are installed: the
+ * application of examples/symfony/ is a Composer project, without its vendor/
+ * in git.
+ *
+ * @param list<Stack>  $stacks
+ * @param list<string> $set    given to build()
+ */
+function build_with_dependencies(array $stacks, array $set = []): void
+{
+    foreach ($stacks as $stack) {
+        if (null === $stack->embed || !is_file($stack->embed . '/composer.json')) {
+            continue;
+        }
+
+        // The composer of Docker: Docker is all the builder needs. Nothing to
+        // do when vendor/ is what composer.lock says.
+        run(
+            ['docker', 'run', '--rm', '--user', posix_getuid() . ':' . posix_getgid(), '--volume', $stack->embed . ':/app', '--workdir', '/app', 'composer:2', 'install', '--no-dev', '--classmap-authoritative', '--no-interaction', '--no-progress'],
+            context: context()->withQuiet(),
+        );
+    }
+
+    build($stacks, $set);
+}
+
+/**
  * Builds a stack if it is not built yet, once asked: what a run needs first.
  *
  * @throws ProblemException when it is not built, and should not be
@@ -344,7 +370,7 @@ function build_if_missing(Stack $stack): void
         throw new ProblemException(\sprintf('Build it first, with "castor wasm:build %s".', $stack->name));
     }
 
-    build([$stack]);
+    build_with_dependencies([$stack]);
 }
 
 /**

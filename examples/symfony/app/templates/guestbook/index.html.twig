@@ -1,0 +1,23 @@
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    <h1>Guestbook</h1>
+    <form method="post" action="{{ path('forget_me') }}">
+        You saw this page {{ views }} {{ views == 1 ? 'time' : 'times' }} in this session.
+        <button>Forget me</button>
+    </form>
+
+    {% for message in app.flashes('success') %}
+        <p class="flash">{{ message }}</p>
+    {% endfor %}
+
+    {{ form(form) }}
+
+    <ul>
+        {% for message in messages %}
+            <li><b>{{ message.author }}</b>, {{ message.createdAt|date('Y-m-d H:i') }}: {{ message.text }}</li>
+        {% else %}
+            <li>Nobody signed yet.</li>
+        {% endfor %}
+    </ul>
+{% endblock %}

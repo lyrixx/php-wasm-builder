@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Symfony, in the browser</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+            font-family: system-ui, sans-serif;
+        }
+        body {
+            max-width: 50rem;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        #address {
+            padding: 0.4rem;
+            font: 0.9rem ui-monospace, monospace;
+            border: 1px solid #8884;
+            border-bottom: none;
+        }
+        iframe {
+            display: block;
+            box-sizing: border-box;
+            width: 100%;
+            height: 32rem;
+            border: 1px solid #8884;
+        }
+        #message {
+            color: GrayText;
+        }
+    </style>
+</head>
+<body>
+    <h1>Symfony, in the browser</h1>
+    <p>
+        The frame is a Symfony application, with Doctrine, Twig and forms. PHP
+        runs it in this page: a service worker hands it what the frame asks
+        for. The guestbook is in SQLite, and the session in files, that the
+        page keeps in IndexedDB: they are still here after a reload.
+    </p>
+
+    <div id="address"></div>
+    <iframe id="frame" title="The Symfony application"></iframe>
+    <p id="message">Loading PHP…</p>
+
+    <script type="module">
+        import createPhp from './build/php-web.mjs';
+
+        const message = document.getElementById('message');
+        const frame = document.getElementById('frame');
+        // Where the frame is: the service worker hands to PHP what is asked for there
+        const app = new URL('app/', location.href).pathname;
+
+        // /symfony, where the database and the sessions are, is kept in
+        // IndexedDB: keep in sync with ../app/.env and
+        // ../app/config/packages/framework.yaml
+        const php = await createPhp({ persist: '/symfony' });
+
+        message.textContent = 'Creating the database…';
+        // It compiles the container of Symfony too, that the requests use
+        const { exitCode, stdout } = await php.runFile('/app/bin/console', { args: ['doctrine:schema:update', '--force', '--no-interaction'] });
+        if (0 !== exitCode) {
+            message.textContent = `The console exits with ${exitCode}: ${stdout}`;
+            throw new Error(message.textContent);
+        }
+
+        // The cookies of the frame: the browser drops the ones of a response
+        // that a service worker makes. Only their names and values, they are
+        // all for the application.
+        const cookies = new Map(JSON.parse(localStorage.getItem('symfony cookies') ?? '[]'));
+
+        function keepCookies(headers) {
+            for (const [name, value] of headers) {
+                if ('set-cookie' !== name.toLowerCase()) {
+                    continue;
+                }
+
+                const [pair, ...attributes] = value.split(';');
+                const equals = pair.indexOf('=');
+                // PHP and Symfony delete a cookie with Max-Age=0
+                if (attributes.some((attribute) => /^\s*max-age\s*=\s*0\s*$/i.test(attribute))) {
+                    cookies.delete(pair.slice(0, equals).trim());
+                } else {
+                    cookies.set(pair.slice(0, equals).trim(), pair.slice(equals + 1).trim());
+                }
+            }
+
+            localStorage.setItem('symfony cookies', JSON.stringify([...cookies]));
+        }
+
+        // What the service worker hands over, and answers with
+        navigator.serviceWorker.onmessage = async (event) => {
+            const [port] = event.ports;
+            const request = event.data;
+            const headers = request.headers.filter(([name]) => 'cookie' !== name.toLowerCase());
+            if (cookies.size > 0) {
+                headers.push(['Cookie', [...cookies].map(([name, value]) => `${name}=${value}`).join('; ')]);
+            }
+
+            try {
+                const response = await php.request({ ...request, headers }, { documentRoot: '/app/public', basePath: app.slice(0, -1) });
+                keepCookies(response.headers);
+                // What Symfony logs
+                if ('' !== response.stderr) {
+                    console.warn(response.stderr);
+                }
+
+                port.postMessage(response, [response.body.buffer]);
+            } catch (error) {
+                port.postMessage({ status: 500, headers: [['Content-Type', 'text/plain']], body: `PHP failed: ${error.message}` });
+                throw error;
+            }
+        };
+
+        message.textContent = 'Starting the service worker…';
+        const registration = await navigator.serviceWorker.register('./sw.js', { scope: app });
+        const worker = registration.installing ?? registration.waiting ?? registration.active;
+        if ('activated' !== worker.state) {
+            await new Promise((resolve) => worker.addEventListener('statechange', () => 'activated' === worker.state && resolve()));
+        }
+
+        frame.addEventListener('load', () => {
+            document.getElementById('address').textContent = frame.contentWindow.location.pathname + frame.contentWindow.location.search;
+        });
+        frame.src = app;
+        message.textContent = '';
+    </script>
+</body>
+</html>

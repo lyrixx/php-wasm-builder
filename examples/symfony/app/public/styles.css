@@ -1,0 +1,35 @@
+/* A static file: request() serves it as it is, PHP does not run */
+:root {
+    color-scheme: light dark;
+    font-family: system-ui, sans-serif;
+}
+body {
+    max-width: 40rem;
+    margin: 1rem auto;
+    padding: 0 1rem;
+}
+form div {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0.5rem;
+}
+input, textarea {
+    padding: 0.4rem;
+    font: inherit;
+}
+ul {
+    padding: 0;
+    list-style: none;
+}
+li {
+    padding: 0.4rem 0;
+    border-bottom: 1px solid #8884;
+}
+.flash {
+    padding: 0.5rem;
+    background: #2a24;
+}
+footer {
+    color: GrayText;
+    font-size: 0.9rem;
+}

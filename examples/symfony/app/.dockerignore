@@ -1,0 +1,3 @@
+# What the symfony stack does not embed: Symfony makes its cache in the
+# browser, with the paths it has there
+/var/
