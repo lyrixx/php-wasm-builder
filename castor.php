@@ -44,8 +44,10 @@ function build_task(
     ?string $memory = null,
     #[AsOption(description: 'Override the directory to embed')]
     ?string $embed = null,
-    #[AsOption(description: 'Override the ICU data of intl: all or none', autocomplete: Stack::ICU_DATA)]
+    #[AsOption(description: 'Override the ICU data of intl: all or none', autocomplete: 'PhpWasm\complete_icu_data')]
     ?string $icuData = null,
+    #[AsOption(description: 'Override what opcache compiles: none, runtime or precompiled', autocomplete: 'PhpWasm\complete_opcache')]
+    ?string $opcache = null,
     #[AsOption(description: 'Print the bake file instead of building')]
     bool $print = false,
 ): void {
@@ -70,7 +72,10 @@ function build_task(
             $selected = $selected->embed(Path::makeAbsolute($embed, getcwd() ?: project_root()));
         }
         if (null !== $icuData) {
-            $selected = $selected->icuData($icuData);
+            $selected = $selected->icuData(IcuData::from($icuData));
+        }
+        if (null !== $opcache) {
+            $selected = $selected->opcache(Opcache::from($opcache));
         }
         $stacks[$i] = $selected;
     }
@@ -118,7 +123,7 @@ function stacks_task(
             $stack->php ?? dockerfile_default('PHP_VERSION'),
             wordwrap(implode(' ', $stack->extensions), 44) ?: '-',
             $stack->memory ?? dockerfile_default('MEMORY'),
-            \in_array('intl', $stack->extensions, true) ? $stack->icuData ?? dockerfile_default('ICU_DATA') : '-',
+            \in_array('intl', $stack->extensions, true) ? $stack->icuData?->value ?? dockerfile_default('ICU_DATA') : '-',
             implode(' ', $stack->targets),
         ];
     }
@@ -393,6 +398,22 @@ function next_step(Stack $stack): string
 function complete_stacks(): array
 {
     return array_keys(stacks());
+}
+
+/**
+ * @return list<string>
+ */
+function complete_icu_data(): array
+{
+    return array_column(IcuData::cases(), 'value');
+}
+
+/**
+ * @return list<string>
+ */
+function complete_opcache(): array
+{
+    return array_column(Opcache::cases(), 'value');
 }
 
 /**

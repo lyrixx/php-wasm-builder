@@ -13,8 +13,10 @@
 #   openssl
 #   sqlite
 #   php         configures and compiles PHP
-#   link        compiles run.c and spawn.c, and links the .mjs/.wasm files
-#               with api.js
+#   objects     compiles run.c and spawn.c
+#   warm        runs WARMUP, and compiles the PHP files with opcache
+#               (OPCACHE=precompiled), in node, with warm.mjs
+#   link        links the .mjs/.wasm files with api.js, and what is embedded
 #
 # Every stage only reads the parts of the plan it needs, and the plan is made
 # of small files: changing EXTENSIONS, TARGETS, ... only rebuilds what actually
@@ -28,6 +30,7 @@ FROM emscripten/emsdk:$EMSDK_VERSION AS resolve
 ARG EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter"
 ARG TARGETS="web node"
 ARG ICU_DATA=all
+ARG OPCACHE=none
 COPY <<'EOF' /resolve.sh
 set -eu
 mkdir -p /plan
@@ -83,7 +86,7 @@ if [ $sqlite = 1 ]; then
 fi
 if [ $icu = 1 ]; then
     # The icu stage builds both: libicudata.a is the empty stub that ICU
-    # installs. Keep in sync with Stack::ICU_DATA, in src/Stack.php
+    # installs. Keep in sync with the IcuData enum, in src/IcuData.php
     case $ICU_DATA in
         all)  icudata=libicudata-all.a ;;
         none) icudata=libicudata.a ;;
@@ -108,7 +111,17 @@ for target in $TARGETS; do
     esac
 done
 
+# Where opcache keeps what it compiles, in the WASM filesystem: run.c defaults
+# to it. Keep in sync with the Opcache enum, in src/Opcache.php, and with the
+# link stage.
+case $OPCACHE in
+    none)                opcache="" ;;
+    runtime|precompiled) opcache='-DOPCACHE_FILE_CACHE="/opcache"' ;;
+    *) echo "Unknown OPCACHE '$OPCACHE', supported values: none runtime precompiled" >&2; exit 1 ;;
+esac
+
 echo "$flags" > /plan/configure
+echo "$opcache" > /plan/opcache
 echo "$link" > /plan/link
 echo "$libiconv" > /plan/libiconv
 echo "$libxml2" > /plan/libxml2
@@ -320,20 +333,23 @@ RUN \
 # "embed" (empty unless given, see docker-bake.hcl), it shows up at $EMBED_AT
 FROM scratch AS embed
 
-# Compile run.c and spawn.c, and link everything
-FROM php AS link
-ARG EMBED_AT=/examples
-ARG MEMORY=128mb
+# Compile run.c and spawn.c
+FROM php AS objects
+COPY --from=resolve /plan/opcache /plan/opcache
+COPY run.c spawn.c /local/src/
+RUN <<EOF
+set -eu
+if [ -n "$(cat /plan/opcache)" ] && ! emar t php-src/.libs/libphp.a | grep -qx ZendAccelerator.o; then
+    echo "OPCACHE needs opcache, that PHP builds since 8.5 only" >&2
+    exit 1
+fi
+emcc -O2 $(cat /plan/opcache) -I php-src/. -I php-src/Zend -I php-src/main -I php-src/TSRM -c run.c -o run.o
+emcc -O2 -c spawn.c -o spawn.o
+EOF
 
-COPY run.c spawn.c api.js worker.js /local/src/
-RUN \
-    emcc -O2 -I php-src/. -I php-src/Zend -I php-src/main -I php-src/TSRM -c run.c -o run.o && \
-    emcc -O2 -c spawn.c -o spawn.o
-
-COPY --from=embed / /embed
-COPY --from=resolve /plan/link /plan/link
-COPY --from=resolve /plan/targets /plan/targets
-
+# link.sh <output .mjs> <environment> [<emcc arguments>...]: links PHP, run.c
+# and api.js.
+#
 # The functions of run.c and what api.js needs are exported from the .wasm
 # file. createPhp() is what the .mjs file exports, and createPhpInWorker() for
 # the web. The C stack is 64 KB by default: PHP goes deeper, through the
@@ -341,25 +357,68 @@ COPY --from=resolve /plan/targets /plan/targets
 # stack then overflows on the memory of PHP, its objects call null functions.
 # It is checked: a stack that overflows aborts the module, as one that takes
 # all the memory does.
-RUN <<EOF
+COPY <<'EOF' /local/src/link.sh
 set -eu
-mkdir -p /build /embed
-while read -r output environment flags; do
-    emcc -o /build/$output.mjs \
-    -O2 \
+output=$1
+environment=$2
+shift 2
+emcc -o "$output" \
     -s STACK_SIZE=1mb -s STACK_OVERFLOW_CHECK=2 \
     -s EXPORTED_FUNCTIONS=_free,_malloc,_run_code,_run_file,_run_request \
-    -s EXPORTED_RUNTIME_METHODS=FS \
     --pre-js api.js \
-    $flags \
     -s ENVIRONMENT=$environment \
     -s INITIAL_MEMORY=$MEMORY -s ALLOW_MEMORY_GROWTH=0 \
     -s ASSERTIONS=0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s MODULARIZE=1 -s INVOKE_RUN=0 -s LZ4=1 -s EXPORT_ES6=1 \
     -s EXPORT_NAME=createPhp \
-    ${EMBED_AT:+--embed-file "/embed@$EMBED_AT"} \
+    "$@" \
     run.o spawn.o php-src/.libs/libphp.a \
     $(cat /plan/link) \
     php-src/.libs/libphp.a < /dev/null
+EOF
+COPY --from=resolve /plan/link /plan/link
+
+# Runs PHP in node, before it is linked with what it embeds: WARMUP, then
+# opcache compiles every PHP file (OPCACHE=precompiled). This build of PHP sees
+# the directory to embed and the cache of opcache out of the WASM filesystem
+# (NODEFS): what it writes in them is embedded. Nothing happens without
+# WARMUP, nor OPCACHE=precompiled.
+FROM objects AS warm
+ARG EMBED_AT=/examples
+ARG MEMORY=128mb
+ARG OPCACHE=none
+ARG WARMUP=""
+COPY api.js warm.mjs /local/src/
+COPY --from=embed / /embed
+RUN <<EOF
+set -eu
+mkdir -p /embed /opcache /warm
+[ -n "$WARMUP" ] || [ "$OPCACHE" = precompiled ] || exit 0
+if [ -z "$EMBED_AT" ]; then
+    echo "WARMUP and OPCACHE=precompiled need something embedded, at EMBED_AT" >&2
+    exit 1
+fi
+# -O0: only the code of emscripten is not optimized, it runs once
+sh link.sh /warm/php.mjs node -O0 -lnodefs.js -s EXPORTED_RUNTIME_METHODS=FS,NODEFS
+node warm.mjs /warm/php.mjs "$EMBED_AT" "$OPCACHE" $WARMUP
+EOF
+
+# Link everything, with what is embedded, and the cache of opcache that the
+# warm stage made
+FROM objects AS link
+ARG EMBED_AT=/examples
+ARG MEMORY=128mb
+COPY api.js worker.js /local/src/
+COPY --from=warm /embed /embed
+COPY --from=warm /opcache /opcache
+COPY --from=resolve /plan/targets /plan/targets
+RUN <<EOF
+set -eu
+mkdir -p /build
+# Keep in sync with OPCACHE_FILE_CACHE, in the "resolve" stage
+[ -z "$(ls -A /opcache)" ] || opcache="--embed-file /opcache@/opcache"
+while read -r output environment flags; do
+    sh link.sh /build/$output.mjs $environment -O2 -s EXPORTED_RUNTIME_METHODS=FS $flags \
+        ${EMBED_AT:+--embed-file "/embed@$EMBED_AT"} ${opcache:-}
 done < /plan/targets
 EOF
 

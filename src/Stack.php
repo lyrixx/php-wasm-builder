@@ -29,14 +29,10 @@ final readonly class Stack
     public const TARGETS = ['web' => 'php-web', 'node' => 'php-node'];
 
     /**
-     * Keep in sync with the "resolve" stage of the Dockerfile.
-     */
-    public const ICU_DATA = ['all', 'none'];
-
-    /**
      * @param list<string> $extensions
      * @param string|null  $embed      absolute path of the directory to embed
      * @param string|null  $embedAt    where the embedded directory is in the WASM filesystem, as /app
+     * @param list<string> $warmup     a file of the embedded directory, and its arguments
      * @param list<string> $targets
      * @param string       $outputDir  absolute path of the directory the files are written to
      */
@@ -46,9 +42,11 @@ final readonly class Stack
         public array $extensions,
         public ?string $embed,
         public ?string $embedAt,
+        public array $warmup,
+        public ?Opcache $opcache,
         public array $targets,
         public ?string $memory,
-        public ?string $icuData,
+        public ?IcuData $icuData,
         public string $outputDir,
     ) {
     }
@@ -61,6 +59,8 @@ final readonly class Stack
             extensions: [],
             embed: null,
             embedAt: null,
+            warmup: [],
+            opcache: null,
             targets: array_keys(self::TARGETS),
             memory: null,
             icuData: null,
@@ -107,6 +107,32 @@ final readonly class Stack
         return $this->with(embed: Path::makeAbsolute($directory, project_root()), embedAt: $at);
     }
 
+    /**
+     * A file of the embedded directory to run when it is built, in PHP as
+     * WebAssembly: what it writes in the directory is embedded too. For a
+     * cache that a framework makes with the paths of the WASM filesystem:
+     * ->warmup('bin/console', 'cache:warmup').
+     */
+    public function warmup(string $file, string ...$arguments): self
+    {
+        // The build argument separates them with spaces
+        foreach ([$file, ...$arguments] as $word) {
+            if ('' === $word || preg_match('/\s/', $word)) {
+                throw new \InvalidArgumentException(\sprintf('"%s" can not be given to warmup(), use a word without spaces.', $word));
+            }
+        }
+
+        return $this->with(warmup: [$file, ...$arguments]);
+    }
+
+    /**
+     * What opcache compiles, with PHP 8.5 and later.
+     */
+    public function opcache(Opcache $opcache): self
+    {
+        return $this->with(opcache: $opcache);
+    }
+
     public function targets(string ...$targets): self
     {
         self::validate('target', $targets, array_keys(self::TARGETS));
@@ -120,13 +146,10 @@ final readonly class Stack
     }
 
     /**
-     * The data of ICU that intl links: "all" of it (the default, every locale),
-     * or "none" (intl is loaded, but it only knows locale codes).
+     * The data of ICU that intl links.
      */
-    public function icuData(string $icuData): self
+    public function icuData(IcuData $icuData): self
     {
-        self::validate('ICU data', [$icuData], self::ICU_DATA);
-
         return $this->with(icuData: $icuData);
     }
 

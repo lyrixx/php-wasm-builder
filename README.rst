@@ -275,11 +275,12 @@ page is where everything that is not Symfony is.
 - The memory: the application is embedded, with its ``vendor/`` (19 MB), and
   takes as much of the memory of the module. It runs with 80 MB, the 128 MB by
   default leave room.
-- The cache: Symfony makes it in the page, in ``/app/var/``, where its paths
-  are the ones of the WASM filesystem. The page runs ``bin/console
-  doctrine:schema:update`` first, with ``runFile()``: it creates the
-  database, and compiles the container, in half a second. A request takes
-  about 100 ms then.
+- The cache: the ``symfony`` stack makes it when it is built (``WARMUP``, see
+  `Options`_), in ``/app/var/``, with the paths of the WASM filesystem. The
+  page runs ``bin/console doctrine:schema:update`` first, with ``runFile()``:
+  it creates the database, in 0.2 s. A request takes about 100 ms then. The
+  ``symfony-runtime`` and ``symfony-precompiled`` stacks have opcache too (see
+  `opcache`_): ``castor wasm:serve symfony --stack symfony-precompiled``.
 - What stays: the database and the sessions are in ``/symfony``, that the page
   keeps in IndexedDB (see `Keep files across reloads`_), and the cookies are in
   its ``localStorage``.
@@ -335,6 +336,16 @@ EMBED_AT
     Where the embedded directory is in the WASM filesystem. Defaults to
     ``/examples``.
 
+WARMUP
+    A PHP file of the embedded directory, relative to it, and its arguments,
+    separated by spaces: it runs when PHP is built, and what it writes in the
+    directory is embedded too. For a cache that a framework makes with the
+    paths of the WASM filesystem: ``bin/console cache:warmup``.
+
+OPCACHE
+    When opcache compiles the PHP files, with PHP 8.5 and later: ``none`` (the
+    default), ``runtime`` or ``precompiled`` (see `opcache`_).
+
 LIBXML_VERSION
     The LibXML version to download and build.
 
@@ -372,6 +383,50 @@ context. ``docker-bake.hcl`` sets it to ``examples/embed/``; anything can be
 used instead::
 
     docker buildx bake --set default.contexts.embed=./my-app --set default.args.EMBED_AT=/app
+
+opcache
+-------
+
+Each run starts PHP, and stops it: what opcache compiled is gone with it.
+With PHP 8.5 and later, opcache can keep it in files of the WASM filesystem,
+in ``/opcache``, that the next runs read instead of compiling the PHP files
+again. ``OPCACHE`` says when it compiles them:
+
+- ``none``, the default: every run compiles what it runs;
+- ``runtime``: as they run, the first run that needs a file compiles it, and
+  writes it;
+- ``precompiled``: when PHP is built, after ``WARMUP``. Every ``.php`` file of
+  the embedded directory is compiled, and what opcache writes is embedded.
+
+With the Symfony example (see `Symfony`_), in node:
+
+==============================  ===========  ======  =============  =============  ========================
+What is built                   createPhp()  Boot    First request  Next requests  ``.wasm`` (gzip)
+==============================  ===========  ======  =============  =============  ========================
+``none``                        190 ms       600 ms  250 ms         115 ms         31 MB (7.4 MB)
+``WARMUP``                      195 ms       220 ms  160 ms         110 ms         32 MB (7.5 MB)
+``runtime`` and ``WARMUP``      195 ms       410 ms  245 ms         35 ms          32 MB (7.5 MB)
+``precompiled`` and ``WARMUP``  420 ms       135 ms  75 ms          35 ms          77 MB (19 MB)
+==============================  ===========  ======  =============  =============  ========================
+
+The boot is ``bin/console doctrine:schema:update``, the first run of the
+page. ``WARMUP`` alone, ``bin/console cache:warmup``, saves the compilation
+of the container. Writing the cache makes the first runs slower, with
+``runtime``. ``precompiled`` costs what is embedded: opcodes are bigger than
+the PHP files, 46 MB for the 16 MB of the 3,932 PHP files of the example, in
+the ``.wasm`` file (13 MB with brotli, 5.2 MB without), and in the memory of
+the module (``MEMORY``, see `Options`_): 73 MB of its 128 MB before it runs,
+26 MB without.
+
+opcache checks the mtime of a file: one written over is compiled again, an
+embedded one too. Its mtimes are in seconds: it does not cache a file written
+less than 2 s before, it could be written again in the same second. What is
+embedded dates from 1970-01-01 00:00:01 (``filemtime()`` gives 1): opcache
+caches it from the first run, and the build compiles it with this date.
+
+``opcache_invalidate()`` does nothing, and ``opcache_get_status()`` is false:
+opcache only has the files, no shared memory. A ``php.ini`` changes its
+settings, at ``/usr/local/lib/php.ini``, written before the first run.
 
 Supported Extensions
 --------------------
@@ -574,9 +629,10 @@ relative to the root of the project, the directory of ``castor.php``, and the
 directory shows up at ``/<its name>`` in the WASM filesystem, unless
 ``embed()`` is told where (``->embed('build/dist', at: '/app')``).
 ``outputDir()`` writes the files somewhere else than
-``build/<stack>/``, also relative to the root of the project. ``memory()`` and
-``icuData()`` set the ``MEMORY`` and ``ICU_DATA`` build arguments (see
-`Options`_).
+``build/<stack>/``, also relative to the root of the project. ``memory()`` sets
+the ``MEMORY`` build argument, ``icuData(IcuData::None)`` ``ICU_DATA``,
+``opcache(Opcache::Precompiled)`` ``OPCACHE``, and
+``warmup('bin/console', 'cache:warmup')`` ``WARMUP`` (see `Options`_).
 
 To build your own stacks with this repository as it is, declare them in a
 ``stacks.override.php`` file next to ``stacks.php``, with the same format (git
@@ -934,8 +990,9 @@ What is in this repository
 
 - ``docker/``: how PHP is compiled, everything else only drives it. The
   ``Dockerfile`` compiles PHP, ``run.c`` runs it, ``api.js`` is the
-  JavaScript API of what is built (see `JavaScript API`_), and ``worker.js``
-  runs it in a worker (see `PHP in a worker`_);
+  JavaScript API of what is built (see `JavaScript API`_), ``worker.js`` runs
+  it in a worker (see `PHP in a worker`_), and ``warm.mjs`` runs ``WARMUP``
+  when PHP is built (see `Options`_);
 - ``node/``: ``run.mjs`` runs a PHP file, or some PHP code, in what is built,
   with node (the build for the web too), and ``fetch-files.mjs`` lets node run
   the modules of a page as a browser does, to test them (see `Check it,

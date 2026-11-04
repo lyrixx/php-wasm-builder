@@ -23,9 +23,14 @@
 #include "sapi/embed/php_embed.h"
 #include <emscripten.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 #include "zend_exceptions.h"
 #include "zend_smart_str.h"
+#include "zend_system_id.h"
+#if PHP_VERSION_ID >= 80500
+#include "ext/opcache/zend_shared_alloc.h"
+#endif
 
 /*
  * What api.js calls to run PHP. run_file() and run_code() run it as the php
@@ -53,6 +58,51 @@ static struct request {
 #define REQUEST_SAPI_NAME "wasm"
 
 static int (*embed_startup)(sapi_module_struct *module);
+
+/*
+ * The cache of opcache is keyed by zend_system_id, that PHP computes each
+ * time the engine starts. Only the first start hashes the frameless functions
+ * in it (zend_system_id.c never resets "finalized"): the next ones get another
+ * one. Every run takes the one of the first, so that they all read what the
+ * build compiled, and what the previous runs did. It hashes whether opcache
+ * started too: the build runs PHP with opcache from its first run, as a page
+ * does. PHP fixes it after 8.5.12 (https://github.com/php/php-src/pull/24184):
+ * this can go once every stack has the fix.
+ */
+static char system_id[32];
+
+#define INI_DEFAULT(name, value) \
+    ZVAL_NEW_STR(&tmp, zend_string_init(value, sizeof(value) - 1, 1)); \
+    zend_hash_str_update(configuration_hash, name, sizeof(name) - 1, &tmp);
+
+/*
+ * Defaults, that a php.ini changes. WASM has no shared memory: opcache does
+ * not start, unless it keeps what it compiles in files (OPCACHE, in the
+ * Dockerfile). It is disabled without them, rather than failing to start in
+ * each run.
+ */
+static void ini_defaults(HashTable *configuration_hash)
+{
+    zval tmp;
+#ifdef OPCACHE_FILE_CACHE
+    INI_DEFAULT("opcache.file_cache", OPCACHE_FILE_CACHE);
+    INI_DEFAULT("opcache.file_cache_only", "1");
+#else
+    INI_DEFAULT("opcache.enable", "0");
+#endif
+}
+
+#ifdef OPCACHE_FILE_CACHE
+/*
+ * opcache does not start without the directory, embedded when the build
+ * compiled the files. Once the module has started, api.js ages what is
+ * embedded when it is there.
+ */
+__attribute__((constructor)) static void make_file_cache(void)
+{
+    mkdir(OPCACHE_FILE_CACHE, 0777);
+}
+#endif
 
 /* What api.js gets of the response once PHP sends its headers: its status, and "Name: value" lines */
 EM_JS(void, send_response_head, (int status, const char *headers, size_t length), {
@@ -166,7 +216,21 @@ static void start(int argc, char **argv, const char *filename, struct request wi
     php_embed_module.read_post = read_post;
     php_embed_module.read_cookies = read_cookies;
     php_embed_module.send_headers = send_headers;
+    php_embed_module.ini_defaults = ini_defaults;
+#if PHP_VERSION_ID >= 80500
+    /*
+     * Without shared memory, opcache leaves it pointing to a variable of a
+     * function that returned, that a later run with the file cache reads: the
+     * memory is corrupted (https://github.com/php/php-src/issues/25195).
+     */
+    smm_shared_globals = NULL;
+#endif
     php_embed_init(argc, argv);
+    if (!system_id[0]) {
+        memcpy(system_id, zend_system_id, sizeof(system_id));
+    } else {
+        memcpy(zend_system_id, system_id, sizeof(system_id));
+    }
     running = true;
     /* Not reset by php_embed_init(), it would keep the status of a previous call */
     EG(exit_status) = 0;

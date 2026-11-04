@@ -23,6 +23,22 @@
   A stack that overflows aborts the module now.
 * The README says that PHP can write over what is embedded, in memory: it is
   not read only.
+* Add the `WARMUP` build argument, `warmup()` of a stack: a file of the
+  embedded directory, that runs in PHP when it is built, and whose output in
+  the directory is embedded too. For a cache made with the paths of the WASM
+  filesystem: `bin/console cache:warmup`.
+* Add the `OPCACHE` build argument, `opcache()` of a stack, PHP 8.5 and
+  later: opcache keeps what it compiles in files of the WASM filesystem, that
+  the next runs read. It compiles the files as they run (`runtime`), or when
+  PHP is built (`precompiled`). What is embedded is dated 1 s after the epoch
+  then.
+* opcache is disabled, unless it has its files: in WASM, it can not start
+  without them.
+* The `symfony` stack makes the cache of Symfony when it is built: the page
+  starts in 0.2 s, instead of 0.6 s. The `symfony-runtime` and
+  `symfony-precompiled` stacks have opcache too.
+* BC break: `icuData()` of a stack takes an `IcuData`,
+  `->icuData(IcuData::None)`, instead of a string.
 
 ## 0.9.0 (2026-11-02)
 
