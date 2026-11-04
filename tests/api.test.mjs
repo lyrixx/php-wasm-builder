@@ -8,7 +8,8 @@ import { pathToFileURL } from 'node:url';
 //
 //     BUILD=build/default/php-web.mjs node --import ./node/fetch-files.mjs --test tests/api.test.mjs
 //
-// persist needs a browser: IndexedDB, and the Web Locks.
+// persist needs a browser: IndexedDB, and the Web Locks, as
+// createPhpInWorker(): a Web Worker.
 
 const build = process.env.BUILD ? pathToFileURL(path.resolve(process.env.BUILD)) : new URL('../build/default/php-node.mjs', import.meta.url);
 
@@ -216,4 +217,10 @@ test('a run of the php command after a request is not a request', async () => {
     const { stdout } = await php.runCode('echo json_encode([PHP_SAPI, $_GET, isset($_SERVER["REQUEST_METHOD"]), headers_sent()]); header("X-Not: sent"); var_dump(headers_list());');
     assert.match(stdout, /^\["embed",\[\],false,false\]/);
     assert.match(stdout, /X-Not: sent/);
+});
+
+test('the build for the web exports createPhpInWorker(), not the one for node', async () => {
+    const { createPhpInWorker } = await import(build);
+
+    assert.equal(typeof createPhpInWorker, build.pathname.endsWith('/php-web.mjs') ? 'function' : 'undefined');
 });

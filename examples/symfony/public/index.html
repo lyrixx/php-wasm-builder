@@ -36,9 +36,9 @@
     <h1>Symfony, in the browser</h1>
     <p>
         The frame is a Symfony application, with Doctrine, Twig and forms. PHP
-        runs it in this page: a service worker hands it what the frame asks
-        for. The guestbook is in SQLite, and the session in files, that the
-        page keeps in IndexedDB: they are still here after a reload.
+        runs it in a worker of this page: a service worker hands it what the
+        frame asks for. The guestbook is in SQLite, and the session in files,
+        that PHP keeps in IndexedDB: they are still here after a reload.
     </p>
 
     <div id="address"></div>
@@ -46,17 +46,18 @@
     <p id="message">Loading PHP…</p>
 
     <script type="module">
-        import createPhp from './build/php-web.mjs';
+        import { createPhpInWorker } from './build/php-web.mjs';
 
         const message = document.getElementById('message');
         const frame = document.getElementById('frame');
         // Where the frame is: the service worker hands to PHP what is asked for there
         const app = new URL('app/', location.href).pathname;
 
-        // /symfony, where the database and the sessions are, is kept in
+        // In a worker: the page, and the frame, do not freeze while PHP
+        // runs. /symfony, where the database and the sessions are, is kept in
         // IndexedDB: keep in sync with ../app/.env and
         // ../app/config/packages/framework.yaml
-        const php = await createPhp({ persist: '/symfony' });
+        const php = await createPhpInWorker({ persist: '/symfony' });
 
         message.textContent = 'Creating the database…';
         // It compiles the container of Symfony too, that the requests use

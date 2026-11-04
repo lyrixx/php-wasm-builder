@@ -8,10 +8,15 @@
   the response. The file of `documentRoot` that the URL asks for runs, or is
   the response as it is, `index.php` otherwise. `PHP_SAPI` is then `wasm`,
   not `embed`, that Symfony takes for the command line.
+* Add `createPhpInWorker()` to the build for the web: PHP in a Web Worker,
+  off the main thread of the page, with the same API, but for `FS`, whose
+  methods return a promise, and `terminate()`. `createPhp()` does not change.
+  The build for the web says it runs in a worker too
+  (`ENVIRONMENT=web,worker`).
 * Add the `symfony` stack, and the page of `examples/symfony/`: a Symfony 8
   application, with Doctrine and SQLite, forms and a session, in a frame,
-  that a service worker hands to PHP. castor installs its `vendor/` with the
-  composer of Docker.
+  that a service worker hands to PHP, in a worker. castor installs its
+  `vendor/` with the composer of Docker.
 * Fix: the C stack is 1 MB, and checked. It was the 64 KB of emscripten: PHP
   overflowed it without a word through the callbacks of its functions
   (Symfony, when it compiles its container), and wrote over its own memory.

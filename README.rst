@@ -176,6 +176,38 @@ A run that takes all the memory of the module (``MEMORY``), or all of its
 stack (see `Limitations`_), aborts it, and the promise is rejected: what is in
 its memory can not be trusted anymore, create another one.
 
+PHP in a worker
+~~~~~~~~~~~~~~~
+
+``createPhp()`` runs PHP in the main thread of the page: the page freezes
+while PHP runs, for 80 ms when Symfony answers a request, for example. The
+build for the web runs it in a Web Worker too, with ``createPhpInWorker()``:
+
+.. code-block:: js
+
+    import { createPhpInWorker } from './php-web.mjs';
+
+    const php = await createPhpInWorker({ persist: '/my-page' });
+    const { stdout } = await php.runFile('/app/page.php');
+
+    await php.FS.writeFile('/tmp/input.json', data);
+
+It starts ``php-web.mjs`` in a worker, that runs ``createPhp()``.
+``runFile()``, ``runCode()`` and ``request()`` are the same, ``persist``
+too: a worker has IndexedDB and the Web Locks. The differences:
+
+- the methods of ``php.FS`` return a promise, of what the method returns, and
+  what they are given, or return, is copied: an ``FS.lookupPath()``, for
+  example, can not be;
+- the options are copied to the worker: no function, as ``locateFile``. The
+  ``.wasm`` file is the one next to ``php-web.mjs``, that must be on the
+  origin of the page, as any worker;
+- the stack of the JavaScript engine is smaller in a worker of Chrome: a
+  recursion goes about 1,000 callbacks deep, instead of 2,000 (see
+  `Limitations`_);
+- ``php.terminate()`` stops the worker, and frees its memory: once PHP
+  aborted, before creating another one.
+
 HTTP requests
 -------------
 
@@ -253,13 +285,14 @@ page is where everything that is not Symfony is.
   its ``localStorage``.
 - The frame: the application is in an ``<iframe>``, where links, forms,
   redirections and the history work as anywhere. A service worker,
-  ``public/sw.js``, hands what the frame asks for to the page, that runs
-  ``php.request()``, and keeps the cookies: the browser drops the ones of a
-  response that a service worker makes. PHP does not run in the service
-  worker: the browser stops it when it has nothing to do, and PHP would forget
-  its files. The service worker gives PHP the ``Referer`` too, that it does
-  not see as a header: the stateless CSRF protection, that the recipes of
-  Symfony enable, checks it when there is no ``Origin``.
+  ``public/sw.js``, hands what the frame asks for to the page, that keeps the
+  cookies, and runs ``php.request()`` in a worker (see `PHP in a worker`_):
+  the browser drops the cookies of a response that a service worker makes.
+  PHP does not run in the service worker: the browser stops it when it has
+  nothing to do, and PHP would forget its files. The service worker gives PHP
+  the ``Referer`` too, that it does not see as a header: the stateless CSRF
+  protection, that the recipes of Symfony enable, checks it when there is no
+  ``Origin``.
 
 What there is not: the network, for an HTTP client or a database server, nor
 another process (see `Limitations`_).
@@ -498,7 +531,8 @@ Limitations
     PHP calls itself back in C through the callbacks of its functions
     (``array_map()``, ``usort()``…). The C stack of the module is 1 MB, and
     the one of the JavaScript engine about as big: a recursion goes about
-    2,000 callbacks deep, in node. Deeper, one of them overflows, and the
+    2,000 callbacks deep, in node and in the main thread of Chrome, about
+    1,000 in a worker of Chrome. Deeper, one of them overflows, and the
     promise is rejected. PHP does not know where the stack ends, there is no
     ``zend.max_allowed_stack_size``.
 
@@ -899,8 +933,9 @@ What is in this repository
 --------------------------
 
 - ``docker/``: how PHP is compiled, everything else only drives it. The
-  ``Dockerfile`` compiles PHP, ``run.c`` runs it, and ``api.js`` is the
-  JavaScript API of what is built (see `JavaScript API`_);
+  ``Dockerfile`` compiles PHP, ``run.c`` runs it, ``api.js`` is the
+  JavaScript API of what is built (see `JavaScript API`_), and ``worker.js``
+  runs it in a worker (see `PHP in a worker`_);
 - ``node/``: ``run.mjs`` runs a PHP file, or some PHP code, in what is built,
   with node (the build for the web too), and ``fetch-files.mjs`` lets node run
   the modules of a page as a browser does, to test them (see `Check it,

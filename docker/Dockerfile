@@ -94,13 +94,15 @@ if [ $icu = 1 ]; then
     link="$link /local/install/lib/libicui18n.a /local/install/lib/libicuio.a /local/install/lib/libicuuc.a /local/install/lib/$icudata -sDEFAULT_TO_CXX"
 fi
 
-# <output file name> <emscripten environment> [<libraries>], by target. IDBFS
+# <output file name> <emscripten environment> [<flags>], by target. IDBFS
 # keeps files in IndexedDB, across the reloads of a page (the persist option of
-# createPhp()). Keep in sync with Stack::TARGETS, in src/Stack.php
+# createPhp()), and worker.js runs PHP in a Web Worker (createPhpInWorker()),
+# what the worker environment says it runs in. Keep in sync with
+# Stack::TARGETS, in src/Stack.php
 : > /plan/targets
 for target in $TARGETS; do
     case $target in
-        web)  echo "php-web web -lidbfs.js" >> /plan/targets ;;
+        web)  echo "php-web web,worker -lidbfs.js --extern-post-js worker.js" >> /plan/targets ;;
         node) echo "php-node node" >> /plan/targets ;;
         *)    echo "Unknown target '$target', supported targets: web node" >&2; exit 1 ;;
     esac
@@ -323,7 +325,7 @@ FROM php AS link
 ARG EMBED_AT=/examples
 ARG MEMORY=128mb
 
-COPY run.c spawn.c api.js /local/src/
+COPY run.c spawn.c api.js worker.js /local/src/
 RUN \
     emcc -O2 -I php-src/. -I php-src/Zend -I php-src/main -I php-src/TSRM -c run.c -o run.o && \
     emcc -O2 -c spawn.c -o spawn.o
@@ -333,22 +335,23 @@ COPY --from=resolve /plan/link /plan/link
 COPY --from=resolve /plan/targets /plan/targets
 
 # The functions of run.c and what api.js needs are exported from the .wasm
-# file. createPhp() is what the .mjs file exports. The C stack is 64 KB by
-# default: PHP goes deeper, through the callbacks of its functions (Symfony
-# when it compiles its container), and the stack then overflows on the memory
-# of PHP, its objects call null functions. It is checked: a stack that
-# overflows aborts the module, as one that takes all the memory does.
+# file. createPhp() is what the .mjs file exports, and createPhpInWorker() for
+# the web. The C stack is 64 KB by default: PHP goes deeper, through the
+# callbacks of its functions (Symfony when it compiles its container), and the
+# stack then overflows on the memory of PHP, its objects call null functions.
+# It is checked: a stack that overflows aborts the module, as one that takes
+# all the memory does.
 RUN <<EOF
 set -eu
 mkdir -p /build /embed
-while read -r output environment libraries; do
+while read -r output environment flags; do
     emcc -o /build/$output.mjs \
     -O2 \
     -s STACK_SIZE=1mb -s STACK_OVERFLOW_CHECK=2 \
     -s EXPORTED_FUNCTIONS=_free,_malloc,_run_code,_run_file,_run_request \
     -s EXPORTED_RUNTIME_METHODS=FS \
     --pre-js api.js \
-    $libraries \
+    $flags \
     -s ENVIRONMENT=$environment \
     -s INITIAL_MEMORY=$MEMORY -s ALLOW_MEMORY_GROWTH=0 \
     -s ASSERTIONS=0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s MODULARIZE=1 -s INVOKE_RUN=0 -s LZ4=1 -s EXPORT_ES6=1 \

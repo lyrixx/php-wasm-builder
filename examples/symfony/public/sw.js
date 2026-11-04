@@ -1,7 +1,7 @@
 // The service worker of index.html: it takes what its frame asks for, under
-// app/, to index.html, where PHP runs the Symfony application, and answers
-// with what PHP answers. It runs no PHP: a browser stops a service worker
-// that has nothing to do, and PHP would forget its files.
+// app/, to index.html, whose worker runs the Symfony application in PHP, and
+// answers with what PHP answers. It runs no PHP: a browser stops a service
+// worker that has nothing to do, and PHP would forget its files.
 
 const app = new URL('app/', self.location).pathname;
 
