@@ -48,6 +48,7 @@ final readonly class Stack
         public ?string $embed,
         public ?string $embedAt,
         public array $warmup,
+        public ?Opcache $opcache,
         public array $targets,
         public ?string $memory,
         public ?string $icuData,
@@ -64,6 +65,7 @@ final readonly class Stack
             embed: null,
             embedAt: null,
             warmup: [],
+            opcache: null,
             targets: array_keys(self::TARGETS),
             memory: null,
             icuData: null,
@@ -126,6 +128,14 @@ final readonly class Stack
         }
 
         return $this->with(warmup: [$file, ...$arguments]);
+    }
+
+    /**
+     * What opcache compiles, with PHP 8.5 and later.
+     */
+    public function opcache(Opcache $opcache): self
+    {
+        return $this->with(opcache: $opcache);
     }
 
     public function targets(string ...$targets): self

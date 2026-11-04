@@ -341,6 +341,10 @@ WARMUP
     directory is embedded too. For a cache that a framework makes with the
     paths of the WASM filesystem: ``bin/console cache:warmup``.
 
+OPCACHE
+    When opcache compiles the PHP files, with PHP 8.5 and later: ``none`` (the
+    default), ``runtime`` or ``precompiled`` (see `opcache`_).
+
 LIBXML_VERSION
     The LibXML version to download and build.
 
@@ -378,6 +382,50 @@ context. ``docker-bake.hcl`` sets it to ``examples/embed/``; anything can be
 used instead::
 
     docker buildx bake --set default.contexts.embed=./my-app --set default.args.EMBED_AT=/app
+
+opcache
+-------
+
+Each run starts PHP, and stops it: what opcache compiled is gone with it.
+With PHP 8.5 and later, opcache can keep it in files of the WASM filesystem,
+in ``/opcache``, that the next runs read instead of compiling the PHP files
+again. ``OPCACHE`` says when it compiles them:
+
+- ``none``, the default: every run compiles what it runs;
+- ``runtime``: as they run, the first run that needs a file compiles it, and
+  writes it;
+- ``precompiled``: when PHP is built, after ``WARMUP``. Every ``.php`` file of
+  the embedded directory is compiled, and what opcache writes is embedded.
+
+With the Symfony example (see `Symfony`_), in node:
+
+==============================  ===========  ======  =============  =============  ========================
+What is built                   createPhp()  Boot    First request  Next requests  ``.wasm`` (gzip)
+==============================  ===========  ======  =============  =============  ========================
+``none``                        190 ms       600 ms  250 ms         115 ms         31 MB (7.4 MB)
+``WARMUP``                      195 ms       220 ms  160 ms         110 ms         32 MB (7.5 MB)
+``runtime`` and ``WARMUP``      195 ms       410 ms  245 ms         35 ms          32 MB (7.5 MB)
+``precompiled`` and ``WARMUP``  420 ms       135 ms  75 ms          35 ms          77 MB (19 MB)
+==============================  ===========  ======  =============  =============  ========================
+
+The boot is ``bin/console doctrine:schema:update``, the first run of the
+page. ``WARMUP`` alone, ``bin/console cache:warmup``, saves the compilation
+of the container. Writing the cache makes the first runs slower, with
+``runtime``. ``precompiled`` costs what is embedded: opcodes are bigger than
+the PHP files, 46 MB for the 16 MB of the 3,932 PHP files of the example, in
+the ``.wasm`` file (13 MB with brotli, 5.2 MB without), and in the memory of
+the module (``MEMORY``, see `Options`_): 73 MB of its 128 MB before it runs,
+26 MB without.
+
+opcache checks the mtime of a file: one written over is compiled again, an
+embedded one too. Its mtimes are in seconds: it does not cache a file written
+less than 2 s before, it could be written again in the same second. What is
+embedded dates from 1970-01-01 00:00:01 (``filemtime()`` gives 1): opcache
+caches it from the first run, and the build compiles it with this date.
+
+``opcache_invalidate()`` does nothing, and ``opcache_get_status()`` is false:
+opcache only has the files, no shared memory. A ``php.ini`` changes its
+settings, at ``/usr/local/lib/php.ini``, written before the first run.
 
 Supported Extensions
 --------------------
@@ -582,7 +630,8 @@ directory shows up at ``/<its name>`` in the WASM filesystem, unless
 ``outputDir()`` writes the files somewhere else than
 ``build/<stack>/``, also relative to the root of the project. ``memory()`` and
 ``icuData()`` set the ``MEMORY`` and ``ICU_DATA`` build arguments,
-``warmup('bin/console', 'cache:warmup')`` sets ``WARMUP`` (see `Options`_).
+``opcache(Opcache::Precompiled)`` sets ``OPCACHE``, and
+``warmup('bin/console', 'cache:warmup')`` ``WARMUP`` (see `Options`_).
 
 To build your own stacks with this repository as it is, declare them in a
 ``stacks.override.php`` file next to ``stacks.php``, with the same format (git

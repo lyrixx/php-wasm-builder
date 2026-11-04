@@ -46,6 +46,8 @@ function build_task(
     ?string $embed = null,
     #[AsOption(description: 'Override the ICU data of intl: all or none', autocomplete: Stack::ICU_DATA)]
     ?string $icuData = null,
+    #[AsOption(description: 'Override what opcache compiles: none, runtime or precompiled', autocomplete: 'PhpWasm\complete_opcache')]
+    ?string $opcache = null,
     #[AsOption(description: 'Print the bake file instead of building')]
     bool $print = false,
 ): void {
@@ -71,6 +73,9 @@ function build_task(
         }
         if (null !== $icuData) {
             $selected = $selected->icuData($icuData);
+        }
+        if (null !== $opcache) {
+            $selected = $selected->opcache(Opcache::from($opcache));
         }
         $stacks[$i] = $selected;
     }
@@ -393,6 +398,14 @@ function next_step(Stack $stack): string
 function complete_stacks(): array
 {
     return array_keys(stacks());
+}
+
+/**
+ * @return list<string>
+ */
+function complete_opcache(): array
+{
+    return array_column(Opcache::cases(), 'value');
 }
 
 /**

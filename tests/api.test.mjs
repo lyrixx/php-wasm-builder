@@ -224,3 +224,56 @@ test('the build for the web exports createPhpInWorker(), not the one for node', 
 
     assert.equal(typeof createPhpInWorker, build.pathname.endsWith('/php-web.mjs') ? 'function' : 'undefined');
 });
+
+test('opcache is disabled, unless it has its file cache', async () => {
+    const { stdout } = await php.runCode('echo json_encode([ini_get("opcache.enable"), ini_get("opcache.file_cache")]);');
+    const [enable, fileCache] = JSON.parse(stdout);
+
+    if (php.FS.analyzePath('/opcache').exists) {
+        assert.deepEqual([enable, fileCache], ['1', '/opcache']);
+    } else {
+        // false before PHP 8.5, without opcache
+        assert.notEqual(enable, '1');
+    }
+});
+
+test('a file written over runs as it is now, opcache or not', async () => {
+    const outputs = [];
+    // In the same second: opcache dates the files in seconds
+    for (const version of [1, 2, 3, 4]) {
+        php.FS.writeFile('/tmp/written-over.php', `<?php echo ${version};`);
+        outputs.push((await php.runFile('/tmp/written-over.php')).stdout);
+    }
+
+    assert.deepEqual(outputs, ['1', '2', '3', '4']);
+});
+
+test('opcache compiles a file once, for the next runs, with its file cache', async (t) => {
+    if (!php.FS.analyzePath('/opcache').exists) {
+        t.skip('opcache has no file cache in this build');
+
+        return;
+    }
+
+    // The first start of PHP in a module: the system_id that the cache is
+    // keyed by is another one from the second start (see run.c)
+    const { default: createPhp } = await import(build);
+    const fresh = await createPhp();
+    fresh.FS.writeFile('/tmp/compiled.php', '<?php echo "compiled";');
+    // opcache does not cache a file written less than 2 s before
+    fresh.FS.utime('/tmp/compiled.php', 1000, 1000);
+    const count = (directory) => fresh.FS.readdir(directory).filter((name) => '.' !== name && '..' !== name).reduce((files, name) => {
+        const entry = `${directory}/${name}`;
+
+        return files + (fresh.FS.isDir(fresh.FS.stat(entry).mode) ? count(entry) : 1);
+    }, 0);
+    const before = count('/opcache');
+
+    assert.equal((await fresh.runFile('/tmp/compiled.php')).stdout, 'compiled');
+    const written = count('/opcache');
+    assert.equal(written, before + 1);
+    assert.equal((await fresh.runFile('/tmp/compiled.php')).stdout, 'compiled');
+    assert.equal(count('/opcache'), written);
+    // One system_id, the one of the build when it compiled what is embedded
+    assert.equal(fresh.FS.readdir('/opcache').length, 3);
+});

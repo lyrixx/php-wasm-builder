@@ -98,6 +98,38 @@
         });
     };
 
+    // With the file cache of opcache (OPCACHE, in the Dockerfile: run.c makes
+    // its directory), what is embedded is older than what the page or PHP
+    // writes: opcache caches it from the first run, compiles a file written
+    // over it again, and a file written less than 2 s before (its mtime is in
+    // seconds). 1 s after the epoch: it does not cache a file whose mtime is
+    // 0. The build compiles the files with this mtime too. Keep the directory
+    // in sync with OPCACHE_FILE_CACHE, in the Dockerfile.
+    Module['postRun'] = [].concat(Module['postRun'] ?? [], () => {
+        if (FS.analyzePath('/opcache').exists) {
+            ageEmbeddedFiles(FS.root);
+        }
+    });
+
+    // By nodes, not paths: 10 times faster, 5 ms for 8,000 files
+    function ageEmbeddedFiles(directory) {
+        for (const name of directory.node_ops.readdir(directory)) {
+            if ('.' === name || '..' === name || (FS.root === directory && ('dev' === name || 'proc' === name))) {
+                continue;
+            }
+
+            const node = FS.lookupNode(directory, name);
+            if (FS.isMountpoint(node)) {
+                continue;
+            }
+            if (FS.isDir(node.mode)) {
+                ageEmbeddedFiles(node);
+            } else if (FS.isFile(node.mode)) {
+                node.node_ops.setattr(node, { atime: 1000, mtime: 1000 });
+            }
+        }
+    }
+
     // A directory kept in IndexedDB, across the reloads of the page
     const persist = Module['persist'];
     if (persist) {

@@ -106,6 +106,7 @@ function bake_definition(array $stacks): string
                 // None if nothing is embedded
                 'EMBED_AT' => $stack->embedAt ?? '',
                 'WARMUP' => [] === $stack->warmup ? null : implode(' ', $stack->warmup),
+                'OPCACHE' => $stack->opcache?->value,
             ], static fn (?string $value): bool => null !== $value),
             'output' => ['type=local,dest=' . $stack->outputDir],
         ];

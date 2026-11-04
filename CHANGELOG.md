@@ -27,6 +27,13 @@
   embedded directory, that runs in PHP when it is built, and whose output in
   the directory is embedded too. For a cache made with the paths of the WASM
   filesystem: `bin/console cache:warmup`.
+* Add the `OPCACHE` build argument, `opcache()` of a stack, PHP 8.5 and
+  later: opcache keeps what it compiles in files of the WASM filesystem, that
+  the next runs read. It compiles the files as they run (`runtime`), or when
+  PHP is built (`precompiled`). What is embedded is dated 1 s after the epoch
+  then.
+* opcache is disabled, unless it has its files: in WASM, it can not start
+  without them.
 
 ## 0.9.0 (2026-11-02)
 

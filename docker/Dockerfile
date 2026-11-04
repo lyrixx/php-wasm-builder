@@ -14,7 +14,8 @@
 #   sqlite
 #   php         configures and compiles PHP
 #   objects     compiles run.c and spawn.c
-#   warm        runs WARMUP in node, with warm.mjs
+#   warm        runs WARMUP, and compiles the PHP files with opcache
+#               (OPCACHE=precompiled), in node, with warm.mjs
 #   link        links the .mjs/.wasm files with api.js, and what is embedded
 #
 # Every stage only reads the parts of the plan it needs, and the plan is made
@@ -29,6 +30,7 @@ FROM emscripten/emsdk:$EMSDK_VERSION AS resolve
 ARG EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter"
 ARG TARGETS="web node"
 ARG ICU_DATA=all
+ARG OPCACHE=none
 COPY <<'EOF' /resolve.sh
 set -eu
 mkdir -p /plan
@@ -109,7 +111,17 @@ for target in $TARGETS; do
     esac
 done
 
+# Where opcache keeps what it compiles, in the WASM filesystem: run.c defaults
+# to it. Keep in sync with the Opcache enum, in src/Opcache.php, and with the
+# link stage.
+case $OPCACHE in
+    none)                opcache="" ;;
+    runtime|precompiled) opcache='-DOPCACHE_FILE_CACHE="/opcache"' ;;
+    *) echo "Unknown OPCACHE '$OPCACHE', supported values: none runtime precompiled" >&2; exit 1 ;;
+esac
+
 echo "$flags" > /plan/configure
+echo "$opcache" > /plan/opcache
 echo "$link" > /plan/link
 echo "$libiconv" > /plan/libiconv
 echo "$libxml2" > /plan/libxml2
@@ -323,10 +335,17 @@ FROM scratch AS embed
 
 # Compile run.c and spawn.c
 FROM php AS objects
+COPY --from=resolve /plan/opcache /plan/opcache
 COPY run.c spawn.c /local/src/
-RUN \
-    emcc -O2 -I php-src/. -I php-src/Zend -I php-src/main -I php-src/TSRM -c run.c -o run.o && \
-    emcc -O2 -c spawn.c -o spawn.o
+RUN <<EOF
+set -eu
+if [ -n "$(cat /plan/opcache)" ] && ! emar t php-src/.libs/libphp.a | grep -qx ZendAccelerator.o; then
+    echo "OPCACHE needs opcache, that PHP builds since 8.5 only" >&2
+    exit 1
+fi
+emcc -O2 $(cat /plan/opcache) -I php-src/. -I php-src/Zend -I php-src/main -I php-src/TSRM -c run.c -o run.o
+emcc -O2 -c spawn.c -o spawn.o
+EOF
 
 # link.sh <output .mjs> <environment> [<emcc arguments>...]: links PHP, run.c
 # and api.js.
@@ -358,41 +377,48 @@ emcc -o "$output" \
 EOF
 COPY --from=resolve /plan/link /plan/link
 
-# Runs WARMUP in node, before PHP is linked with what it embeds. This build of
-# PHP sees the directory to embed out of the WASM filesystem (NODEFS): what it
-# writes in it is embedded. Nothing happens without WARMUP.
+# Runs PHP in node, before it is linked with what it embeds: WARMUP, then
+# opcache compiles every PHP file (OPCACHE=precompiled). This build of PHP sees
+# the directory to embed and the cache of opcache out of the WASM filesystem
+# (NODEFS): what it writes in them is embedded. Nothing happens without
+# WARMUP, nor OPCACHE=precompiled.
 FROM objects AS warm
 ARG EMBED_AT=/examples
 ARG MEMORY=128mb
+ARG OPCACHE=none
 ARG WARMUP=""
 COPY api.js warm.mjs /local/src/
 COPY --from=embed / /embed
 RUN <<EOF
 set -eu
-mkdir -p /embed /warm
-[ -n "$WARMUP" ] || exit 0
+mkdir -p /embed /opcache /warm
+[ -n "$WARMUP" ] || [ "$OPCACHE" = precompiled ] || exit 0
 if [ -z "$EMBED_AT" ]; then
-    echo "WARMUP needs something embedded, at EMBED_AT" >&2
+    echo "WARMUP and OPCACHE=precompiled need something embedded, at EMBED_AT" >&2
     exit 1
 fi
 # -O0: only the code of emscripten is not optimized, it runs once
 sh link.sh /warm/php.mjs node -O0 -lnodefs.js -s EXPORTED_RUNTIME_METHODS=FS,NODEFS
-node warm.mjs /warm/php.mjs "$EMBED_AT" $WARMUP
+node warm.mjs /warm/php.mjs "$EMBED_AT" "$OPCACHE" $WARMUP
 EOF
 
-# Link everything, with what is embedded, as the warm stage left it
+# Link everything, with what is embedded, and the cache of opcache that the
+# warm stage made
 FROM objects AS link
 ARG EMBED_AT=/examples
 ARG MEMORY=128mb
 COPY api.js worker.js /local/src/
 COPY --from=warm /embed /embed
+COPY --from=warm /opcache /opcache
 COPY --from=resolve /plan/targets /plan/targets
 RUN <<EOF
 set -eu
 mkdir -p /build
+# Keep in sync with OPCACHE_FILE_CACHE, in the "resolve" stage
+[ -z "$(ls -A /opcache)" ] || opcache="--embed-file /opcache@/opcache"
 while read -r output environment flags; do
     sh link.sh /build/$output.mjs $environment -O2 -s EXPORTED_RUNTIME_METHODS=FS $flags \
-        ${EMBED_AT:+--embed-file "/embed@$EMBED_AT"}
+        ${EMBED_AT:+--embed-file "/embed@$EMBED_AT"} ${opcache:-}
 done < /plan/targets
 EOF
 
