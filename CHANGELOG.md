@@ -8,10 +8,16 @@
   the response. The file of `documentRoot` that the URL asks for runs, or is
   the response as it is, `index.php` otherwise. `PHP_SAPI` is then `wasm`,
   not `embed`, that Symfony takes for the command line.
+* Add the `symfony` stack, and the page of `examples/symfony/`: a Symfony 8
+  application, with Doctrine and SQLite, forms and a session, in a frame,
+  that a service worker hands to PHP. castor installs its `vendor/` with the
+  composer of Docker.
 * Fix: the C stack is 1 MB, and checked. It was the 64 KB of emscripten: PHP
   overflowed it without a word through the callbacks of its functions
   (Symfony, when it compiles its container), and wrote over its own memory.
   A stack that overflows aborts the module now.
+* The README says that PHP can write over what is embedded, in memory: it is
+  not read only.
 
 ## 0.9.0 (2026-11-02)
 

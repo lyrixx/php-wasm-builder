@@ -161,8 +161,8 @@ of its variables. The files stay, until the page goes away.
     <https://emscripten.org/docs/api_reference/Filesystem-API.html>`__), to
     give files to PHP, or read the ones it writes:
     ``php.FS.writeFile('/tmp/input.json', data)``,
-    ``php.FS.readFile('/tmp/output.png')``. What is embedded is there too, read
-    only.
+    ``php.FS.readFile('/tmp/output.png')``. What is embedded is there too: PHP
+    can write over it, in memory, as over the other files.
 
 ``createPhp({ persist })``
     ``persist`` is a directory of the WASM filesystem to keep in IndexedDB,
@@ -226,6 +226,43 @@ It resolves with the response:
 
 ``request()`` is the web server, not the browser: it keeps no cookie, and
 follows no redirection.
+
+Symfony
+~~~~~~~
+
+The ``symfony`` example runs a Symfony 8 application in a page: a guestbook,
+with Doctrine and SQLite, Twig, forms, CSRF and a session (see `Playing with
+it`_). The application, in ``examples/symfony/app/``, is a usual one: the
+page is where everything that is not Symfony is.
+
+- The extensions: ``ctype``, ``iconv``, ``mbstring`` and ``xml``, that
+  Symfony, Doctrine and their polyfills require, ``filter``, that Symfony
+  calls everywhere (``filter_var()``), ``tokenizer``, without which the routes
+  of the controllers are not found, ``session`` and ``pdo_sqlite``. The
+  ``symfony`` stack has them.
+- The memory: the application is embedded, with its ``vendor/`` (19 MB), and
+  takes as much of the memory of the module. It runs with 80 MB, the 128 MB by
+  default leave room.
+- The cache: Symfony makes it in the page, in ``/app/var/``, where its paths
+  are the ones of the WASM filesystem. The page runs ``bin/console
+  doctrine:schema:update`` first, with ``runFile()``: it creates the
+  database, and compiles the container, in half a second. A request takes
+  about 100 ms then.
+- What stays: the database and the sessions are in ``/symfony``, that the page
+  keeps in IndexedDB (see `Keep files across reloads`_), and the cookies are in
+  its ``localStorage``.
+- The frame: the application is in an ``<iframe>``, where links, forms,
+  redirections and the history work as anywhere. A service worker,
+  ``public/sw.js``, hands what the frame asks for to the page, that runs
+  ``php.request()``, and keeps the cookies: the browser drops the ones of a
+  response that a service worker makes. PHP does not run in the service
+  worker: the browser stops it when it has nothing to do, and PHP would forget
+  its files. The service worker gives PHP the ``Referer`` too, that it does
+  not see as a header: the stateless CSRF protection, that the recipes of
+  Symfony enable, checks it when there is no ``Origin``.
+
+What there is not: the network, for an HTTP client or a database server, nor
+another process (see `Limitations`_).
 
 Options
 -------
@@ -557,6 +594,8 @@ These are the stacks of ``stacks.php``:
   ``examples/playground/`` (see below);
 - ``notes``: adds pdo_sqlite and sqlite3 (see `SQLite`_), for the page of
   ``examples/notes/`` (see below);
+- ``symfony``: what Symfony needs (see `Symfony`_), for the page of
+  ``examples/symfony/`` (see below);
 - ``intl``: adds intl (see `intl`_);
 - ``intl-without-data``: adds intl, without ICU's data;
 - ``full-without-intl-data``: every extension of `Supported Extensions`_, intl
@@ -581,7 +620,11 @@ server of PHP. It lists them:
 - ``examples/notes/`` keeps notes in SQLite, that are still there after a
   reload, and searches them with FTS5. It is made as a project makes its page
   (see `Using it from your own project`_): the ``notes`` stack embeds its
-  ``embed/`` directory at ``/app``.
+  ``embed/`` directory at ``/app``;
+- ``examples/symfony/`` runs a Symfony application, a guestbook, in a frame
+  (see `Symfony`_). The ``symfony`` stack embeds its ``app/`` directory at
+  ``/app``, once castor installed its ``vendor/``, with the composer of
+  Docker.
 
 ``--stack`` builds the page with the PHP version and the extensions of another
 stack: the one of ``intl.php``, for example::
@@ -865,8 +908,9 @@ What is in this repository
 - ``examples/``: what an ``embed/`` directory has is embedded in what is
   built, what a ``public/`` directory has is served. ``examples/embed/`` has a
   few PHP scripts, embedded in every stack at ``/examples``,
-  ``examples/playground/`` a page that runs them, and ``examples/notes/`` a
-  page that keeps notes in SQLite (see `Playing with it`_);
+  ``examples/playground/`` a page that runs them, ``examples/notes/`` a
+  page that keeps notes in SQLite, and ``examples/symfony/`` a page that runs
+  a Symfony application (see `Playing with it`_);
 - ``stacks.php``, ``src/`` and ``castor.php``: named builds, a ``build()``
   function, and castor tasks to build, run and check them (see `Stacks, and
   castor`_);

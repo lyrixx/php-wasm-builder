@@ -1,0 +1,8 @@
+framework:
+    secret: '%env(APP_SECRET)%'
+    csrf_protection: true
+    session:
+        handler_id: session.handler.native_file
+        # Kept in IndexedDB by the page, keep in sync with persist in
+        # ../public/index.html
+        save_path: /symfony/sessions

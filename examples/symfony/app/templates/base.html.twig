@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>{% block title %}Guestbook{% endblock %}</title>
+        <link rel="stylesheet" href="{{ asset('styles.css') }}">
+    </head>
+    <body>
+        {% block body %}{% endblock %}
+        <footer>
+            Symfony {{ constant('Symfony\\Component\\HttpKernel\\Kernel::VERSION') }},
+            PHP {{ constant('PHP_VERSION') }} ({{ constant('PHP_SAPI') }})
+        </footer>
+    </body>
+</html>

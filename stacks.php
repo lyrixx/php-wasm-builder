@@ -35,6 +35,17 @@ return [
         ->targets('web')
         ->outputDir('examples/notes/public/build'),
 
+    // Symfony, with Doctrine and SQLite, for the page of examples/symfony/:
+    // what the framework needs (filter, tokenizer for the routes of its
+    // controllers, iconv), and sessions. It embeds the application, and its
+    // vendor/, that castor installs before it builds the stack: 19 MB of the
+    // memory, it runs with 80 MB.
+    $default->renamed('symfony')
+        ->extensions('filter', 'iconv', 'pdo_sqlite', 'session', 'tokenizer')
+        ->embed('examples/symfony/app', at: '/app')
+        ->targets('web')
+        ->outputDir('examples/symfony/public/build'),
+
     // intl, with all of ICU's data linked in the .wasm file. The data takes
     // 32 MB of the memory: this leaves PHP as much of it as the default stack.
     $default->renamed('intl')
