@@ -6,12 +6,12 @@ import { pathToFileURL } from 'node:url';
 // The tests of the JavaScript API of a build (docker/api.js), the build of the
 // default stack for node unless BUILD says which:
 //
-//     BUILD=build/default/php-web.mjs node --import ./node/fetch-files.mjs --test tests/api.test.mjs
+//     BUILD=build/php-8.5/php-web.mjs node --import ./node/fetch-files.mjs --test tests/api.test.mjs
 //
 // persist needs a browser: IndexedDB, and the Web Locks, as
 // createPhpInWorker(): a Web Worker.
 
-const build = process.env.BUILD ? pathToFileURL(path.resolve(process.env.BUILD)) : new URL('../build/default/php-node.mjs', import.meta.url);
+const build = process.env.BUILD ? pathToFileURL(path.resolve(process.env.BUILD)) : new URL('../build/php-8.5/php-node.mjs', import.meta.url);
 
 let php;
 before(async () => {

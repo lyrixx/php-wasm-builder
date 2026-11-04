@@ -43,7 +43,7 @@ This builds PHP 8.5.12, with the extensions listed in `Supported
 Extensions`_: another version, or other extensions, are build arguments (see
 `Options`_). The first build compiles everything, and takes a while: the
 next ones only compile again what changed. The files end up in
-``build/default/``:
+``build/php-8.5/``:
 
 - ``php-web.mjs`` and ``php-web.wasm``, for the browser;
 - ``php-node.mjs`` and ``php-node.wasm``, for node.
@@ -59,14 +59,14 @@ Run it, in node
     node node/run.mjs my-script.php     # a file of your disk
 
 It writes what PHP writes, and exits with its exit status. ``--build
-build/default/php-web.mjs`` runs the build for the web instead, the one a
+build/php-8.5/php-web.mjs`` runs the build for the web instead, the one a
 browser loads.
 
 Run it, in a browser
 ~~~~~~~~~~~~~~~~~~~~
 
 ``php-web.mjs`` is a module, that a page imports. Save this page as
-``build/default/index.html``, next to it:
+``build/php-8.5/index.html``, next to it:
 
 .. code-block:: html
 
@@ -83,7 +83,7 @@ Run it, in a browser
 A browser does not load a module from a ``file:`` URL, so the directory must
 be served. Any static server does it, the one of PHP for example::
 
-    php -S 127.0.0.1:8000 -t build/default
+    php -S 127.0.0.1:8000 -t build/php-8.5
 
 Then open http://127.0.0.1:8000/.
 
@@ -96,20 +96,15 @@ Embed your code
 
 PHP has a filesystem of its own, in memory: it does not see your disk. It
 runs what the page writes in it (``php.FS.writeFile()``), and what is embedded
-in the ``.wasm`` file when it is built. ``docker-bake.hcl`` embeds
-``examples/embed/``, a few scripts, at ``/examples``::
-
-    node node/run.mjs -r 'require "/examples/hello.php";'
-
-``node node/run.mjs my-script.php`` ran a file of your disk: ``run.mjs``
-copies it in the filesystem of PHP first. ``/examples/hello.php`` is the copy
-that was embedded: it only changes with a new build. To embed your code
-instead, at ``/app``::
+in the ``.wasm`` file when it is built. ``node node/run.mjs my-script.php``
+runs a file of your disk: ``run.mjs`` copies it in the filesystem of PHP
+first. To embed your code, at ``/app``::
 
     docker buildx bake --set default.contexts.embed=./my-app --set default.args.EMBED_AT=/app
     node node/run.mjs -r 'require "/app/index.php";'
 
-A page runs it with ``php.runFile('/app/index.php')``.
+``/app/index.php`` is the copy that was embedded: it only changes with a new
+build. A page runs it with ``php.runFile('/app/index.php')``.
 
 JavaScript API
 --------------
@@ -270,17 +265,18 @@ page is where everything that is not Symfony is.
 - The extensions: ``ctype``, ``iconv``, ``mbstring`` and ``xml``, that
   Symfony, Doctrine and their polyfills require, ``filter``, that Symfony
   calls everywhere (``filter_var()``), ``tokenizer``, without which the routes
-  of the controllers are not found, ``session`` and ``pdo_sqlite``. The
-  ``symfony`` stack has them.
+  of the controllers are not found, ``session`` and ``pdo_sqlite``. The stack
+  of the example, ``examples/symfony/stack.php``, has them.
 - The memory: the application is embedded, with its ``vendor/`` (19 MB), and
   takes as much of the memory of the module. It runs with 80 MB, the 128 MB by
   default leave room.
-- The cache: the ``symfony`` stack makes it when it is built (``WARMUP``, see
-  `Options`_), in ``/app/var/``, with the paths of the WASM filesystem. The
-  page runs ``bin/console doctrine:schema:update`` first, with ``runFile()``:
-  it creates the database, in 0.2 s. A request takes about 100 ms then. The
-  ``symfony-runtime`` and ``symfony-precompiled`` stacks have opcache too (see
-  `opcache`_): ``castor wasm:serve symfony --stack symfony-precompiled``.
+- The cache: the stack of the example makes it when it is built
+  (``WARMUP``, see `Options`_), in ``/app/var/``, with the paths of the WASM
+  filesystem, and opcache keeps what it compiles as the files run
+  (``OPCACHE=runtime``, see `opcache`_). The page runs ``bin/console
+  doctrine:schema:update`` first, with ``runFile()``: it creates the
+  database. ``castor wasm:serve symfony --opcache precompiled`` compiles every
+  file when it is built instead.
 - What stays: the database and the sessions are in ``/symfony``, that the page
   keeps in IndexedDB (see `Keep files across reloads`_), and the cookies are in
   its ``localStorage``.
@@ -333,8 +329,8 @@ ICU_DATA
     ``none``.
 
 EMBED_AT
-    Where the embedded directory is in the WASM filesystem. Defaults to
-    ``/examples``.
+    Where the embedded directory is in the WASM filesystem, ``/app`` for
+    example. Nothing is embedded without it (the default).
 
 WARMUP
     A PHP file of the embedded directory, relative to it, and its arguments,
@@ -379,8 +375,7 @@ EMSDK_VERSION
     is pinned, so that the same arguments always give the same build.
 
 The directory to embed in the WASM filesystem is the ``embed`` named build
-context. ``docker-bake.hcl`` sets it to ``examples/embed/``; anything can be
-used instead::
+context, given with ``EMBED_AT``::
 
     docker buildx bake --set default.contexts.embed=./my-app --set default.args.EMBED_AT=/app
 
@@ -506,9 +501,9 @@ data takes 32 MB of the memory of the module. Add it to the extensions, with
 32 MB more memory::
 
     docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter intl" --set default.args.MEMORY=160mb
-    node node/run.mjs examples/embed/intl.php
+    node node/run.mjs -r 'echo (new NumberFormatter("fr_FR", NumberFormatter::CURRENCY))->formatCurrency(1234.5, "EUR");'
 
-The ``intl`` stack (see `Stacks, and castor`_) is the same build.
+The ``php-8.5-intl`` stack (see `Stacks, and castor`_) is the same build.
 
 When the code only needs intl to be loaded, ``ICU_DATA=none`` leaves the
 data out: the ``.wasm`` file is then about 2 MB bigger than without intl (less
@@ -516,7 +511,8 @@ than 1 MB gzipped), and it needs no more memory. ICU only has what is in its
 code: NFC normalization, and the character properties of ``IntlChar``.
 Everything else fails: ``Locale::getDisplayLanguage('fr', 'en')`` gives
 ``fr``, and the formatters, collators, transliterators and ``grapheme_*()``
-functions do not work. The ``intl-without-data`` stack is this build::
+functions do not work. The intl of the playground (see `Playing with it`_) is
+this one::
 
     docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter intl" --set default.args.ICU_DATA=none
 
@@ -552,8 +548,7 @@ pdo_sqlite and sqlite3 link SQLite, compiled from its amalgamation, with FTS5
 ``log()``…), as the SQLite of the distributions has them. It can not load
 extensions: there is no ``dlopen()`` in a static build. pdo_sqlite comes with
 PDO, and the ``.wasm`` file is about 1.3 MB bigger with both (500 KB
-gzipped). The ``notes`` stack has both, for its page (see `Playing with
-it`_)::
+gzipped)::
 
     docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter pdo_sqlite sqlite3"
 
@@ -595,13 +590,13 @@ Stacks, and castor
 ------------------
 
 A *stack* is a PHP version, a set of extensions, what to embed, which targets
-to build and where, with a name. The stacks of this repository are declared in
-``stacks.php``, and `castor <https://castor.jolicode.com>`_ builds them with
-one command; castor only runs ``docker buildx bake`` for you, the Dockerfile is
-what knows how to compile PHP. Nobody needs castor to use this repository, and
-no PHP is needed on the host but to serve a page (``castor wasm:serve``):
-castor is a single binary, installed with ``curl
-"https://castor.jolicode.com/install" | bash``.
+to build and where, with a name. The builds of this repository are declared in
+``stacks.php``, the page of each example in its ``stack.php``, and `castor
+<https://castor.jolicode.com>`_ builds them with one command; castor only runs
+``docker buildx bake`` for you, the Dockerfile is what knows how to compile
+PHP. Nobody needs castor to use this repository, and no PHP is needed on the
+host but to serve a page (``castor wasm:serve``): castor is a single binary,
+installed with ``curl "https://castor.jolicode.com/install" | bash``.
 
 .. code-block:: php
 
@@ -609,17 +604,16 @@ castor is a single binary, installed with ``curl
 
     use PhpWasm\Stack;
 
-    $default = Stack::named('default')
+    $php85 = Stack::named('php-8.5')
         ->php('8.5.12')
         ->extensions('calendar', 'ctype', 'dom', 'mbstring', 'simplexml', 'xml', 'xmlreader', 'xmlwriter')
-        ->embed('examples/embed', at: '/examples')
         ->targets('web', 'node');
 
     return [
-        $default,
+        $php85,
 
-        // Everything from default, and two more extensions
-        $default->renamed('default-bcmath')->extensions('bcmath', 'tokenizer'),
+        // Everything from php-8.5, and two more extensions
+        $php85->renamed('php-8.5-bcmath')->extensions('bcmath', 'tokenizer'),
     ];
 
 A stack never changes: each method returns a new one, so a stack is derived
@@ -641,30 +635,31 @@ ones that have the same name.
 
 Unless a stack says otherwise, everything is built in ``build/<stack>/``::
 
-    castor wasm:stacks                         # lists the stacks
-    castor wasm:build                          # builds the default stack
-    castor wasm:build intl                     # builds another one
-    castor wasm:build --all                    # builds all of them, in one buildx invocation (with the overrides below)
-    castor wasm:check                          # builds them all, and checks them
-    castor wasm:sizes                          # compares the size of the .wasm files with the default stack
-    castor wasm:run examples/embed/hello.php   # runs a file, in the default stack
+    castor wasm:stacks                               # lists the stacks
+    castor wasm:build                                # builds php-8.5
+    castor wasm:build php-8.5-intl                   # builds another one
+    castor wasm:build --all                          # builds all of them, in one buildx invocation (with the overrides below)
+    castor wasm:check                                # builds them all, and checks them
+    castor wasm:sizes                                # compares the size of the .wasm files with php-8.5
+    castor wasm:run my-script.php                    # runs a file, in php-8.5
     castor wasm:run -r 'echo PHP_VERSION;' --stack php-8.3
-    castor wasm:serve                          # lists the examples that have a page
-    castor wasm:serve notes                    # builds the page of examples/notes/, and serves it
-    castor wasm:serve playground --stack intl  # another page, with the PHP version and the extensions of the intl stack
+    castor wasm:serve                                # lists the examples
+    castor wasm:serve playground                     # builds the page of examples/playground/, and serves it
+    castor wasm:serve playground --php 8.3.35        # the same page, on PHP 8.3
 
 Anything in a stack can be overridden from the command line, so there is no
 need to declare a stack to try something::
 
-    castor wasm:build --php 8.3.35                      # the default stack, on PHP 8.3
+    castor wasm:build --php 8.3.35                      # php-8.5, on PHP 8.3
     castor wasm:build php-8.3 --target node             # only the node target
-    castor wasm:build --with tokenizer --with bcmath    # the default stack, and two more extensions
+    castor wasm:build --with tokenizer --with bcmath    # php-8.5, and two more extensions
     castor wasm:build --memory 256mb --embed my-app     # more memory, another directory to embed
-    castor wasm:build intl --icu-data none              # intl, without ICU's data
+    castor wasm:build php-8.5-intl --icu-data none      # intl, without ICU's data
+    castor wasm:build --embed my-app --opcache precompiled  # opcache compiles what is embedded when it is built
     castor wasm:build --print                           # only shows the bake file
 
 What is built with overrides goes to the directory of the stack
-(``build/default/``, ``build/php-8.3/``), in place of what was there.
+(``build/php-8.5/``, ``build/php-8.3/``), in place of what was there.
 
 ``castor wasm:check`` is what tells that a stack works: once built, it runs
 every build of each stack in node, the one for the web too, and checks that
@@ -675,52 +670,40 @@ works (``tests/api.test.mjs``). It does not run what the stack embeds.
 Playing with it
 ---------------
 
-These are the stacks of ``stacks.php``:
+The stacks of ``stacks.php`` are the builds that ``castor wasm:check``
+checks, in CI too:
 
-- ``default``: PHP 8.5, with the default extensions, what ``docker buildx
+- ``php-8.5``: PHP 8.5, with the default extensions, what ``docker buildx
   bake`` builds too;
 - ``php-8.4`` and ``php-8.3``: the same thing, on older PHP versions;
-- ``playground``: adds bcmath, filter and tokenizer, for the page of
-  ``examples/playground/`` (see below);
-- ``notes``: adds pdo_sqlite and sqlite3 (see `SQLite`_), for the page of
-  ``examples/notes/`` (see below);
-- ``symfony``: what Symfony needs (see `Symfony`_), for the page of
-  ``examples/symfony/`` (see below);
-- ``intl``: adds intl (see `intl`_);
-- ``intl-without-data``: adds intl, without ICU's data;
-- ``full-without-intl-data``: every extension of `Supported Extensions`_, intl
-  without ICU's data.
+- ``php-8.5-intl``: adds intl, with ICU's data (see `intl`_);
+- ``php-8.5-opcache-runtime`` and ``php-8.5-opcache-precompiled``: opcache
+  keeps what it compiles in files (see `opcache`_).
 
-Each script of ``examples/embed/`` says which stack it needs, and says so
-when it runs in another one. ``castor wasm:run`` offers to build the stack
-when it is not built yet::
+``castor wasm:run`` runs a file, or some code, in one of them, and offers to
+build it when it is not built yet::
 
-    castor wasm:run examples/embed/hello.php
-    castor wasm:run examples/embed/xml.php --stack php-8.3
-    castor wasm:run examples/embed/playground.php --stack playground
-    castor wasm:run examples/embed/intl.php --stack intl
+    castor wasm:run -r 'echo PHP_VERSION;' --stack php-8.3
 
-The examples that have a page are built by the stack of the same name, in
-their ``public/`` directory. ``castor wasm:serve`` builds it, in a second when
-nothing changed, and serves it on http://127.0.0.1:8000/, with the built-in
-server of PHP. It lists them:
+Each directory of ``examples/`` is a page, laid out as a project of your own
+would be: its stack in ``stack.php``, what the browser loads in ``public/``,
+and the PHP code that the stack embeds in ``app/``, when there is one:
 
-- ``examples/playground/`` runs the scripts of ``examples/embed/``, embedded at
-  ``/examples``: pick one, change it, and run it;
-- ``examples/notes/`` keeps notes in SQLite, that are still there after a
-  reload, and searches them with FTS5. It is made as a project makes its page
-  (see `Using it from your own project`_): the ``notes`` stack embeds its
-  ``embed/`` directory at ``/app``;
-- ``examples/symfony/`` runs a Symfony application, a guestbook, in a frame
-  (see `Symfony`_). The ``symfony`` stack embeds its ``app/`` directory at
-  ``/app``, once castor installed its ``vendor/``, with the composer of
-  Docker.
+- ``examples/playground/`` has an editor, with a script that shows what PHP
+  has there: change it, and run it. Its stack has every extension of
+  `Supported Extensions`_, intl without ICU's data;
+- ``examples/symfony/`` runs a Symfony application, a guestbook with
+  Doctrine and SQLite, in a frame (see `Symfony`_). Its stack embeds
+  ``app/`` at ``/app``, once castor installed its ``vendor/``, with the
+  composer of Docker.
 
-``--stack`` builds the page with the PHP version and the extensions of another
-stack: the one of ``intl.php``, for example::
+``castor wasm:serve`` builds the page of an example, in a second when nothing
+changed, and serves it on http://127.0.0.1:8000/, with the built-in server of
+PHP. As with ``castor wasm:build``, ``--php``, ``--with`` and ``--opcache``
+change what the stack of the page has::
 
-    castor wasm:serve playground
-    castor wasm:serve playground --stack intl
+    castor wasm:serve playground --php 8.3.35
+    castor wasm:serve symfony --opcache precompiled
 
 The page changes with a reload, its PHP when the server starts again.
 
@@ -852,9 +835,9 @@ Each tab has its own copy of the files. A run reads IndexedDB before PHP runs,
 what the other tabs wrote, and writes in it after, one run at a time across
 the tabs of the page (with a Web Lock): no tab writes over what another one
 wrote. ``php.FS`` sees the files as the last run of the tab left them: what
-another tab wrote since is only there once a run has read it. The page of
-``examples/notes/`` keeps an SQLite database this way (see `Playing with
-it`_).
+another tab wrote since is only there once a run has read it. The Symfony
+example keeps its SQLite database and its sessions this way (see
+`Symfony`_).
 
 The directory names the IndexedDB database: two pages of the same origin that
 keep the same directory share its files. Name it after the page:
@@ -997,16 +980,15 @@ What is in this repository
   with node (the build for the web too), and ``fetch-files.mjs`` lets node run
   the modules of a page as a browser does, to test them (see `Check it,
   without a browser`_);
-- ``examples/``: what an ``embed/`` directory has is embedded in what is
-  built, what a ``public/`` directory has is served. ``examples/embed/`` has a
-  few PHP scripts, embedded in every stack at ``/examples``,
-  ``examples/playground/`` a page that runs them, ``examples/notes/`` a
-  page that keeps notes in SQLite, and ``examples/symfony/`` a page that runs
-  a Symfony application (see `Playing with it`_);
+- ``examples/``: a page each, with its stack in ``stack.php``, what is served
+  in ``public/``, and what is embedded in ``app/``. ``examples/playground/``
+  runs the PHP typed in it, ``examples/symfony/`` a Symfony application (see
+  `Playing with it`_);
 - ``stacks.php``, ``src/`` and ``castor.php``: named builds, a ``build()``
   function, and castor tasks to build, run and check them (see `Stacks, and
   castor`_);
-- ``tests/``: the tests of the JavaScript API, and of ``fetch-files.mjs``.
+- ``tests/``: the tests of the JavaScript API, and of ``fetch-files.mjs``, and
+  what the ``php-8.5-opcache-precompiled`` stack embeds.
 
 Credits
 -------

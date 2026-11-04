@@ -18,12 +18,13 @@ use function Castor\run;
  *
  * @internal
  */
-const DEFAULT_STACK = 'default';
+const DEFAULT_STACK = 'php-8.5';
 
 /**
  * The stacks of this repository, that the tasks of castor.php build: the ones
- * of stacks.php, and of stacks.override.php when there is one, that replace
- * the ones that have the same name.
+ * of stacks.php, the one of each example, in its stack.php, and the ones of
+ * stacks.override.php when there is one, that replace the ones that have the
+ * same name.
  *
  * @return array<string, Stack> by name
  *
@@ -37,28 +38,74 @@ function stacks(): array
     }
 
     $stacks = [];
-    foreach (['stacks.php', 'stacks.override.php'] as $file) {
-        if (!is_file($path = builder_root() . '/' . $file)) {
-            continue;
+    $files = [builder_root() . '/stacks.php'];
+    foreach (examples() as $example) {
+        $files[] = example_stack_file($example);
+    }
+    foreach ($files as $file) {
+        foreach (declared_stacks($file) as $stack) {
+            if (isset($stacks[$stack->name])) {
+                throw new \UnexpectedValueException(\sprintf('"%s" declares the stack "%s", that another file declares already.', $file, $stack->name));
+            }
+
+            $stacks[$stack->name] = $stack;
         }
+    }
 
-        $declared = [];
-        // In a closure, so that the file only sees its own variables
-        foreach ((static fn (): array => require $path)() as $stack) {
-            if (!$stack instanceof Stack) {
-                throw new \UnexpectedValueException(\sprintf('"%s" must return a list of "%s".', $path, Stack::class));
-            }
-            // A stack derived from another one, and not renamed
-            if (isset($declared[$stack->name])) {
-                throw new \UnexpectedValueException(\sprintf('"%s" declares the stack "%s" twice.', $path, $stack->name));
-            }
-
-            $declared[$stack->name] = true;
+    if (is_file($override = builder_root() . '/stacks.override.php')) {
+        foreach (declared_stacks($override) as $stack) {
             $stacks[$stack->name] = $stack;
         }
     }
 
     return $stacks;
+}
+
+/**
+ * The examples: the directories of examples/ that have a stack.php, the stack
+ * of their page.
+ *
+ * @return list<string>
+ *
+ * @internal
+ */
+function examples(): array
+{
+    return array_map(static fn (string $file): string => basename(\dirname($file)), glob(builder_root() . '/examples/*/stack.php') ?: []);
+}
+
+/**
+ * @internal
+ */
+function example_stack_file(string $example): string
+{
+    return builder_root() . "/examples/{$example}/stack.php";
+}
+
+/**
+ * The stacks that a file declares: a list of them, as stacks.php does, or
+ * one, as the stack.php of an example does.
+ *
+ * @return list<Stack>
+ *
+ * @internal
+ */
+function declared_stacks(string $file): array
+{
+    // In a closure, so that the file only sees its own variables
+    $declared = (static fn (): mixed => require $file)();
+    $declared = $declared instanceof Stack ? [$declared] : $declared;
+    if (!\is_array($declared) || !array_is_list($declared) || [] !== array_filter($declared, static fn (mixed $stack): bool => !$stack instanceof Stack)) {
+        throw new \UnexpectedValueException(\sprintf('"%s" must return a "%s", or a list of them.', $file, Stack::class));
+    }
+
+    $names = array_map(static fn (Stack $stack): string => $stack->name, $declared);
+    // A stack derived from another one, and not renamed
+    if ([] !== $twice = array_diff_assoc($names, array_unique($names))) {
+        throw new \UnexpectedValueException(\sprintf('"%s" declares the stack "%s" twice.', $file, reset($twice)));
+    }
+
+    return $declared;
 }
 
 /**

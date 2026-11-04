@@ -1,11 +1,5 @@
 target "default" {
   context = "docker"
-  contexts = {
-    embed = "./examples/embed"
-  }
-  args = {
-    EMBED_AT = "/examples"
-  }
-  output = ["type=local,dest=./build/default"]
+  output = ["type=local,dest=./build/php-8.5"]
   tags = ["php-wasm"]
 }

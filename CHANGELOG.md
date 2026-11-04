@@ -34,11 +34,31 @@
   then.
 * opcache is disabled, unless it has its files: in WASM, it can not start
   without them.
-* The `symfony` stack makes the cache of Symfony when it is built: the page
-  starts in 0.2 s, instead of 0.6 s. The `symfony-runtime` and
-  `symfony-precompiled` stacks have opcache too.
+* The Symfony example makes the cache of Symfony when it is built, and
+  opcache compiles its files as they run: it starts in 0.4 s instead of
+  0.6 s, a request takes 35 ms instead of 115 ms, in node.
 * BC break: `icuData()` of a stack takes an `IcuData`,
   `->icuData(IcuData::None)`, instead of a string.
+* The stacks are renamed after what they are. `stacks.php` has the builds:
+  `php-8.5` instead of `default` (in `build/php-8.5/`, as what `docker buildx
+  bake` builds), `php-8.5-intl` instead of `intl`, and
+  `php-8.5-opcache-runtime` and `php-8.5-opcache-precompiled`.
+  `intl-without-data` and `full-without-intl-data` are gone: the playground
+  has every extension, intl without ICU's data.
+* Each example is a directory, laid out as a project would be: its stack in
+  `stack.php` (`example-playground`, `example-symfony`), what the browser
+  loads in `public/`, the PHP code it embeds in `app/`, and a README that says
+  how it is wired. Their pages are redone: each says what it shows, what to
+  try, and how it works.
+* The notes example is gone: the Symfony one keeps its SQLite database in
+  IndexedDB too. `examples/embed/` is gone, and nothing is embedded by
+  default: `EMBED_AT` is empty, and `docker-bake.hcl` gives no `embed`
+  context.
+* `castor wasm:serve` takes `--php`, `--with` and `--opcache`, as `castor
+  wasm:build`, instead of `--stack`: the page keeps what its stack needs.
+  `castor wasm:serve playground --php 8.3.35`.
+* `castor wasm:stacks` lists, for each stack, what it embeds, its warmup and
+  its opcache too.
 
 ## 0.9.0 (2026-11-02)
 

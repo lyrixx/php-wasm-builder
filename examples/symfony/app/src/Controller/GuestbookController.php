@@ -22,8 +22,8 @@ final class GuestbookController extends AbstractController
         // Who signed last, in this session
         $message->author = $session->get('author', '');
         $form = $this->createFormBuilder($message)
-            ->add('author')
-            ->add('text', TextareaType::class)
+            ->add('author', null, ['label' => 'Your name'])
+            ->add('text', TextareaType::class, ['label' => 'Your message'])
             ->add('sign', SubmitType::class)
             ->getForm()
             ->handleRequest($request);
@@ -37,20 +37,9 @@ final class GuestbookController extends AbstractController
             return $this->redirectToRoute('guestbook');
         }
 
-        $session->set('views', $session->get('views', 0) + 1);
-
         return $this->render('guestbook/index.html.twig', [
             'form' => $form,
             'messages' => $entityManager->getRepository(Message::class)->findBy([], ['id' => 'DESC']),
-            'views' => $session->get('views'),
         ]);
-    }
-
-    #[Route('/forget-me', name: 'forget_me', methods: ['POST'])]
-    public function forgetMe(Request $request): Response
-    {
-        $request->getSession()->invalidate();
-
-        return $this->redirectToRoute('guestbook');
     }
 }

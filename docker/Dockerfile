@@ -330,7 +330,8 @@ RUN \
     emmake make -j`nproc`
 
 # The directory to embed in the WASM filesystem is the named build context
-# "embed" (empty unless given, see docker-bake.hcl), it shows up at $EMBED_AT
+# "embed", empty unless given. It shows up at $EMBED_AT: nothing is embedded
+# when EMBED_AT is empty.
 FROM scratch AS embed
 
 # Compile run.c and spawn.c
@@ -339,7 +340,7 @@ COPY --from=resolve /plan/opcache /plan/opcache
 COPY run.c spawn.c /local/src/
 RUN <<EOF
 set -eu
-if [ -n "$(cat /plan/opcache)" ] && ! emar t php-src/.libs/libphp.a | grep -qx ZendAccelerator.o; then
+if [ -n "$(cat /plan/opcache)" ] && ! emar t php-src/.libs/libphp.a | grep -x ZendAccelerator.o > /dev/null; then
     echo "OPCACHE needs opcache, that PHP builds since 8.5 only" >&2
     exit 1
 fi
@@ -383,7 +384,7 @@ COPY --from=resolve /plan/link /plan/link
 # (NODEFS): what it writes in them is embedded. Nothing happens without
 # WARMUP, nor OPCACHE=precompiled.
 FROM objects AS warm
-ARG EMBED_AT=/examples
+ARG EMBED_AT=""
 ARG MEMORY=128mb
 ARG OPCACHE=none
 ARG WARMUP=""
@@ -405,7 +406,7 @@ EOF
 # Link everything, with what is embedded, and the cache of opcache that the
 # warm stage made
 FROM objects AS link
-ARG EMBED_AT=/examples
+ARG EMBED_AT=""
 ARG MEMORY=128mb
 COPY api.js worker.js /local/src/
 COPY --from=warm /embed /embed

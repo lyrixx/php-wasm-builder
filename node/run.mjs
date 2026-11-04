@@ -24,7 +24,7 @@ let args;
 try {
     args = parseArgs({
         options: {
-            build: { type: 'string', default: fileURLToPath(new URL('../build/default/php-node.mjs', import.meta.url)) },
+            build: { type: 'string', default: fileURLToPath(new URL('../build/php-8.5/php-node.mjs', import.meta.url)) },
             code: { type: 'string', short: 'r' },
         },
         allowPositionals: true,
