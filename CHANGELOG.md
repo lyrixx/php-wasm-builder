@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+* Fix: the C stack is 1 MB, and checked. It was the 64 KB of emscripten: PHP
+  overflowed it without a word through the callbacks of its functions
+  (Symfony, when it compiles its container), and wrote over its own memory.
+  A stack that overflows aborts the module now.
+
 ## 0.9.0 (2026-11-02)
 
 * Add the `fileinfo` extension, with the libmagic and the database that come

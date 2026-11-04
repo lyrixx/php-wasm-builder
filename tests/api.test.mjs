@@ -84,6 +84,13 @@ test('proc_open() fails, there is no other process to run: the module goes on', 
     ]);
 });
 
+test('PHP goes deep through the callbacks of its functions: the C stack is not the default one of emscripten', async () => {
+    // 64 KB overflow before 400, and nothing says so
+    const code = 'function deeper($n) { return $n ? array_map(fn () => deeper($n - 1), [1])[0] : "deep enough"; } echo deeper(1000);';
+
+    assert.equal((await php.runCode(code)).stdout, 'deep enough');
+});
+
 test('each run is a request of its own, the files stay', async () => {
     await php.runCode('$GLOBALS["previous"] = true; file_put_contents("/tmp/previous.txt", "kept");');
 

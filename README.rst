@@ -168,9 +168,9 @@ of its variables. The files stay, until the page goes away.
 ``createPhp()`` takes the options of the ``Module`` of emscripten too, for
 example ``locateFile`` to load the ``.wasm`` file from somewhere else.
 
-A run that takes all the memory of the module (``MEMORY``) aborts it, and the
-promise is rejected: what is in its memory can not be trusted anymore, create
-another one.
+A run that takes all the memory of the module (``MEMORY``), or all of its
+stack (see `Limitations`_), aborts it, and the promise is rejected: what is in
+its memory can not be trusted anymore, create another one.
 
 Options
 -------
@@ -401,6 +401,14 @@ Limitations
     There is no other program to run: ``proc_open()`` (and Symfony Process),
     ``exec()``, ``system()``, ``shell_exec()`` and ``popen()`` fail, with a
     warning.
+
+- Stack
+    PHP calls itself back in C through the callbacks of its functions
+    (``array_map()``, ``usort()``…). The C stack of the module is 1 MB, and
+    the one of the JavaScript engine about as big: a recursion goes about
+    2,000 callbacks deep, in node. Deeper, one of them overflows, and the
+    promise is rejected. PHP does not know where the stack ends, there is no
+    ``zend.max_allowed_stack_size``.
 
 Stacks, and castor
 ------------------
