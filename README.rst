@@ -285,13 +285,14 @@ page is where everything that is not Symfony is.
   its ``localStorage``.
 - The frame: the application is in an ``<iframe>``, where links, forms,
   redirections and the history work as anywhere. A service worker,
-  ``public/sw.js``, hands what the frame asks for to the page, that runs
-  ``php.request()``, and keeps the cookies: the browser drops the ones of a
-  response that a service worker makes. PHP does not run in the service
-  worker: the browser stops it when it has nothing to do, and PHP would forget
-  its files. The service worker gives PHP the ``Referer`` too, that it does
-  not see as a header: the stateless CSRF protection, that the recipes of
-  Symfony enable, checks it when there is no ``Origin``.
+  ``public/sw.js``, hands what the frame asks for to the page, that keeps the
+  cookies, and runs ``php.request()`` in a worker (see `PHP in a worker`_):
+  the browser drops the cookies of a response that a service worker makes.
+  PHP does not run in the service worker: the browser stops it when it has
+  nothing to do, and PHP would forget its files. The service worker gives PHP
+  the ``Referer`` too, that it does not see as a header: the stateless CSRF
+  protection, that the recipes of Symfony enable, checks it when there is no
+  ``Origin``.
 
 What there is not: the network, for an HTTP client or a database server, nor
 another process (see `Limitations`_).
