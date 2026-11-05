@@ -135,6 +135,12 @@
         }
     }
 
+    // What FS throws only has an errno. Its message is made when it is read:
+    // PHP goes through it each time a file does not exist
+    Module['preRun'] = [].concat(Module['preRun'] ?? [], () => {
+        Object.defineProperty(FS.ErrnoError.prototype, 'message', { get() { return UTF8ToString(_strerror(this.errno)); } });
+    });
+
     // A directory kept in IndexedDB, across the reloads of the page
     const persist = Module['persist'];
     if (persist) {

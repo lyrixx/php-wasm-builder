@@ -527,7 +527,7 @@ environment=$2
 shift 2
 emcc -o "$output" \
     -s STACK_SIZE=1mb -s STACK_OVERFLOW_CHECK=2 \
-    -s EXPORTED_FUNCTIONS=_free,_malloc,_run_code,_run_file,_run_request \
+    -s EXPORTED_FUNCTIONS=_free,_malloc,_run_code,_run_file,_run_request,_strerror \
     --pre-js api.js \
     -s ENVIRONMENT=$environment \
     -s INITIAL_MEMORY=$MEMORY -s ALLOW_MEMORY_GROWTH=0 \

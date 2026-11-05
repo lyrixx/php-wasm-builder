@@ -56,6 +56,10 @@ webTest('an answer that can not be copied rejects the promise, and says why: PHP
     assert.equal((await ask('runCode', ['echo "Still running";'])).result.stdout, 'Still running');
 });
 
-webTest('an error of the filesystem gets to the page', async () => {
-    assert.ok('error' in await ask('FS', ['mkdir', ['/tmp/missing/directory']]));
+webTest('an error of the filesystem gets to the page, and says what is wrong', async () => {
+    const { error } = await ask('FS', ['mkdir', ['/tmp/missing/directory']]);
+
+    assert.equal(error.name, 'ErrnoError');
+    assert.equal(error.message, 'No such file or directory');
+    assert.equal(typeof error.errno, 'number');
 });

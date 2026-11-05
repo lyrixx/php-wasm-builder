@@ -37,6 +37,10 @@ test('runCode() returns what PHP writes, as it is written', async () => {
     });
 });
 
+test('what FS throws says what is wrong', () => {
+    assert.throws(() => php.FS.mkdir('/tmp/missing/directory'), { name: 'ErrnoError', message: 'No such file or directory' });
+});
+
 test('runCode() returns the exit status of PHP', async () => {
     assert.equal((await php.runCode('exit(3);')).exitCode, 3);
     assert.equal((await php.runCode('throw new Exception();')).exitCode, 255);

@@ -7,6 +7,8 @@
 * In a worker, `FS.mkdir()`, `FS.symlink()` and what else creates a file resolve
   their promise: they worked, and rejected it, as their node can not be copied.
   What can not be copied says so, in a message that can be read.
+* What `FS` throws has a `message`, as `No such file or directory`: it only had
+  its `errno`.
 
 ## 0.12.1 (2026-11-05)
 

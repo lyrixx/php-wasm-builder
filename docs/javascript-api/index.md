@@ -42,7 +42,8 @@ files stay, until the page goes away.
 [its API](https://emscripten.org/docs/api_reference/Filesystem-API.html)), to give files to PHP, or
 read the ones it writes: `php.FS.writeFile('/tmp/input.json', data)`,
 `php.FS.readFile('/tmp/output.png')`. What is embedded is there too: PHP can write over it, in
-memory, as over the other files.
+memory, as over the other files. What fails throws an `ErrnoError`, that is not an `Error`: its
+`message` says why, as `No such file or directory`, and it has an `errno`.
 
 ## Options
 

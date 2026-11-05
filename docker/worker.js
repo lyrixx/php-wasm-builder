@@ -61,6 +61,19 @@ export async function createPhpInWorker(options = {}) {
     };
 }
 
+function errorForThePage(error, args) {
+    // Its message is the source code of what can not be copied
+    if ('DataCloneError' === error.name) {
+        return new Error(`FS.${args[0]}() returns what can not be copied to the page.`);
+    }
+    // Its message comes from its class, that a copy does not have
+    if ('ErrnoError' === error.name) {
+        return { name: error.name, errno: error.errno, message: error.message };
+    }
+
+    return error;
+}
+
 if ('undefined' !== typeof WorkerGlobalScope && PHP_WORKER_NAME === self.name) {
     let php;
 
@@ -86,8 +99,7 @@ if ('undefined' !== typeof WorkerGlobalScope && PHP_WORKER_NAME === self.name) {
             // The body of a response is not copied
             port.postMessage({ result }, 'request' === method ? [result.body.buffer] : []);
         } catch (error) {
-            // Its message is the source code of what can not be copied
-            port.postMessage({ error: 'DataCloneError' === error.name ? new Error(`FS.${args[0]}() returns what can not be copied to the page.`) : error });
+            port.postMessage({ error: errorForThePage(error, args) });
         }
     };
 }
