@@ -13,6 +13,10 @@
 #   libiconv
 #   openssl
 #   sqlite
+#   zlib
+#   libpng
+#   libjpeg
+#   libwebp
 #   php         configures and compiles PHP
 #   objects     compiles run.c and spawn.c
 #   warm        runs WARMUP, and compiles the PHP files with opcache
@@ -37,6 +41,7 @@ set -eu
 mkdir -p /plan
 
 flags=""
+gd=0
 libiconv=0
 libxml2=0
 oniguruma=0
@@ -48,16 +53,17 @@ sqlite=0
 # Keep in sync with Stack::EXTENSIONS, in src/Stack.php
 for extension in $(printf '%s\n' $EXTENSIONS | sort -u); do
     case $extension in
-        bcmath|calendar|ctype|fileinfo|filter|session|tokenizer) flags="$flags --enable-$extension" ;;
-        dom|simplexml|xml|xmlreader|xmlwriter)                   flags="$flags --enable-$extension"; libxml2=1 ;;
-        iconv)                                                   flags="$flags --with-iconv=/local/install"; libiconv=1 ;;
-        libxml)                                                  libxml2=1 ;;
-        mbstring)                                                flags="$flags --enable-mbstring"; oniguruma=1 ;;
-        intl)                                                    flags="$flags --enable-intl"; icu=1 ;;
-        openssl)                                                 flags="$flags --with-openssl"; openssl=1 ;;
-        pdo)                                                     pdo=1 ;;
-        pdo_sqlite)                                              flags="$flags --with-pdo-sqlite"; pdo=1; sqlite=1 ;;
-        sqlite3)                                                 flags="$flags --with-sqlite3"; sqlite=1 ;;
+        bcmath|calendar|ctype|exif|fileinfo|filter|session|tokenizer) flags="$flags --enable-$extension" ;;
+        dom|simplexml|xml|xmlreader|xmlwriter)                        flags="$flags --enable-$extension"; libxml2=1 ;;
+        gd)                                                           flags="$flags --enable-gd --with-jpeg --with-webp"; gd=1 ;;
+        iconv)                                                        flags="$flags --with-iconv=/local/install"; libiconv=1 ;;
+        libxml)                                                       libxml2=1 ;;
+        mbstring)                                                     flags="$flags --enable-mbstring"; oniguruma=1 ;;
+        intl)                                                         flags="$flags --enable-intl"; icu=1 ;;
+        openssl)                                                      flags="$flags --with-openssl"; openssl=1 ;;
+        pdo)                                                          pdo=1 ;;
+        pdo_sqlite)                                                   flags="$flags --with-pdo-sqlite"; pdo=1; sqlite=1 ;;
+        sqlite3)                                                      flags="$flags --with-sqlite3"; sqlite=1 ;;
         *) echo "Unknown extension '$extension'" >&2; exit 1 ;;
     esac
 done
@@ -84,6 +90,10 @@ if [ $openssl = 1 ]; then
 fi
 if [ $sqlite = 1 ]; then
     link="$link /local/install/lib/libsqlite3.a"
+fi
+if [ $gd = 1 ]; then
+    # libpng needs zlib, and libwebp libsharpyuv: they come after them
+    link="$link /local/install/lib/libpng16.a /local/install/lib/libz.a /local/install/lib/libjpeg.a /local/install/lib/libwebp.a /local/install/lib/libsharpyuv.a"
 fi
 if [ $icu = 1 ]; then
     # The icu stage builds both: libicudata.a is the empty stub that ICU
@@ -124,6 +134,7 @@ esac
 echo "$flags" > /plan/configure
 echo "$opcache" > /plan/opcache
 echo "$link" > /plan/link
+echo "$gd" > /plan/gd
 echo "$libiconv" > /plan/libiconv
 echo "$libxml2" > /plan/libxml2
 echo "$oniguruma" > /plan/oniguruma
@@ -301,6 +312,69 @@ emar rcs /local/install/lib/libsqlite3.a sqlite3.o
 cp sqlite3.h sqlite3ext.h /local/install/include/
 EOF
 
+# Compile zlib, that libpng needs
+FROM base AS zlib
+ARG ZLIB_VERSION=1.3.2
+COPY --from=resolve /plan/gd /plan/gd
+RUN <<EOF
+set -eu
+[ "$(cat /plan/gd)" = 1 ] || exit 0
+git clone https://github.com/madler/zlib --branch v$ZLIB_VERSION --single-branch --depth 1
+cd zlib
+emconfigure ./configure --static --prefix=/local/install
+emmake make -j`nproc` libz.a
+emmake make install
+EOF
+
+# Compile libpng, for gd
+FROM base AS libpng
+ARG LIBPNG_VERSION=1.6.59
+COPY --from=resolve /plan/gd /plan/gd
+COPY --from=zlib /local/install /local/install
+RUN <<EOF
+set -eu
+[ "$(cat /plan/gd)" = 1 ] || exit 0
+git clone https://github.com/pnggroup/libpng --branch v$LIBPNG_VERSION --single-branch --depth 1
+cd libpng
+# CMAKE_FIND_ROOT_PATH: emscripten only looks for zlib in its own directories
+emcmake cmake -S . -B out -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/local/install -DCMAKE_INSTALL_LIBDIR=lib \
+    -DCMAKE_FIND_ROOT_PATH=/local/install \
+    -DPNG_SHARED=OFF -DPNG_TESTS=OFF -DPNG_TOOLS=OFF -DPNG_HARDWARE_OPTIMIZATIONS=OFF
+emmake make -C out -j`nproc` install
+EOF
+
+# Compile libjpeg-turbo, for gd
+FROM base AS libjpeg
+ARG LIBJPEG_TURBO_VERSION=3.2.1
+COPY --from=resolve /plan/gd /plan/gd
+RUN <<EOF
+set -eu
+[ "$(cat /plan/gd)" = 1 ] || exit 0
+git clone https://github.com/libjpeg-turbo/libjpeg-turbo --branch $LIBJPEG_TURBO_VERSION --single-branch --depth 1
+cd libjpeg-turbo
+# Its SIMD code is assembly, for x86 and ARM
+emcmake cmake -S . -B out -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/local/install -DCMAKE_INSTALL_LIBDIR=lib \
+    -DENABLE_SHARED=OFF -DWITH_SIMD=OFF -DWITH_TURBOJPEG=OFF -DWITH_TOOLS=OFF -DWITH_TESTS=OFF
+emmake make -C out -j`nproc` install
+EOF
+
+# Compile libwebp, for gd
+FROM base AS libwebp
+ARG LIBWEBP_VERSION=1.6.0
+COPY --from=resolve /plan/gd /plan/gd
+RUN <<EOF
+set -eu
+[ "$(cat /plan/gd)" = 1 ] || exit 0
+git clone https://github.com/webmproject/libwebp --branch v$LIBWEBP_VERSION --single-branch --depth 1
+cd libwebp
+# No threads, and only the library: its tools need more libraries
+emcmake cmake -S . -B out -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/local/install -DCMAKE_INSTALL_LIBDIR=lib \
+    -DWEBP_USE_THREAD=OFF -DWEBP_ENABLE_SIMD=OFF -DWEBP_BUILD_ANIM_UTILS=OFF -DWEBP_BUILD_CWEBP=OFF -DWEBP_BUILD_DWEBP=OFF \
+    -DWEBP_BUILD_GIF2WEBP=OFF -DWEBP_BUILD_IMG2WEBP=OFF -DWEBP_BUILD_VWEBP=OFF -DWEBP_BUILD_WEBPINFO=OFF \
+    -DWEBP_BUILD_LIBWEBPMUX=OFF -DWEBP_BUILD_WEBPMUX=OFF -DWEBP_BUILD_EXTRAS=OFF
+emmake make -C out -j`nproc` install
+EOF
+
 # Configure and compile PHP
 FROM php-src AS php
 COPY --from=oniguruma /local/install /local/install
@@ -309,6 +383,10 @@ COPY --from=icu /local/install /local/install
 COPY --from=libiconv /local/install /local/install
 COPY --from=openssl /local/install /local/install
 COPY --from=sqlite /local/install /local/install
+COPY --from=libjpeg /local/install /local/install
+# With zlib
+COPY --from=libpng /local/install /local/install
+COPY --from=libwebp /local/install /local/install
 COPY --from=resolve /plan/configure /plan/configure
 
 ENV ONIG_LIBS="-L/local/install"
@@ -318,7 +396,8 @@ ENV LIBXML_CFLAGS="-I/local/install/include/libxml2"
 # What pkg-config would give, SQLite is not installed with its .pc file
 ENV SQLITE_CFLAGS="-I/local/install/include"
 ENV SQLITE_LIBS="-L/local/install/lib -lsqlite3"
-# intl finds ICU, and its version, with pkg-config, and openssl finds OpenSSL
+# intl finds ICU, and its version, with pkg-config, openssl finds OpenSSL, and
+# gd its libraries
 ENV EM_PKG_CONFIG_PATH=/local/install/lib/pkgconfig
 
 RUN cd php-src && \

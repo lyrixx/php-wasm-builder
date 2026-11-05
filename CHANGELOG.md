@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+* Add the `gd` extension, with zlib 1.3.2, libpng 1.6.59, libjpeg-turbo 3.2.1
+  and libwebp 1.6.0 (`ZLIB_VERSION`, `LIBPNG_VERSION`,
+  `LIBJPEG_TURBO_VERSION`, `LIBWEBP_VERSION`).
+* Add the `exif` extension.
+
 ## 0.10.0 (2026-11-05)
 
 ### Features
