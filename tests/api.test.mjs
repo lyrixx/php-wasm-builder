@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { before, test } from 'node:test';
 import { pathToFileURL } from 'node:url';
@@ -12,6 +13,15 @@ import { pathToFileURL } from 'node:url';
 // createPhpInWorker(): a Web Worker.
 
 const build = process.env.BUILD ? pathToFileURL(path.resolve(process.env.BUILD)) : new URL('../build/php-8.5/php-node.mjs', import.meta.url);
+
+// What tests/embed/constants.php prints
+const CONSTANTS_ATTRIBUTES = '[["first"],["second"]]';
+
+const isCached = (php, file) => {
+    const [systemId] = php.FS.readdir('/opcache').filter((name) => '.' !== name && '..' !== name);
+
+    return php.FS.analyzePath(`/opcache/${systemId}${file}.bin`).exists;
+};
 
 let php;
 before(async () => {
@@ -334,4 +344,37 @@ test('opcache compiles a file once, for the next runs, with its file cache', asy
     assert.equal(count('/opcache'), written);
     // One system_id, the one of the build when it compiled what is embedded
     assert.equal(fresh.FS.readdir('/opcache').length, 3);
+});
+
+test('a constant keeps its attributes in the file cache of opcache', async (t) => {
+    if (!php.FS.analyzePath('/opcache').exists) {
+        t.skip('opcache has no file cache in this build');
+
+        return;
+    }
+
+    // A module of its own: a crash would take the next tests with it
+    const { default: createPhp } = await import(build);
+    const fresh = await createPhp();
+    fresh.FS.writeFile('/tmp/constants.php', readFileSync(new URL('embed/constants.php', import.meta.url)));
+    // A file written less than 2 s before is not cached: nothing would fail
+    fresh.FS.utime('/tmp/constants.php', 1000, 1000);
+
+    assert.equal((await fresh.runFile('/tmp/constants.php')).stdout, CONSTANTS_ATTRIBUTES);
+    assert.ok(isCached(fresh, '/tmp/constants.php'));
+    assert.equal((await fresh.runFile('/tmp/constants.php')).stdout, CONSTANTS_ATTRIBUTES);
+});
+
+test('a constant keeps its attributes in what the build compiled', async (t) => {
+    if (!php.FS.analyzePath('/tests/constants.php').exists) {
+        t.skip('nothing is compiled with this file in this build');
+
+        return;
+    }
+
+    const { default: createPhp } = await import(build);
+    const fresh = await createPhp();
+
+    assert.ok(isCached(fresh, '/tests/constants.php'));
+    assert.equal((await fresh.runFile('/tests/constants.php')).stdout, CONSTANTS_ATTRIBUTES);
 });
