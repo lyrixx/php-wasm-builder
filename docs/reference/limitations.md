@@ -12,6 +12,26 @@ range, cast to an int, gives a wrong int, and PHP 8.5 warns (`The float … is n
 an int`): a timestamp in milliseconds, for example, as `getTimestampMs()` of Carbon gives, and as
 the `schedule:interrupt` command of Laravel 13 stores.
 
+## Network
+
+PHP can not reach the network, and it can not wait for the browser in the middle of a run. There is
+no curl, `http://` and `https://` URLs fail (`Failed to open stream`), and so does what is built on
+them, as Symfony HttpClient and Guzzle.
+
+Sockets are a trap: `fsockopen()` and `stream_socket_client()` do not fail. They give a socket,
+`fwrite()` says it wrote, and `fread()` times out. `gethostbyname()` gives a made-up address, and in
+a browser, emscripten tries to open a WebSocket to the host.
+
+What PHP needs from the network comes from JavaScript: `fetch()` it before the run, and give it to
+PHP, on `php://stdin` or in a file of the WASM filesystem. As any `fetch()` of a page, it needs the
+CORS headers of the server:
+
+```js
+const response = await fetch('https://api.example.com/rates');
+
+const { stdout } = await php.runFile('/app/report.php', { stdin: await response.text() });
+```
+
 ## Processes
 
 There is no other program to run: `proc_open()` (and Symfony Process), `exec()`, `system()`,

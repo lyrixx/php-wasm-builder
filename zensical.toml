@@ -40,6 +40,7 @@ nav = [
     "reference/opcache.md",
     "reference/sizes.md",
     "reference/limitations.md",
+    "reference/backward-compatibility.md",
   ] },
   { "This repository" = [
     "repository/index.md",
