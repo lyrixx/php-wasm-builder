@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+* With `OPCACHE`, a file with attributes on its constants, as
+  `symfony/polyfill-uuid` has, does not crash PHP anymore: PHP 8.5.12 and before
+  get the fix of PHP 8.5.13.
+
 ## 0.12.0 (2026-11-05)
 
 ### Features

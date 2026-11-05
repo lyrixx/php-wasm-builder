@@ -472,6 +472,21 @@ RUN cd php-src && \
     --disable-all --without-pcre-jit --disable-fiber-asm --disable-cgi --disable-cli --disable-phpdbg \
     $(cat /plan/configure)
 
+# On 32 bits, the file cache of opcache breaks the attributes of constants, that
+# PHP 8.5 brings: the script that runs gets an offset for them, and the file a
+# raw pointer. PHP crashes on such a file, or loses them
+# (https://github.com/php/php-src/issues/24745). PHP 8.5.13 has this fix: it
+# goes, with the patch, once every stack has it.
+COPY php-gh-24745.patch /local/src/
+RUN <<EOF
+set -eu
+cd php-src
+version=$(sed -n 's/^#define PHP_VERSION_ID //p' main/php_version.h)
+if [ "$version" -ge 80500 ] && [ "$version" -lt 80513 ]; then
+    git apply /local/src/php-gh-24745.patch
+fi
+EOF
+
 RUN \
     cd php-src && \
     emmake make -j`nproc`
