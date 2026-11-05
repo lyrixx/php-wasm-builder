@@ -39,7 +39,7 @@ await serveInFrame(php, { frame: document.getElementById('frame'), documentRoot:
 // sw.js
 importScripts('./build/php-sw.js');
 
-forwardToPhp({ under: 'app/' });
+forwardToPhp();
 ```
 
 ## On its own page, PHP in the service worker

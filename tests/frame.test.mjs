@@ -104,7 +104,7 @@ webTest('forwardToPhp() adds its listeners as it is called', async () => {
 });
 
 webTest('forwardToPhp() takes what is under the application to the page, except the files of the website', async () => {
-    const sw = await serviceWorker({ pages: [page(directory)], options: { under: 'app/', except: ['app/bundles/'] } });
+    const sw = await serviceWorker({ pages: [page(directory)], options: { except: ['app/bundles/'] } });
 
     assert.equal(await (await sw.fetch(new Request(`${app}admin`))).text(), 'From PHP');
     assert.equal(sw.fetch(new Request(`${app}bundles/style.css`)), undefined);
@@ -113,8 +113,11 @@ webTest('forwardToPhp() takes what is under the application to the page, except 
     assert.equal(sw.fetch(new Request(`https://cdn.example.com/repository/app/admin`)), undefined);
 });
 
-webTest('forwardToPhp() does not start for another directory than serveInFrame()', async () => {
-    await assert.rejects(serviceWorker({ options: { under: 'site/' } }), /give both the same under option/);
+webTest('forwardToPhp() takes what is in the scope that serveInFrame() gives it', async () => {
+    const sw = await serviceWorker({ pages: [page(directory)], scope: `${directory}site/` });
+
+    assert.equal(await (await sw.fetch(new Request(`${directory}site/admin`))).text(), 'From PHP');
+    assert.equal(sw.fetch(new Request(`${app}admin`)), undefined);
 });
 
 webTest('forwardToPhp() only hands over to the page next to it: others are clients too', async () => {

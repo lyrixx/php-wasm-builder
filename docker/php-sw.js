@@ -10,23 +10,19 @@
 // Service-Worker-Allowed header that lifts this.
 
 /**
- * Takes what is asked for under a directory to the page. Both are relative to
- * the service worker, as the page is: `index.html`, next to it.
+ * Takes what is asked for in its scope, where serveInFrame() registers it, to
+ * the page: `index.html`, next to it.
  *
  * To call as the script is first evaluated: the browser ignores a listener
  * added later.
  *
- * @param {string}   under  the directory of the application, as serveInFrame() has it
- * @param {string[]} except what is in it, and needs no PHP: files of the website
+ * @param {string[]} except what is in the scope and needs no PHP, relative to the
+ *                          service worker: files of the website
  */
-function forwardToPhp({ under = 'app/', except = [] } = {}) {
-    const app = new URL(under, self.location).href;
+function forwardToPhp({ except = [] } = {}) {
+    const app = self.registration.scope;
     const files = except.map((path) => new URL(path, self.location).href);
     const index = new URL('./', self.location).pathname;
-
-    if (app !== self.registration.scope) {
-        throw new Error(`forwardToPhp() takes what is under ${app}, and serveInFrame() registers it for ${self.registration.scope}: give both the same under option.`);
-    }
 
     self.addEventListener('install', () => self.skipWaiting());
     self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));

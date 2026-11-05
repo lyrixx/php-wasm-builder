@@ -22,7 +22,7 @@ in an `<iframe>`, with a service worker: the page only says what is its own.
 // sw.js
 importScripts('./build/php-sw.js');
 
-forwardToPhp({ under: 'app/' });
+forwardToPhp();
 ```
 
 The frame shows `app/`, next to the page, where links, forms, redirections and the history work as
@@ -55,13 +55,12 @@ fails, the frame shows why, in a 500, and the error goes to the console.
 
 ## `forwardToPhp(options)`
 
-It must be called as the script is first evaluated: the browser ignores a listener added later. Its
-paths are relative to the service worker.
+It must be called as the script is first evaluated: the browser ignores a listener added later. It
+takes what is in its scope, the `under` option of `serveInFrame()`, to the page.
 
-| Option   | Default | What it is                                                                                                           |
-|----------|---------|----------------------------------------------------------------------------------------------------------------------|
-| `under`  | `app/`  | Where the application is in the URLs. The same as for `serveInFrame()`: the service worker does not start otherwise. |
-| `except` | `[]`    | What is in it, and needs no PHP: files of the website, that the browser asks the server for, as `['app/bundles/']`.  |
+| Option   | Default | What it is                                                                                                                                                  |
+|----------|---------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `except` | `[]`    | What is in the scope and needs no PHP, relative to the service worker: files of the website, that the browser asks the server for, as `['app/bundles/']`. |
 
 The page must be `index.html`, next to `sw.js`: the service worker looks for it among the pages of
 the origin, that are all its clients. On GitHub Pages, the ones of every repository are.
