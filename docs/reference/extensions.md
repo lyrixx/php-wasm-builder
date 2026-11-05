@@ -9,8 +9,10 @@ These are the extensions that can be listed in `EXTENSIONS` (see
 | calendar     | Built by default.         |
 | ctype        | Built by default.         |
 | dom          | Built by default.         |
+| exif         | See [exif](#exif).        |
 | fileinfo     | See [fileinfo](#fileinfo). |
 | filter       |                           |
+| gd           | See [gd](#gd).            |
 | iconv        | See [iconv](#iconv).      |
 | intl         | See [intl](#intl).        |
 | libxml       |                           |
@@ -33,6 +35,15 @@ and later).
 To add an extension, add it to the `case` of the `resolve` stage of the `docker/Dockerfile` (and a
 stage for the library that it needs, if it needs one), and to `Stack::EXTENSIONS`.
 
+## exif
+
+exif needs no library: the `.wasm` file is about 50 KB bigger. `exif_read_data()` reads the files of
+the WASM filesystem, streams and `data://` URLs:
+
+```
+docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter exif"
+```
+
 ## fileinfo
 
 fileinfo needs no library: PHP comes with libmagic and its database, compiled in the `.wasm` file,
@@ -42,6 +53,22 @@ of the WASM filesystem. The `.wasm` file is about 1.6 MB bigger (600 KB gzipped)
 ```
 docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter fileinfo"
 ```
+
+## gd
+
+gd links libpng, with zlib, libjpeg-turbo and libwebp, without their SIMD code: it reads and writes
+PNG, JPEG and WebP. PHP comes with libgd, that does GIF, BMP, WBMP and XBM by itself. There is no
+FreeType, so no `imagettftext()`, and no AVIF. The `.wasm` file is about 1.2 MB bigger (360 KB
+gzipped):
+
+```
+docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter gd"
+```
+
+An image takes 4 bytes per pixel, whatever its format, and the memory of the module does not grow:
+in the 128 MB by default, an image of 24 megapixels fits, one of 35 does not. PHP then does not fail,
+the module aborts (`Aborted(OOM)`): PHP allocates with `malloc()` in WebAssembly, `memory_limit` does
+not count what it takes. Give the module the memory of the images it opens, with `MEMORY`.
 
 ## iconv
 

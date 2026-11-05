@@ -98,6 +98,12 @@ function check_stack(Stack $stack): void
     if (\in_array('iconv', $stack->extensions, true)) {
         $problems['iconv does not transliterate'] = 'extension_loaded("iconv") && @iconv("UTF-8", "ASCII//TRANSLIT", "€") === "EUR"';
     }
+    // Each library of gd that the Dockerfile compiles, or the format is missing
+    if (\in_array('gd', $stack->extensions, true)) {
+        foreach (['jpeg', 'png', 'webp'] as $format) {
+            $problems["gd does not write and read {$format}"] = \sprintf('extension_loaded("gd") && (static function () { ob_start(); image%s(imagecreatetruecolor(8, 8)); return imagecreatefromstring(ob_get_clean()) !== false; })()', $format);
+        }
+    }
     // The size of the key is in the configuration of OpenSSL, that is embedded
     if (\in_array('openssl', $stack->extensions, true)) {
         $problems['OpenSSL does not have its configuration'] = 'extension_loaded("openssl") && @openssl_pkey_new() !== false';
