@@ -22,12 +22,15 @@
  */
 #include "sapi/embed/php_embed.h"
 #include <emscripten.h>
+#include <emscripten/heap.h>
+#include <malloc.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 
 #include "zend_exceptions.h"
 #include "zend_smart_str.h"
 #include "zend_system_id.h"
+#include "zend_virtual_cwd.h"
 #if PHP_VERSION_ID >= 80500
 #include "ext/opcache/zend_shared_alloc.h"
 #endif
@@ -71,6 +74,9 @@ static int (*embed_startup)(sapi_module_struct *module);
  */
 static char system_id[32];
 
+/* Where malloc() starts, after the data of the module */
+extern char __heap_base;
+
 #define INI_DEFAULT(name, value) \
     ZVAL_NEW_STR(&tmp, zend_string_init(value, sizeof(value) - 1, 1)); \
     zend_hash_str_update(configuration_hash, name, sizeof(name) - 1, &tmp);
@@ -84,6 +90,17 @@ static char system_id[32];
 static void ini_defaults(HashTable *configuration_hash)
 {
     zval tmp;
+    char memory_limit[16];
+    /*
+     * 7/8 of what the module has after its data, what it embeds included:
+     * malloc() gets the rest, and PHP says it went over its limit before the
+     * memory is full.
+     */
+    size_t size = snprintf(memory_limit, sizeof(memory_limit), "%zuM", (emscripten_get_heap_size() - (uintptr_t) &__heap_base) / 8 * 7 / (1024 * 1024));
+    ZVAL_NEW_STR(&tmp, zend_string_init(memory_limit, size, 1));
+    zend_hash_str_update(configuration_hash, "memory_limit", sizeof("memory_limit") - 1, &tmp);
+    /* PHP 8.5 exits over it, 200% of memory_limit: the memory of the module comes first */
+    INI_DEFAULT("memory_hard_limit_percent", "2147483647");
 #ifdef OPCACHE_FILE_CACHE
     INI_DEFAULT("opcache.file_cache", OPCACHE_FILE_CACHE);
     INI_DEFAULT("opcache.file_cache_only", "1");
@@ -103,6 +120,175 @@ __attribute__((constructor)) static void make_file_cache(void)
     mkdir(OPCACHE_FILE_CACHE, 0777);
 }
 #endif
+
+/*
+ * Zend MM takes its memory in blocks aligned on 2 MB, from mmap(), and trims
+ * what it gets to align it. The mmap() of emscripten only gives back a whole
+ * mapping: what is trimmed never is, and 4 MB are lost each time the engine
+ * starts. malloc() does not do either: its header comes before each block, the
+ * next one can only start 2 MB further, and half of the memory is lost. Zend MM
+ * takes them from the end of the memory instead, going down, as malloc() goes
+ * up: they share all of it, and meet in the middle. malloc() never gives back
+ * what it took: once the end of the memory is full, Zend MM takes what is free
+ * in malloc() too, or a run that took a lot of it would leave the next ones
+ * without memory.
+ */
+#define BLOCK_SIZE ZEND_MM_CHUNK_SIZE
+#define BLOCKS(size) (((size) + BLOCK_SIZE - 1) / BLOCK_SIZE)
+#define MEMORY_BLOCKS (emscripten_get_heap_size() / BLOCK_SIZE)
+/* Or it comes from malloc() */
+#define IS_BLOCK(chunk) blocks[(uintptr_t) (chunk) / BLOCK_SIZE]
+/* What malloc() rounds its limit up to */
+#define MALLOC_GRANULARITY 65536
+
+/* Of dlmalloc, that malloc.h does not declare */
+size_t malloc_footprint(void);
+size_t malloc_set_footprint_limit(size_t bytes);
+void *realloc_in_place(void *pointer, size_t size);
+
+/* The blocks taken, of the 4 GB that WASM can address */
+static bool blocks[(1ULL << 32) / BLOCK_SIZE];
+static bool reporting_out_of_memory = false;
+
+/* malloc() stays under the lowest block, and fails there: it does not abort */
+static void limit_malloc(void)
+{
+    size_t lowest = 0;
+
+    while (lowest < MEMORY_BLOCKS && !blocks[lowest]) {
+        lowest++;
+    }
+    malloc_set_footprint_limit(lowest * BLOCK_SIZE - ((uintptr_t) sbrk(0) - malloc_footprint()) - MALLOC_GRANULARITY);
+}
+
+#ifdef ZEND_HAS_OOM
+/*
+ * PHP 8.5 exits when the memory is full, that would throw through the run: this
+ * is the fatal error that PHP 8.4 gives there. The memory it needs to say so
+ * comes from the block that chunk_alloc() keeps.
+ */
+static ZEND_COLD ZEND_NORETURN void out_of_memory(size_t size)
+{
+    reporting_out_of_memory = true;
+    /* The stack trace of a deep recursion takes more than a block */
+    EG(fatal_error_backtrace_on) = false;
+    zend_try {
+        zend_error_noreturn(E_ERROR, "Out of memory (allocated %zu bytes) (tried to allocate %zu bytes)", zend_memory_usage(true), size);
+    } zend_end_try();
+    reporting_out_of_memory = false;
+    zend_bailout();
+}
+#endif
+
+/* Zend MM expects the header of a chunk to be 0, as with mmap() */
+static void *clear_chunk_header(void *chunk)
+{
+    return memset(chunk, 0, ZEND_MM_FIRST_PAGE * ZEND_MM_PAGE_SIZE);
+}
+
+static void *chunk_alloc(zend_mm_storage *storage, size_t size, size_t alignment)
+{
+    /* The last block is for what malloc() needs in a run, and for out_of_memory() */
+    size_t lowest = BLOCKS((uintptr_t) sbrk(0) + MALLOC_GRANULARITY) + (reporting_out_of_memory ? 0 : 1);
+    size_t free_blocks = 0;
+
+    for (size_t block = MEMORY_BLOCKS; block-- > lowest;) {
+        free_blocks = blocks[block] ? 0 : free_blocks + 1;
+        if (free_blocks == BLOCKS(size)) {
+            memset(&blocks[block], true, free_blocks);
+            limit_malloc();
+
+            return clear_chunk_header((void *) (block * BLOCK_SIZE));
+        }
+    }
+
+    void *chunk = memalign(alignment, size);
+    if (chunk) {
+        return clear_chunk_header(chunk);
+    }
+
+#ifdef ZEND_HAS_OOM
+    if (!reporting_out_of_memory) {
+        out_of_memory(size);
+    }
+#endif
+
+    return NULL;
+}
+
+static void chunk_free(zend_mm_storage *storage, void *chunk, size_t size)
+{
+    if (!IS_BLOCK(chunk)) {
+        free(chunk);
+
+        return;
+    }
+
+    memset(&blocks[(uintptr_t) chunk / BLOCK_SIZE], false, BLOCKS(size));
+    limit_malloc();
+}
+
+static bool chunk_truncate(zend_mm_storage *storage, void *chunk, size_t old_size, size_t new_size)
+{
+    if (!IS_BLOCK(chunk)) {
+        return NULL != realloc_in_place(chunk, new_size);
+    }
+
+    memset(&blocks[(uintptr_t) chunk / BLOCK_SIZE + BLOCKS(new_size)], false, BLOCKS(old_size) - BLOCKS(new_size));
+    limit_malloc();
+
+    return true;
+}
+
+static bool chunk_extend(zend_mm_storage *storage, void *chunk, size_t old_size, size_t new_size)
+{
+    if (!IS_BLOCK(chunk)) {
+        return NULL != realloc_in_place(chunk, new_size);
+    }
+
+    size_t first = (uintptr_t) chunk / BLOCK_SIZE + BLOCKS(old_size);
+    size_t end = (uintptr_t) chunk / BLOCK_SIZE + BLOCKS(new_size);
+
+    if (end > MEMORY_BLOCKS) {
+        return false;
+    }
+    for (size_t block = first; block < end; block++) {
+        if (blocks[block]) {
+            return false;
+        }
+    }
+    memset(&blocks[first], true, end - first);
+
+    return true;
+}
+
+static const zend_mm_handlers chunks = {chunk_alloc, chunk_free, chunk_truncate, chunk_extend};
+
+/*
+ * The engine starts on malloc() (USE_ZEND_ALLOC=0), as its memory manager takes
+ * no storage, then runs on Zend MM: php_module_startup() forgets about what it
+ * allocated with emalloc(), but for the current directory, allocated right
+ * after. Zend MM takes nothing from the heap it replaces.
+ */
+static int start_engine(sapi_module_struct *module)
+{
+    if (FAILURE == embed_startup(module)) {
+        return FAILURE;
+    }
+
+    /* An exit() may have gone through out_of_memory() in a previous run */
+    reporting_out_of_memory = false;
+    virtual_cwd_deactivate();
+    free(zend_mm_set_heap(zend_mm_startup_ex(&chunks, NULL, 0)));
+    virtual_cwd_activate();
+#ifdef ZEND_HAS_OOM
+    /* What the heap it replaces got from php.ini: zend_mm_startup_ex() leaves it unset */
+    zend_set_memory_hard_limit_percent(zend_ini_long(ZEND_STRL("memory_hard_limit_percent"), false));
+#endif
+    zend_set_memory_limit(PG(memory_limit));
+
+    return SUCCESS;
+}
 
 /* What api.js gets of the response once PHP sends its headers: its status, and "Name: value" lines */
 EM_JS(void, send_response_head, (int status, const char *headers, size_t length), {
@@ -148,7 +334,7 @@ static void register_variables(zval *track_vars_array)
  */
 static int start_request(sapi_module_struct *module)
 {
-    if (FAILURE == embed_startup(module)) {
+    if (FAILURE == start_engine(module)) {
         return FAILURE;
     }
 
@@ -211,7 +397,7 @@ static void start(int argc, char **argv, const char *filename, struct request wi
         embed_startup = php_embed_module.startup;
     }
     php_embed_module.name = request.variables ? REQUEST_SAPI_NAME : "embed";
-    php_embed_module.startup = request.variables ? start_request : embed_startup;
+    php_embed_module.startup = request.variables ? start_request : start_engine;
     php_embed_module.register_server_variables = register_variables;
     php_embed_module.read_post = read_post;
     php_embed_module.read_cookies = read_cookies;

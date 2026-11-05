@@ -4,11 +4,22 @@
 
 ### Features
 
+* BC break: PHP allocates with Zend MM, its own allocator, instead of
+  `malloc()`: `memory_limit` works, and `memory_get_usage()` too. Going over it,
+  or filling the memory of the module, is a fatal error of PHP: the module does
+  not abort, and the next run starts with all of its memory.
+* BC break: `memory_limit` defaults to 7/8 of what the module has after its data
+  and what it embeds, `107M` with the 128 MB by default, instead of `128M`.
 * Add the `phar` extension.
 * Add the `sodium` extension, with libsodium 1.0.22 (`LIBSODIUM_VERSION`).
 * Add the `zip` extension, with libzip 1.12.1 (`LIBZIP_VERSION`), and only
   deflate.
 * Add the `zlib` extension.
+
+### Fixes
+
+* A module does not run out of memory by itself anymore: what a run leaves is
+  gone with it. The Symfony example aborted after about 1,900 requests.
 
 ### Minor
 

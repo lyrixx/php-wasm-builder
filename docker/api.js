@@ -179,11 +179,16 @@
             headers: [],
         };
 
-        const pointers = strings.map(copyString);
-        const array = _malloc(pointers.length * 4);
-        HEAPU32.set(pointers, array / 4);
+        const pointers = [];
 
         try {
+            for (const string of strings) {
+                pointers.push(copyString(string));
+            }
+            const array = allocate(pointers.length * 4);
+            HEAPU32.set(pointers, array / 4);
+            pointers.push(array);
+
             return {
                 exitCode: callback(strings.length, array),
                 stdout: new Uint8Array(stdio.stdout),
@@ -192,7 +197,7 @@
                 headers: stdio.headers,
             };
         } finally {
-            for (const pointer of [...pointers, array]) {
+            for (const pointer of pointers) {
                 _free(pointer);
             }
             stdio = undefined;
@@ -278,8 +283,19 @@
      */
     function copyString(string) {
         const bytes = utf8Encoder.encode(string + '\0');
-        const pointer = _malloc(bytes.length);
+        const pointer = allocate(bytes.length);
         HEAPU8.set(bytes, pointer);
+
+        return pointer;
+    }
+
+    // malloc() gives 0 when the memory is full: it does not abort, and 0 is a
+    // valid address to write to, in WebAssembly
+    function allocate(size) {
+        const pointer = _malloc(size);
+        if (0 === pointer) {
+            throw new RangeError(`The memory of the module has no room for ${size} bytes.`);
+        }
 
         return pointer;
     }

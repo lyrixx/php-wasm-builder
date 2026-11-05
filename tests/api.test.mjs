@@ -219,6 +219,63 @@ test('a run of the php command after a request is not a request', async () => {
     assert.match(stdout, /X-Not: sent/);
 });
 
+test('going over memory_limit is a fatal error of PHP: the module goes on', async () => {
+    const { exitCode, stdout } = await php.runCode('register_shutdown_function(function () { echo "shut down"; }); $strings = []; while (true) { $strings[] = str_repeat("x", 1000); }');
+
+    assert.equal(exitCode, 255);
+    assert.match(stdout, /Fatal error: Allowed memory size of \d+ bytes exhausted/);
+    assert.match(stdout, /shut down$/);
+    assert.equal((await php.runCode('echo "Still running";')).stdout, 'Still running');
+});
+
+test('filling the memory of the module is a fatal error of PHP too, whatever memory_limit says', async () => {
+    const { default: createPhp } = await import(build);
+    const fresh = await createPhp();
+    fresh.FS.mkdirTree('/usr/local/lib');
+    fresh.FS.writeFile('/usr/local/lib/php.ini', 'memory_limit=-1\n');
+
+    // Small allocations, and one that does not fit
+    for (const code of ['$strings = []; while (true) { $strings[] = str_repeat("x", 1000); }', '$string = pack("x1000000000");']) {
+        const { exitCode, stdout } = await fresh.runCode(code);
+
+        assert.equal(exitCode, 255);
+        assert.match(stdout, /Fatal error: Out of memory/);
+        assert.equal((await fresh.runCode('echo "Still running";')).stdout, 'Still running');
+    }
+});
+
+test('memory_limit leaves some of the memory of the module to the C library, a php.ini changes it', async () => {
+    const usage = 'echo json_encode([ini_get("memory_limit"), memory_get_usage() > 0]);';
+    const [limit, counted] = JSON.parse((await php.runCode(usage)).stdout);
+
+    assert.match(limit, /^\d+M$/);
+    assert.equal(counted, true);
+
+    const { default: createPhp } = await import(build);
+    const fresh = await createPhp();
+    fresh.FS.mkdirTree('/usr/local/lib');
+    fresh.FS.writeFile('/usr/local/lib/php.ini', 'memory_limit=16M\n');
+
+    assert.deepEqual(JSON.parse((await fresh.runCode(usage)).stdout), ['16M', true]);
+    assert.equal((await fresh.runCode('$string = str_repeat("x", 32 * 1024 * 1024);')).exitCode, 255);
+});
+
+test('code that does not fit in the memory of the module rejects the promise: the module goes on', async () => {
+    // More than the memory of the module, whatever the stack
+    await assert.rejects(php.runCode(`/*${'x'.repeat(400 * 1024 * 1024)}*/`), /has no room for/);
+
+    assert.equal((await php.runCode('echo "Still running";')).stdout, 'Still running');
+});
+
+test('a run gives back the memory it takes, however it ends', async () => {
+    // More than the memory of the module, whatever the stack
+    for (let run = 0; run < 100; run++) {
+        assert.equal((await php.runCode('echo strlen(str_repeat("x", 32 * 1024 * 1024));')).stdout, String(32 * 1024 * 1024));
+        assert.equal((await php.runCode('$string = str_repeat("x", 32 * 1024 * 1024); exit(3);')).exitCode, 3);
+        assert.equal((await php.runCode('$string = str_repeat("x", 32 * 1024 * 1024); throw new Exception();')).exitCode, 255);
+    }
+});
+
 test('the build for the web exports createPhpInWorker(), not the one for node', async () => {
     const { createPhpInWorker } = await import(build);
 
