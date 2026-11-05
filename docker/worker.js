@@ -75,13 +75,19 @@ if ('undefined' !== typeof WorkerGlobalScope && PHP_WORKER_NAME === self.name) {
             } else if ('FS' === method) {
                 const [name, fsArgs] = args;
                 result = php.FS[name](...fsArgs);
+                // What creates a file returns its node: it worked, and a node
+                // can not be copied, nor would it be of any use to the page
+                if (result instanceof php.FS.FSNode) {
+                    result = undefined;
+                }
             } else {
                 result = await php[method](...args);
             }
             // The body of a response is not copied
             port.postMessage({ result }, 'request' === method ? [result.body.buffer] : []);
         } catch (error) {
-            port.postMessage({ error });
+            // Its message is the source code of what can not be copied
+            port.postMessage({ error: 'DataCloneError' === error.name ? new Error(`FS.${args[0]}() returns what can not be copied to the page.`) : error });
         }
     };
 }

@@ -17,7 +17,8 @@ It starts `php-web.mjs` in a worker, that runs `createPhp()`. `runFile()`, `runC
 `request()` are the same, `persist` too: a worker has IndexedDB and the Web Locks. The differences:
 
 - the methods of `php.FS` return a promise, of what the method returns, and what they are given, or
-  return, is copied: an `FS.lookupPath()`, for example, can not be;
+  return, is copied. The node of `FS.mkdir()` or `FS.symlink()` can not be, the promise gives
+  nothing. An `FS.lookupPath()` or an `FS.analyzePath()` can not be either, the promise is rejected;
 - the options are copied to the worker: no function, as `locateFile`. The `.wasm` file is the one
   next to `php-web.mjs`, that must be on the origin of the page, as any worker;
 - the stack of the JavaScript engine is smaller in a worker of Chrome: a recursion goes about 1,000
