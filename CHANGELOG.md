@@ -59,6 +59,8 @@
   `castor wasm:serve playground --php 8.3.35`.
 * `castor wasm:stacks` lists, for each stack, what it embeds, its warmup and
   its opcache too.
+* BC break: `targets()` of a stack takes `Target`s, `->targets(Target::Web)`,
+  instead of strings, and `artifact()` a `Target`. `Stack::TARGETS` is gone.
 
 ## 0.9.0 (2026-11-02)
 

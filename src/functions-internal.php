@@ -147,7 +147,7 @@ function bake_definition(array $stacks): string
             'args' => array_filter([
                 'PHP_VERSION' => $stack->php,
                 'EXTENSIONS' => implode(' ', $stack->extensions),
-                'TARGETS' => implode(' ', $stack->targets),
+                'TARGETS' => implode(' ', array_column($stack->targets, 'value')),
                 'MEMORY' => $stack->memory,
                 'ICU_DATA' => $stack->icuData?->value,
                 // None if nothing is embedded

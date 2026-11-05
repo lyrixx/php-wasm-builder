@@ -2,6 +2,7 @@
 
 use PhpWasm\Opcache;
 use PhpWasm\Stack;
+use PhpWasm\Target;
 
 // The builds of PHP that this repository checks, in CI too. The pages of
 // examples/ have their own stack, in their stack.php.
@@ -12,7 +13,7 @@ use PhpWasm\Stack;
 $php85 = Stack::named('php-8.5')
     ->php('8.5.12')
     ->extensions('calendar', 'ctype', 'dom', 'mbstring', 'simplexml', 'xml', 'xmlreader', 'xmlwriter')
-    ->targets('web', 'node');
+    ->targets(Target::Web, Target::Node);
 
 return [
     $php85,

@@ -2,6 +2,7 @@
 
 use PhpWasm\Opcache;
 use PhpWasm\Stack;
+use PhpWasm\Target;
 
 // The PHP of the page: the one of the Dockerfile (keep in sync with
 // config.platform.php in app/composer.json), with what the application needs:
@@ -17,5 +18,5 @@ return Stack::named('example-symfony')
     // WASM filesystem, and opcache compiles the files as they run
     ->warmup('bin/console', 'cache:warmup')
     ->opcache(Opcache::Runtime)
-    ->targets('web')
+    ->targets(Target::Web)
     ->outputDir(__DIR__ . '/public/build');

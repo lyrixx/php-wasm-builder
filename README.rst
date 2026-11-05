@@ -603,11 +603,12 @@ installed with ``curl "https://castor.jolicode.com/install" | bash``.
     <?php
 
     use PhpWasm\Stack;
+    use PhpWasm\Target;
 
     $php85 = Stack::named('php-8.5')
         ->php('8.5.12')
         ->extensions('calendar', 'ctype', 'dom', 'mbstring', 'simplexml', 'xml', 'xmlreader', 'xmlwriter')
-        ->targets('web', 'node');
+        ->targets(Target::Web, Target::Node);
 
     return [
         $php85,
@@ -752,6 +753,7 @@ without its dev dependencies, embedded at ``/app``:
     use Castor\Attribute\AsOption;
     use Castor\Attribute\AsTask;
     use PhpWasm\Stack;
+    use PhpWasm\Target;
     use Symfony\Component\Console\Input\InputOption;
 
     use function Castor\context;
@@ -771,7 +773,7 @@ without its dev dependencies, embedded at ``/app``:
             // Relative to the project, at /app in the WASM filesystem
             ->embed('build/embed', at: '/app')
             // Only php-web.mjs and php-web.wasm
-            ->targets('web')
+            ->targets(Target::Web)
             // Next to the page that loads them
             ->outputDir('public/build');
     }

@@ -2,6 +2,7 @@
 
 use PhpWasm\IcuData;
 use PhpWasm\Stack;
+use PhpWasm\Target;
 
 // The PHP of the page: the one of the Dockerfile, with every extension that
 // the builder supports, to try them all. intl comes without ICU's data, that
@@ -10,5 +11,5 @@ use PhpWasm\Stack;
 return Stack::named('example-playground')
     ->extensions(...Stack::EXTENSIONS)
     ->icuData(IcuData::None)
-    ->targets('web')
+    ->targets(Target::Web)
     ->outputDir(__DIR__ . '/public/build');

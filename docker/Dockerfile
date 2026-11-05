@@ -101,7 +101,7 @@ fi
 # keeps files in IndexedDB, across the reloads of a page (the persist option of
 # createPhp()), and worker.js runs PHP in a Web Worker (createPhpInWorker()),
 # what the worker environment says it runs in. Keep in sync with
-# Stack::TARGETS, in src/Stack.php
+# the cases of src/Target.php
 : > /plan/targets
 for target in $TARGETS; do
     case $target in

@@ -37,7 +37,7 @@ function build_task(
     ?string $php = null,
     #[AsOption(description: 'Add an extension, can be repeated', mode: InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, autocomplete: Stack::EXTENSIONS)]
     array $with = [],
-    #[AsOption(description: 'Only build this target (web or node), can be repeated', mode: InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, autocomplete: ['web', 'node'])]
+    #[AsOption(description: 'Only build this target (web or node), can be repeated', mode: InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, autocomplete: 'PhpWasm\complete_targets')]
     array $target = [],
     #[AsOption(description: 'Override the memory of the WASM module, for example 256mb')]
     ?string $memory = null,
@@ -61,7 +61,7 @@ function build_task(
             $selected = $selected->php($php);
         }
         if ([] !== $target) {
-            $selected = $selected->targets(...$target);
+            $selected = $selected->targets(...array_map(Target::from(...), $target));
         }
         if (null !== $memory) {
             $selected = $selected->memory($memory);
@@ -124,7 +124,7 @@ function stacks_task(
         $extensions = $stack->extensions;
         sort($extensions);
 
-        io()->writeln(\sprintf(' <info>%s</info>, PHP %s, for %s', $stack->name, $stack->php ?? dockerfile_default('PHP_VERSION'), implode(' and ', $stack->targets)));
+        io()->writeln(\sprintf(' <info>%s</info>, PHP %s, for %s', $stack->name, $stack->php ?? dockerfile_default('PHP_VERSION'), implode(' and ', array_column($stack->targets, 'value'))));
         $details = [
             'Extensions' => wordwrap(implode(' ', $extensions), 64, "\n" . $indent) ?: 'none',
             'ICU data' => \in_array('intl', $extensions, true) ? $stack->icuData?->value ?? dockerfile_default('ICU_DATA') : null,
@@ -147,12 +147,12 @@ function sizes_task(): void
 {
     io()->title('Size of the .wasm files');
 
-    $size = static fn (Stack $stack, string $target): ?int => is_file($path = $stack->artifact($target, 'wasm')) ? filesize($path) : null;
+    $size = static fn (Stack $stack, Target $target): ?int => is_file($path = $stack->artifact($target, 'wasm')) ? filesize($path) : null;
 
     $rows = [];
     foreach (stacks() as $stack) {
         // The web build is the one that matters, and the one everybody has
-        $target = null !== $size($stack, 'web') ? 'web' : 'node';
+        $target = null !== $size($stack, Target::Web) ? Target::Web : Target::Node;
         if (null === $bytes = $size($stack, $target)) {
             continue;
         }
@@ -427,6 +427,14 @@ function complete_icu_data(): array
 function complete_opcache(): array
 {
     return array_column(Opcache::cases(), 'value');
+}
+
+/**
+ * @return list<string>
+ */
+function complete_targets(): array
+{
+    return array_column(Target::cases(), 'value');
 }
 
 /**
