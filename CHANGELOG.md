@@ -21,6 +21,11 @@
 * A module does not run out of memory by itself anymore: what a run leaves is
   gone with it. The Symfony example aborted after about 1,900 requests.
 
+### Minor
+
+* Document what PHP can not do with the network, and what the backward
+  compatibility covers.
+
 ## 0.11.0 (2026-11-05)
 
 ### Features
