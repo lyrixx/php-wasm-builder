@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>The image of the links to the website</title>
+    <!-- The source of docs/assets/social-image.png, 1280x640, that
+         castor site:social-image renders: the inks and the fonts are the ones
+         of the website -->
+    <link rel="stylesheet" href="../stylesheets/extra.css">
+    <style>
+        body {
+            position: relative;
+            overflow: hidden;
+            width: 1280px;
+            height: 640px;
+            margin: 0;
+            background:
+                radial-gradient(#ffffff1f 1.3px, transparent 1.5px) 0 0 / 24px 24px,
+                var(--ink);
+            color: #fff;
+        }
+
+        .blob {
+            position: absolute;
+            top: -70px;
+            right: -10px;
+            width: 500px;
+            aspect-ratio: 1;
+            border-radius: 46% 54% 60% 40% / 52% 40% 60% 48%;
+            background: var(--yellow);
+        }
+
+        .ring {
+            position: absolute;
+            bottom: 62px;
+            left: 560px;
+            width: 96px;
+            aspect-ratio: 1;
+            border: 22px solid var(--pink);
+            border-radius: 50%;
+        }
+
+        .text {
+            position: absolute;
+            top: 44px;
+            left: 60px;
+        }
+
+        .kicker {
+            margin: 0;
+            color: var(--yellow);
+            font: 700 22px "JetBrains Mono", monospace;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            margin: 6px 0 0;
+            font: 800 88px/1 var(--font-display);
+            letter-spacing: -0.02em;
+        }
+
+        /* Printed twice, in two inks, as on the home page */
+        .riso {
+            position: relative;
+            display: inline-block;
+            color: var(--violet);
+            font-size: 1.7em;
+            font-weight: 900;
+        }
+
+        .riso::after {
+            content: attr(data-text);
+            position: absolute;
+            inset: 0;
+            color: var(--pink);
+            mix-blend-mode: screen;
+            transform: translate(0.05em, 0.04em);
+        }
+
+        .repository {
+            margin: 22px 0 0;
+            color: #cfc9f5;
+            font: 500 24px "JetBrains Mono", monospace;
+        }
+
+        .window {
+            position: absolute;
+            top: 120px;
+            right: 54px;
+            width: 540px;
+            border: 4px solid #fff;
+            border-radius: 20px;
+            background: #120f29;
+            box-shadow: 13px 13px 0 var(--pink);
+            font: 500 22px/1.55 "JetBrains Mono", monospace;
+            transform: rotate(1.5deg);
+        }
+
+        .window__bar {
+            display: flex;
+            gap: 9px;
+            align-items: center;
+            padding: 13px 20px;
+            border-bottom: 2px solid #ffffff26;
+            color: #928cc4;
+            font-size: 17px;
+        }
+
+        .window__bar i {
+            width: 13px;
+            aspect-ratio: 1;
+            border-radius: 50%;
+        }
+
+        .window pre {
+            margin: 0;
+            padding: 16px 20px;
+            color: #ece7ff;
+            font: inherit;
+        }
+
+        .keyword {
+            color: #b9a6ff;
+        }
+
+        .string {
+            color: #7ee2b8;
+        }
+
+        .window__output {
+            margin: 0;
+            padding: 11px 20px;
+            border-top: 2px solid #ffffff26;
+            color: #7ee2b8;
+        }
+
+        .sticker {
+            position: absolute;
+            top: 66px;
+            right: 26px;
+            display: grid;
+            place-items: center;
+            width: 124px;
+            aspect-ratio: 1;
+            margin: 0;
+            border: 4px solid var(--ink);
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 6px 6px 0 var(--ink);
+            color: var(--ink);
+            font: 900 19px/1.1 var(--font-display);
+            text-align: center;
+            transform: rotate(-14deg);
+        }
+
+        .band {
+            position: absolute;
+            right: -24px;
+            bottom: 34px;
+            left: -24px;
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            padding: 13px 0;
+            border-block: 4px solid var(--ink);
+            background: var(--yellow);
+            color: var(--ink);
+            font: 800 23px var(--font-display);
+            white-space: nowrap;
+            transform: rotate(-1.5deg);
+        }
+
+        .band b {
+            color: var(--pink);
+            font-weight: 800;
+        }
+    </style>
+</head>
+<body>
+    <div class="blob"></div>
+    <div class="ring"></div>
+
+    <div class="text">
+        <p class="kicker">No server. Just a page.</p>
+        <h1><span class="riso" data-text="PHP">PHP</span><br>in the<br>browser</h1>
+        <p class="repository">lyrixx/php-wasm-builder</p>
+    </div>
+
+    <div class="window">
+        <div class="window__bar">
+            <i style="background: #ff6b6b"></i><i style="background: #ffc83a"></i><i style="background: #12b886"></i>
+            &nbsp;index.html
+        </div>
+        <pre><span class="keyword">import</span> createPhp <span class="keyword">from</span> <span class="string">'./php-web.mjs'</span>;
+
+<span class="keyword">const</span> php = <span class="keyword">await</span> createPhp();
+<span class="keyword">await</span> php.runCode(<span class="string">'echo "Hello!";'</span>);</pre>
+        <p class="window__output">→ Hello!▍</p>
+    </div>
+    <p class="sticker">Zero servers</p>
+
+    <div class="band">
+        <span>Symfony</span><b>✦</b><span>SQLite</span><b>✦</b><span>intl</span><b>✦</b><span>OpenSSL</span><b>✦</b><span>opcache</span><b>✦</b><span>Web Workers</span><b>✦</b><span>node</span>
+    </div>
+</body>
+</html>

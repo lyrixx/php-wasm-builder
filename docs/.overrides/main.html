@@ -1,0 +1,17 @@
+{#- Every page: what a link to it shows on the other websites -#}
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {% set title = page.meta.title if page.meta and page.meta.title else page.title | striptags %}
+  {% set description = page.meta.description if page.meta and page.meta.description else config.site_description %}
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ config.site_name }}">
+  <meta property="og:title" content="{{ title | e }}">
+  <meta property="og:description" content="{{ description | e }}">
+  <meta property="og:url" content="{{ page.canonical_url }}">
+  <meta property="og:image" content="{{ config.site_url }}assets/social-image.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="PHP in the browser: PHP WASM Builder">
+  <meta name="twitter:card" content="summary_large_image">
+{% endblock %}

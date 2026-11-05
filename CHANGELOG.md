@@ -76,6 +76,8 @@
 * `castor wasm:sizes` gives the gzipped size too, and `--json` prints the
   sizes as JSON. The website shows them: `castor site:build` builds every
   stack, and measures them.
+* A link to the website shows an image, `docs/assets/social-image.png`, that
+  `castor site:social-image` renders.
 * The README is short, and in Markdown: what this is, how to try it, and
   where things are. What it said is in the documentation, on the website.
 
