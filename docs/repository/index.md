@@ -4,11 +4,13 @@ Everything that compiles PHP is in `docker/`, everything else drives it:
 
 - `docker/Dockerfile` compiles PHP to WebAssembly, with emscripten. The PHP version, the extensions
   and the directory to embed are its [build arguments](../reference/build-arguments.md). It builds
-  two files for each target: `php-web.mjs` and `php-web.wasm` for the browser, `php-node.mjs` and
-  `php-node.wasm` for node. `run.c` runs PHP, and `warm.mjs` runs `WARMUP` when it is built.
+  two files for each target, `php-web.mjs` and `php-web.wasm` for the browser, `php-node.mjs` and
+  `php-node.wasm` for node, and `php-sw.js` for the service worker of a page. `run.c` runs PHP, and
+  `warm.mjs` runs `WARMUP` when it is built.
 - The `.mjs` file is the [JavaScript API](../javascript-api/index.md), from `docker/api.js`:
   `createPhp()` starts PHP, `runFile()`, `runCode()` and `request()` run it. `docker/worker.js`
-  runs it [in a worker](../javascript-api/worker.md).
+  runs it [in a worker](../javascript-api/worker.md), and `docker/frame.js`, with
+  `docker/php-sw.js`, shows an application [in a frame](../javascript-api/frame.md).
 - A *stack* names a set of build arguments, in PHP (see [Stacks](stacks.md)). `stacks.php` has the
   builds that this repository checks, in CI too, and castor builds them with the tasks of
   `castor.php`, from the functions of `src/`. A project that requires the package declares its own

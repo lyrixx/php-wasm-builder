@@ -17,10 +17,30 @@ The example runs the same application twice, with two ways to do it.
 ## In a frame, PHP in the page
 
 `examples/symfony/` shows the application in an `<iframe>`, where links, forms, redirections and the
-history work as anywhere. PHP runs in a worker of the page (see [PHP in a worker](worker.md)): the
-page does not freeze while it runs. A service worker, `public/sw.js`, hands what the frame asks for
-to the page, and the page hands back what PHP answers. PHP does not run in the service worker: the
-page keeps it running as long as it is open.
+history work as anywhere, with `serveInFrame()` (see [An application in a frame](frame.md)). PHP
+runs in a worker of the page (see [PHP in a worker](worker.md)): the page does not freeze while it
+runs. A service worker, `public/sw.js`, hands what the frame asks for to the page, and the page
+hands back what PHP answers. PHP does not run in the service worker: the page keeps it running as
+long as it is open.
+
+A project of your own needs the same two files, with its own paths:
+
+```js
+// index.html
+import { createPhpInWorker, serveInFrame } from './build/php-web.mjs';
+
+const php = await createPhpInWorker({ persist: '/symfony' });
+await php.runFile('/app/bin/console', { args: ['doctrine:schema:update', '--force', '--no-interaction'] });
+
+await serveInFrame(php, { frame: document.getElementById('frame'), documentRoot: '/app/public' });
+```
+
+```js
+// sw.js
+importScripts('./build/php-sw.js');
+
+forwardToPhp();
+```
 
 ## On its own page, PHP in the service worker
 
@@ -60,8 +80,9 @@ What stays
 
 The cookies
 :   The browser drops the cookies of a response that a service worker makes: what runs PHP keeps
-    them, and gives them back to each request, `public/cookies.mjs`. The framed page keeps them in
-    its `localStorage`, the service worker in the Cache API.
+    them, and gives them back to each request, with `keepCookies()` and `withCookies()` (see
+    [An application in a frame](frame.md#the-cookies-without-the-frame)). The framed page keeps them
+    in its `localStorage`, the service worker in the Cache API.
 
 The `Referer`
 :   A service worker does not see it as a header: it gives it to PHP, the stateless CSRF protection,

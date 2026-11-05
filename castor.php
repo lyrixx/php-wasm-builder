@@ -424,8 +424,8 @@ function site_social_image_task(): void
 }
 
 /**
- * Runs the tests of the JavaScript API, tests/api.test.mjs, on every build of
- * a stack.
+ * Runs the tests of the JavaScript API, tests/api.test.mjs and
+ * tests/frame.test.mjs, on every build of a stack.
  *
  * @throws ProblemException with the tests that fail
  */
@@ -436,7 +436,7 @@ function check_api(Stack $stack): void
     foreach ($stack->targets as $target) {
         $build = $stack->artifact($target, 'mjs');
         $process = run(
-            ['node', '--import', builder_root() . '/node/fetch-files.mjs', '--test', builder_root() . '/tests/api.test.mjs'],
+            ['node', '--import', builder_root() . '/node/fetch-files.mjs', '--test', builder_root() . '/tests/api.test.mjs', builder_root() . '/tests/frame.test.mjs'],
             context: context()->withEnvironment(['BUILD' => $build])->withQuiet()->withAllowFailure(),
         );
         if (!$process->isSuccessful()) {

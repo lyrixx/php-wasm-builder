@@ -36,7 +36,7 @@ loads them.
             ->extensions('ctype', 'mbstring')
             // Relative to the project, at /app in the WASM filesystem
             ->embed('build/embed', at: '/app')
-            // Only php-web.mjs and php-web.wasm
+            // Only php-web.mjs, php-web.wasm and php-sw.js
             ->targets(Target::Web)
             ->outputDir('public/build');
     }
@@ -58,9 +58,9 @@ loads them.
     }
     ```
 
-    `castor wasm:build` writes `public/build/php-web.mjs` and `php-web.wasm`. `build()` takes
-    several stacks too: they are built in a single buildx invocation, in parallel, and sharing the
-    layers they have in common.
+    `castor wasm:build` writes `public/build/php-web.mjs`, `php-web.wasm` and `php-sw.js`. `build()`
+    takes several stacks too: they are built in a single buildx invocation, in parallel, and sharing
+    the layers they have in common.
 
 === "Composer and Docker"
 
@@ -80,7 +80,7 @@ loads them.
         PHP_VERSION = "8.5.12"
         EXTENSIONS = "ctype mbstring"
         EMBED_AT = "/app"
-        # Only php-web.mjs and php-web.wasm
+        # Only php-web.mjs, php-web.wasm and php-sw.js
         TARGETS = "web"
       }
       output = ["type=local,dest=public/build"]
@@ -105,5 +105,5 @@ loads them.
     }
     ```
 
-    `composer wasm:build` writes `public/build/php-web.mjs` and `php-web.wasm`. buildx creates
-    `public/build/` readable by its owner only: `chmod` lets a web server read it.
+    `composer wasm:build` writes `public/build/php-web.mjs`, `php-web.wasm` and `php-sw.js`. buildx
+    creates `public/build/` readable by its owner only: `chmod` lets a web server read it.

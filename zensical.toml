@@ -32,6 +32,7 @@ nav = [
     "javascript-api/worker.md",
     "javascript-api/persist.md",
     "javascript-api/http.md",
+    "javascript-api/frame.md",
     "javascript-api/symfony.md",
   ] },
   { "Reference" = [

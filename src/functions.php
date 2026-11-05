@@ -56,7 +56,7 @@ function build(array $stacks, array $set = []): array
 
         // The output directory is only ever added to: forget about the targets that are not built anymore
         foreach (array_filter(Target::cases(), static fn (Target $target): bool => !\in_array($target, $stack->targets, true)) as $target) {
-            fs()->remove([$stack->artifact($target, 'mjs'), $stack->artifact($target, 'wasm')]);
+            fs()->remove($stack->targetArtifacts($target));
         }
     }
 
@@ -142,10 +142,15 @@ function check_stack(Stack $stack): void
     )));
 
     $found = [];
+    foreach ($stack->artifacts() as $artifact) {
+        if (!is_file($artifact)) {
+            $found[] = \sprintf('%s does not exist', relative($artifact));
+        }
+    }
+
     foreach ($stack->targets as $target) {
         $build = $stack->artifact($target, 'mjs');
         if (!is_file($build)) {
-            $found[] = \sprintf('%s does not exist', relative($build));
             continue;
         }
 

@@ -14,7 +14,7 @@ a while: the next ones only compile again what changed.
 
 The files end up in `build/php-8.5/`:
 
-- `php-web.mjs` and `php-web.wasm`, for the browser;
+- `php-web.mjs` and `php-web.wasm`, for the browser, and `php-sw.js`, for a service worker;
 - `php-node.mjs` and `php-node.wasm`, for node.
 
 Next: [run it in node](node.md), or [in a page](page.md).

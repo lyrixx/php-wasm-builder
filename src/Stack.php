@@ -166,13 +166,15 @@ final readonly class Stack
      */
     public function artifacts(): array
     {
-        $files = [];
-        foreach ($this->targets as $target) {
-            $files[] = $this->artifact($target, 'mjs');
-            $files[] = $this->artifact($target, 'wasm');
-        }
+        return array_merge(...array_map($this->targetArtifacts(...), $this->targets));
+    }
 
-        return $files;
+    /**
+     * @return list<string> the absolute paths of the files that a target produces, whether this stack builds it or not
+     */
+    public function targetArtifacts(Target $target): array
+    {
+        return array_map(fn (string $file): string => $this->outputDir . '/' . $file, $target->files());
     }
 
     private function with(mixed ...$changes): self

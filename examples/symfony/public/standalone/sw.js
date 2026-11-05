@@ -7,12 +7,11 @@
 // the next request starts PHP again, that finds its files in IndexedDB. The
 // framed page, ../index.html, runs PHP in a worker of the page instead.
 
-import createPhp from '../build/php-web.mjs';
-import { keepCookies, withCookies } from '../cookies.mjs';
+import createPhp, { keepCookies, withCookies } from '../build/php-web.mjs';
 
 // Where the application is in the URLs: the scope of this service worker
 const base = new URL('./', self.location).pathname;
-// Where the cookies are kept, see ../cookies.mjs
+// Where the cookies are kept: the page has localStorage, not a service worker
 const cookieJar = new URL('cookies', self.location).href;
 
 let started;

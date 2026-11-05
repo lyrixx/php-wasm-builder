@@ -9,7 +9,8 @@ namespace PhpWasm;
 enum Target: string
 {
     /**
-     * php-web.mjs and php-web.wasm, for a page, or a worker.
+     * php-web.mjs and php-web.wasm, for a page, or a worker, and php-sw.js,
+     * for a service worker.
      */
     case Web = 'web';
 
@@ -24,5 +25,18 @@ enum Target: string
     public function fileName(): string
     {
         return 'php-' . $this->value;
+    }
+
+    /**
+     * The names of the files it builds. Keep in sync with the "link" stage of
+     * the Dockerfile.
+     *
+     * @return list<string>
+     */
+    public function files(): array
+    {
+        $files = [$this->fileName() . '.mjs', $this->fileName() . '.wasm'];
+
+        return self::Web === $this ? [...$files, 'php-sw.js'] : $files;
     }
 }

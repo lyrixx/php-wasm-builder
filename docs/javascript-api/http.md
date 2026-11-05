@@ -45,3 +45,4 @@ text, `display_errors` on, no flush…).
 | `stderr`  | What PHP wrote on stderr, the logs of Symfony for example.                      |
 
 `request()` is the web server, not the browser: it keeps no cookie, and follows no redirection.
+[An application in a frame](frame.md) does both.

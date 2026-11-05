@@ -8,12 +8,11 @@ PHP in the page, and on its own page, with PHP in a service worker.
 | --- | --- |
 | `stack.php` | The PHP of the pages: what Symfony needs, and the application, embedded at `/app`. |
 | `app/` | The Symfony application, as any other one. castor installs its `vendor/` before the build. |
-| `public/index.html` | The framed page: it starts PHP, and shows the application in a frame. |
-| `public/sw.js` | The service worker of the framed page, that hands what the frame asks for to the page. |
+| `public/index.html` | The framed page: it starts PHP, and shows the application in a frame, with `serveInFrame()`. |
+| `public/sw.js` | The service worker of the framed page, that hands what the frame asks for to the page, with `build/php-sw.js`. |
 | `public/standalone/index.html` | What shows until the service worker of `standalone/` answers. |
 | `public/standalone/sw.js` | The service worker that runs PHP, and answers every request under `standalone/`. |
-| `public/cookies.mjs` | The cookies of the application, that both keep: a browser drops the ones a service worker answers with. |
-| `public/build/` | What castor builds: `php-web.mjs` and `php-web.wasm` (not in git). |
+| `public/build/` | What castor builds: `php-web.mjs`, `php-web.wasm` and `php-sw.js` (not in git). |
 
 How a request of the framed page goes through:
 
@@ -21,7 +20,7 @@ How a request of the framed page goes through:
    does not freeze while PHP runs. `/symfony`, where the SQLite database and
    the sessions are, is kept in IndexedDB.
 2. It creates the database with `bin/console doctrine:schema:update`, then
-   registers `sw.js` for `app/`, and loads `app/` in the frame.
+   `serveInFrame()` registers `sw.js` for `app/`, and loads `app/` in the frame.
 3. The service worker hands each request of the frame to the page, that runs
    it with `php.request()`, through `app/public/index.php`, and hands the
    response back.
