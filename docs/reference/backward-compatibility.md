@@ -8,9 +8,14 @@ says it, with `BC break:`.
 
 - The [build arguments](build-arguments.md): their names, and the values they take.
 - The extensions that are [built by default](extensions.md): one can be added, not removed.
-- The files that a build gives: `php-web.mjs`, `php-web.wasm`, `php-node.mjs` and `php-node.wasm`.
+- The files that a build gives: `php-web.mjs`, `php-web.wasm`, `php-sw.js`, `php-node.mjs` and
+  `php-node.wasm`.
 - The [JavaScript API](../javascript-api/index.md): `createPhp()`, `createPhpInWorker()`, what they
   give, and their options.
+- [What shows an application in a frame](../javascript-api/frame.md): `serveInFrame()`,
+  `keepCookies()` and `withCookies()` of `php-web.mjs`, `forwardToPhp()` of `php-sw.js`, and their
+  options. So is where a project puts its files, `sw.js` next to `index.html`, and the key of the
+  cookies in `localStorage`: with another one, the visitors would lose their session.
 - `Stack`, `Target`, `Opcache` and `IcuData`, and the functions of `src/functions.php`: what a
   project uses, see [Use it in your project](../your-project/index.md).
 - `node/run.mjs` and `node/fetch-files.mjs`: their arguments, and what they do.
