@@ -51,6 +51,11 @@
         });
     };
 
+    // Where libsodium takes its random numbers from. Without it, it looks for
+    // window, self or require: php-web.mjs has none of them in node, and PHP
+    // does not start.
+    Module['getRandomValue'] = () => crypto.getRandomValues(new Uint32Array(1))[0];
+
     // php <file> <args>...
     Module['runFile'] = (file, { args = [], stdin = '' } = {}) => withPersistedFiles(() => commandOutput(runPhp([file, ...args], stdin, (argc, argv) => _run_file(argc, argv))));
 

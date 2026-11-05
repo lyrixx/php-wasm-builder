@@ -112,6 +112,27 @@ function check_stack(Stack $stack): void
     if (\in_array('session', $stack->extensions, true)) {
         $problems['sessions do not start'] = 'extension_loaded("session") && @session_start()';
     }
+    // PharData writes whatever phar.readonly says, Phar does not
+    if (\in_array('phar', $stack->extensions, true)) {
+        $problems['phar does not write and read an archive'] = 'extension_loaded("phar") && (static function () { (new PharData("/tmp/check.tar"))->addFromString("file", "php"); return @file_get_contents("phar:///tmp/check.tar/file") === "php"; })()';
+    }
+    // libsodium takes its random numbers from api.js, without them the same key
+    // comes back, or PHP does not start. PHP has no Argon2 of its own.
+    if (\in_array('sodium', $stack->extensions, true)) {
+        $problems['sodium does not give random keys'] = 'extension_loaded("sodium") && sodium_crypto_secretbox_keygen() !== sodium_crypto_secretbox_keygen()';
+        $problems['password_hash() does not do Argon2id'] = 'extension_loaded("sodium") && in_array("argon2id", password_algos(), true) && password_verify("php", password_hash("php", "argon2id", ["memory_cost" => 1024, "time_cost" => 1, "threads" => 1]))';
+    }
+    if (\in_array('zip', $stack->extensions, true)) {
+        $problems['ZipArchive does not write and read a compressed file'] = 'extension_loaded("zip") && (static function () { $content = str_repeat("php", 100); $zip = new ZipArchive(); $zip->open("/tmp/check.zip", ZipArchive::CREATE); $zip->addFromString("file", $content); $zip->close(); $zip->open("/tmp/check.zip"); return $zip->getFromName("file") === $content && $zip->statName("file")["comp_size"] < 100; })()';
+        // What ./configure looks for in libzip: it does not fail without
+        foreach (['isCompressionMethodSupported', 'registerCancelCallback', 'registerProgressCallback', 'setEncryptionName', 'setMtimeName'] as $method) {
+            $problems["ZipArchive has no {$method}()"] = \sprintf('method_exists("ZipArchive", "%s")', $method);
+        }
+    }
+    if (\in_array('zlib', $stack->extensions, true)) {
+        $problems['zlib does not compress'] = 'extension_loaded("zlib") && strlen(gzencode(str_repeat("php", 100))) < 100 && gzdecode(gzencode("php")) === "php"';
+        $problems['compress.zlib:// does not write and read a file'] = 'extension_loaded("zlib") && file_put_contents("compress.zlib:///tmp/check.gz", "php") === 3 && file_get_contents("compress.zlib:///tmp/check.gz") === "php"';
+    }
 
     // Prints the problems whose expression is false
     $code = \sprintf('echo json_encode(array_keys(array_filter([%s])));', implode(', ', array_map(

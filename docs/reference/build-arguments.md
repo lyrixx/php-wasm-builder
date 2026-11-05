@@ -46,10 +46,12 @@ They are pinned, so that the same arguments always give the same build. The defa
 | `LIBICONV_VERSION`      | GNU libiconv, that iconv uses, for example `1.19`.                                                                                  |
 | `LIBJPEG_TURBO_VERSION` | libjpeg-turbo, that gd uses, for example `3.2.1`.                                                                                   |
 | `LIBPNG_VERSION`        | libpng, that gd uses, for example `1.6.59`.                                                                                         |
+| `LIBSODIUM_VERSION`     | libsodium, that sodium uses, for example `1.0.22`.                                                                                  |
 | `LIBWEBP_VERSION`       | libwebp, that gd uses, for example `1.6.0`.                                                                                         |
 | `LIBXML_VERSION`        | libxml2, that the xml extensions use.                                                                                               |
+| `LIBZIP_VERSION`        | libzip, that zip uses, for example `1.12.1`.                                                                                        |
 | `ONIGURUMA_VERSION`     | Oniguruma, that mbstring uses for regular expressions.                                                                              |
 | `OPENSSL_VERSION`       | OpenSSL, that openssl uses, for example `3.5.9`.                                                                                    |
 | `SQLITE_VERSION`        | SQLite, that pdo_sqlite and sqlite3 use, for example `3.54.1`.                                                                      |
 | `SQLITE_YEAR`           | The year of the release of `SQLITE_VERSION`, that is in its URL: for example `2026`.                                                |
-| `ZLIB_VERSION`          | zlib, that libpng uses, for example `1.3.2`.                                                                                        |
+| `ZLIB_VERSION`          | zlib, that zlib, libpng and libzip use, for example `1.3.2`.                                                                        |

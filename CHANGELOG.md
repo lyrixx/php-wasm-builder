@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+* Add the `phar` extension.
+* Add the `sodium` extension, with libsodium 1.0.22 (`LIBSODIUM_VERSION`).
+* Add the `zip` extension, with libzip 1.12.1 (`LIBZIP_VERSION`), and only
+  deflate.
+* Add the `zlib` extension.
+
 ## 0.11.0 (2026-11-05)
 
 ### Features
