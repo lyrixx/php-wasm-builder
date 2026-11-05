@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Symfony, in the browser</title>
+    <meta name="description" content="A Symfony application, with Doctrine and SQLite, forms and a session, in a frame: what you write is still there after a reload.">
     <style>
         /* Keep in sync with examples/playground/public/index.html and
            examples/symfony/app/public/styles.css */
@@ -115,6 +116,12 @@
     <iframe id="frame" title="The Symfony application"></iframe>
     <p id="message">Loading PHP…</p>
 
+    <p>
+        <strong>Or without the frame:</strong> <a href="standalone/">the same
+        application, on its own page</a>, with its URLs in the address bar. PHP
+        runs in the service worker there.
+    </p>
+
     <h2>How it works</h2>
     <ul>
         <li>
@@ -135,12 +142,13 @@
     </ul>
 
     <footer>
-        An example of <a href="https://github.com/lyrixx/php-wasm-builder">PHP WASM Builder</a>
+        An example of <a href="https://lyrixx.github.io/php-wasm-builder/">PHP WASM Builder</a>
         (<a href="https://github.com/lyrixx/php-wasm-builder/tree/main/examples/symfony">source</a>).
     </footer>
 
     <script type="module">
         import { createPhpInWorker } from './build/php-web.mjs';
+        import { keepCookies, withCookies } from './cookies.mjs';
 
         const message = document.getElementById('message');
         const frame = document.getElementById('frame');
@@ -161,42 +169,21 @@
             throw new Error(message.textContent);
         }
 
-        // The cookies of the frame: the browser drops the ones of a response
-        // that a service worker makes. Only their names and values, they are
-        // all for the application.
+        // The cookies of the frame, see cookies.mjs
         const cookies = new Map(JSON.parse(localStorage.getItem('symfony cookies') ?? '[]'));
-
-        function keepCookies(headers) {
-            for (const [name, value] of headers) {
-                if ('set-cookie' !== name.toLowerCase()) {
-                    continue;
-                }
-
-                const [pair, ...attributes] = value.split(';');
-                const equals = pair.indexOf('=');
-                // PHP and Symfony delete a cookie with Max-Age=0
-                if (attributes.some((attribute) => /^\s*max-age\s*=\s*0\s*$/i.test(attribute))) {
-                    cookies.delete(pair.slice(0, equals).trim());
-                } else {
-                    cookies.set(pair.slice(0, equals).trim(), pair.slice(equals + 1).trim());
-                }
-            }
-
-            localStorage.setItem('symfony cookies', JSON.stringify([...cookies]));
-        }
 
         // What the service worker hands over, and answers with
         navigator.serviceWorker.onmessage = async (event) => {
             const [port] = event.ports;
             const request = event.data;
-            const headers = request.headers.filter(([name]) => 'cookie' !== name.toLowerCase());
-            if (cookies.size > 0) {
-                headers.push(['Cookie', [...cookies].map(([name, value]) => `${name}=${value}`).join('; ')]);
-            }
+            // What the About page of the application shows. Keep in sync with
+            // ../app/src/Controller/AboutController.php
+            const headers = [...withCookies(request.headers, cookies), ['X-PHP-Runs-In', 'a Web Worker of the page, and the service worker hands it what the frame asks for']];
 
             try {
                 const response = await php.request({ ...request, headers }, { documentRoot: '/app/public', basePath: app.slice(0, -1) });
-                keepCookies(response.headers);
+                keepCookies(cookies, response.headers);
+                localStorage.setItem('symfony cookies', JSON.stringify([...cookies]));
                 // What Symfony logs
                 if ('' !== response.stderr) {
                     console.warn(response.stderr);

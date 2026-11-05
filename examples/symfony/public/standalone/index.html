@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Symfony, on its own page</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🐘%3C/text%3E%3C/svg%3E">
+    <style>
+        :root {
+            color-scheme: light dark;
+            background: light-dark(#fff, #121318);
+            color: light-dark(#1c1d23, #e2e3ea);
+            font: 1rem/1.5 system-ui, sans-serif;
+        }
+        body {
+            max-width: 46rem;
+            margin: 0 auto;
+            padding: 2rem 1.25rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- What the browser shows until the service worker answers in its place,
+         with the application -->
+    <h1>Symfony, on its own page</h1>
+    <p id="message">Starting PHP in the service worker…</p>
+
+    <script type="module">
+        const message = document.getElementById('message');
+
+        try {
+            // A module: it imports php-web.mjs
+            const registration = await navigator.serviceWorker.register('./sw.js', { type: 'module', scope: './' });
+            const worker = registration.installing ?? registration.waiting ?? registration.active;
+            if ('activated' !== worker.state) {
+                await new Promise((resolve) => worker.addEventListener('statechange', () => 'activated' === worker.state && resolve()));
+            }
+
+            // The service worker answers now: with Symfony
+            location.reload();
+        } catch (error) {
+            message.textContent = `This browser can not run PHP in a service worker (${error.message}). The framed page runs it in the page: `;
+            const link = document.createElement('a');
+            link.href = '../';
+            link.textContent = 'open it.';
+            message.append(link);
+        }
+    </script>
+</body>
+</html>

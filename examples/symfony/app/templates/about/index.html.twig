@@ -1,0 +1,24 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}About · Guestbook{% endblock %}
+
+{% block body %}
+    <h1>About</h1>
+    <p>
+        This application is a usual Symfony application. PHP, compiled to
+        WebAssembly, runs it in your browser: no server runs it.
+    </p>
+
+    <dl>
+        <dt>PHP runs in</dt>
+        <dd>{{ php_runs_in }}</dd>
+        <dt>This request</dt>
+        <dd><code>{{ app.request.method }} {{ app.request.requestUri }}</code></dd>
+        <dt>Versions</dt>
+        <dd>PHP {{ constant('PHP_VERSION') }}, Symfony {{ symfony_version }}</dd>
+        <dt>Extensions</dt>
+        <dd>{{ extensions|join(', ') }}</dd>
+    </dl>
+
+    <p><a href="{{ app.request.basePath }}/../" target="_top">← The page of the example</a></p>
+{% endblock %}

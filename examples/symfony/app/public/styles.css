@@ -112,3 +112,23 @@ li p {
     /* The line breaks of the message */
     white-space: pre-line;
 }
+nav {
+    display: flex;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+nav a[aria-current] {
+    font-weight: 700;
+    text-decoration: none;
+}
+.message {
+    /* The line breaks of the message */
+    white-space: pre-line;
+}
+dt {
+    margin-top: 0.75rem;
+    font-weight: 600;
+}
+dd {
+    margin: 0.25rem 0 0;
+}

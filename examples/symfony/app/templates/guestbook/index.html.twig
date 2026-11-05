@@ -3,16 +3,12 @@
 {% block body %}
     <h1>Guestbook</h1>
 
-    {% for message in app.flashes('success') %}
-        <p class="flash">{{ message }}</p>
-    {% endfor %}
-
     {{ form(form) }}
 
     <ul>
         {% for message in messages %}
             <li>
-                <b>{{ message.author }}</b>
+                <a href="{{ path('message', {id: message.id}) }}"><b>{{ message.author }}</b></a>
                 <time>{{ message.createdAt|date('Y-m-d H:i') }}</time>
                 <p>{{ message.text }}</p>
             </li>

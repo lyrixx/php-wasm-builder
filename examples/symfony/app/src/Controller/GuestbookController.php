@@ -34,12 +34,23 @@ final class GuestbookController extends AbstractController
             $session->set('author', $message->author);
             $this->addFlash('success', 'Thanks for signing!');
 
-            return $this->redirectToRoute('guestbook');
+            return $this->redirectToRoute('message', ['id' => $message->id]);
         }
 
         return $this->render('guestbook/index.html.twig', [
             'form' => $form,
             'messages' => $entityManager->getRepository(Message::class)->findBy([], ['id' => 'DESC']),
+        ]);
+    }
+
+    #[Route('/messages/{id<\d+>}', name: 'message')]
+    public function show(int $id, EntityManagerInterface $entityManager): Response
+    {
+        $message = $entityManager->getRepository(Message::class)->find($id)
+            ?? throw $this->createNotFoundException(\sprintf('There is no message %d.', $id));
+
+        return $this->render('guestbook/show.html.twig', [
+            'message' => $message,
         ]);
     }
 }

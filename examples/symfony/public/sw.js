@@ -4,6 +4,10 @@
 // worker that has nothing to do, and PHP would forget its files.
 
 const app = new URL('app/', self.location).pathname;
+// The page of the example, next to this file: the other pages of the origin
+// are clients too, and on github.io the origin has the pages of every
+// repository
+const index = new URL('./', self.location).pathname;
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
@@ -18,7 +22,7 @@ self.addEventListener('fetch', (event) => {
 async function forward(request) {
     // index.html is not in the scope of the service worker
     const pages = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    const page = pages.find((client) => !new URL(client.url).pathname.startsWith(app));
+    const page = pages.find((client) => [index, `${index}index.html`].includes(new URL(client.url).pathname));
     if (undefined === page) {
         return new Response('PHP runs in the page of the example: open it, not its frame.', { status: 503 });
     }
