@@ -55,6 +55,7 @@ the `.wasm` file from somewhere else.
 
 ## When it aborts
 
-A run that takes all the memory of the module (`MEMORY`), or all of its stack (see
-[Limitations](../reference/limitations.md)), aborts it, and the promise is rejected: what is in its
-memory can not be trusted anymore, create another one.
+A run that takes all of the stack of the module (see [Limitations](../reference/limitations.md))
+aborts it, and the promise is rejected: what is in its memory can not be trusted anymore, create
+another one. A run that takes all of its memory does not: it is a fatal error of PHP, and the module
+goes on (see [Memory](../reference/limitations.md#memory)).

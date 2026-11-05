@@ -66,9 +66,9 @@ docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring si
 ```
 
 An image takes 4 bytes per pixel, whatever its format, and the memory of the module does not grow:
-in the 128 MB by default, an image of 24 megapixels fits, one of 35 does not. PHP then does not fail,
-the module aborts (`Aborted(OOM)`): PHP allocates with `malloc()` in WebAssembly, `memory_limit` does
-not count what it takes. Give the module the memory of the images it opens, with `MEMORY`.
+in the 128 MB by default, an image of 24 megapixels fits, one of 35 does not: PHP stops with a fatal
+error (see [Memory](limitations.md#memory)). Give the module the memory of the images it opens, with
+`MEMORY`.
 
 ## iconv
 
