@@ -402,6 +402,27 @@ function site_serve_task(
     return run(['php', '-S', "127.0.0.1:{$port}", '-t', $root], context: context()->withAllowFailure())->getExitCode();
 }
 
+#[AsTask(name: 'social-image', namespace: 'site', description: 'Renders docs/assets/social-image.png, what a link to the website shows, with Chrome')]
+function site_social_image_task(): void
+{
+    $image = builder_root() . '/docs/assets/social-image.png';
+
+    run(
+        [
+            'google-chrome', '--headless=new', '--disable-gpu', '--hide-scrollbars', '--window-size=1280,640',
+            // A profile of its own: Chrome may already run with the usual one
+            '--user-data-dir=' . build_dir() . '/chrome',
+            // Or the fonts, in another directory, do not load
+            '--allow-file-access-from-files',
+            '--screenshot=' . $image,
+            'file://' . builder_root() . '/docs/.overrides/social-image.html',
+        ],
+        context: context()->withQuiet(),
+    );
+
+    io()->success(relative($image));
+}
+
 /**
  * Runs the tests of the JavaScript API, tests/api.test.mjs, on every build of
  * a stack.
