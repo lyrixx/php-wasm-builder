@@ -1,0 +1,713 @@
+/*
+ * The theme of the website. Riso print: fluo inks, thick lines, and shadows
+ * printed slightly off register. The fonts of ../assets/fonts/ are under the
+ * SIL Open Font License 1.1: Unbounded, Figtree and JetBrains Mono.
+ */
+
+@font-face {
+    font-family: "Unbounded";
+    src: url("../assets/fonts/unbounded.woff2") format("woff2");
+    font-weight: 200 900;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Figtree";
+    src: url("../assets/fonts/figtree.woff2") format("woff2");
+    font-weight: 300 900;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Figtree";
+    src: url("../assets/fonts/figtree-italic.woff2") format("woff2");
+    font-weight: 300 900;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "JetBrains Mono";
+    src: url("../assets/fonts/jetbrains-mono.woff2") format("woff2");
+    font-weight: 400 800;
+    font-display: swap;
+}
+
+:root {
+    /* The inks. Keep in sync with docs/assets/logo.svg */
+    --ink: #1f1b3d;
+    --violet: #5b3cf0;
+    --pink: #ff4f9a;
+    --yellow: #ffc83a;
+    --green: #12b886;
+
+    --font-display: "Unbounded", system-ui, sans-serif;
+    --md-text-font: "Figtree";
+    --md-code-font: "JetBrains Mono";
+}
+
+[data-md-color-scheme="default"] {
+    --md-hue: 248deg;
+    --paper: #fff;
+    --line: var(--ink);
+    --md-default-fg-color: #1f1b3d;
+    --md-default-fg-color--light: #57527a;
+    --md-primary-fg-color: var(--violet);
+    --md-primary-fg-color--light: #7c62f5;
+    --md-primary-fg-color--dark: #4127d1;
+    --md-primary-bg-color: #fff;
+    --md-primary-bg-color--light: #ffffffb3;
+    --md-accent-fg-color: #e0337f;
+    --md-accent-fg-color--transparent: #ff4f9a1a;
+    --md-typeset-a-color: var(--violet);
+    --md-code-bg-color: #efebff;
+    --md-code-fg-color: #2b2559;
+    --table-head-bg-color: #fff3cf;
+}
+
+[data-md-color-scheme="slate"] {
+    --md-hue: 248deg;
+    --paper: #14112b;
+    --line: #d9d3ff;
+    --md-default-fg-color: #e6e2ff;
+    --md-default-fg-color--light: #b4aee0;
+    --md-default-bg-color: #14112b;
+    --md-default-bg-color--light: #14112bb3;
+    --md-primary-fg-color: #a593ff;
+    --md-primary-fg-color--light: #c2b6ff;
+    --md-primary-fg-color--dark: #8b74ff;
+    --md-primary-bg-color: #14112b;
+    --md-primary-bg-color--light: #14112bb3;
+    --md-accent-fg-color: #ff7ab3;
+    --md-accent-fg-color--transparent: #ff4f9a1f;
+    --md-typeset-a-color: #a593ff;
+    --md-code-bg-color: #221d4a;
+    --md-footer-bg-color: #0d0b1e;
+    --table-head-bg-color: #2a2457;
+}
+
+/* The header: the inks on top, a thick line under the tabs */
+
+.md-header::before {
+    content: "";
+    display: block;
+    height: 0.25rem;
+    background: linear-gradient(90deg, var(--violet) 0 25%, var(--pink) 25% 50%, var(--yellow) 50% 75%, var(--green) 75%);
+}
+
+.md-header__title {
+    font-family: var(--font-display);
+    font-weight: 800;
+}
+
+.md-header__button.md-logo img {
+    height: 1.5rem;
+}
+
+.md-tabs {
+    box-shadow: 0 0.15rem 0 var(--line);
+}
+
+.md-tabs__link {
+    font-weight: 700;
+}
+
+/* The documentation */
+
+.md-typeset h1,
+.md-typeset h2 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+}
+
+.md-typeset h1 {
+    color: var(--md-default-fg-color);
+    font-weight: 800;
+}
+
+.md-typeset h2 {
+    font-weight: 700;
+}
+
+.md-typeset h3 {
+    font-weight: 800;
+}
+
+.md-typeset a {
+    text-decoration-thickness: 0.1em;
+    text-underline-offset: 0.15em;
+}
+
+/* Code is printed on ink, in both schemes */
+.md-typeset .highlight {
+    --md-code-bg-color: #1f1b3d;
+    --md-code-fg-color: #ece7ff;
+    --md-code-hl-comment-color: #928cc4;
+    --md-code-hl-constant-color: #ffc83a;
+    --md-code-hl-function-color: #ff9ad0;
+    --md-code-hl-generic-color: #ece7ff;
+    --md-code-hl-keyword-color: #b9a6ff;
+    --md-code-hl-name-color: #ece7ff;
+    --md-code-hl-number-color: #ffc83a;
+    --md-code-hl-operator-color: #c9bfff;
+    --md-code-hl-punctuation-color: #a7a1d6;
+    --md-code-hl-special-color: #ff9ad0;
+    --md-code-hl-string-color: #7ee2b8;
+    --md-code-hl-variable-color: #ece7ff;
+}
+
+.md-typeset .highlight pre {
+    border: 0.1rem solid var(--line);
+    border-radius: 0.6rem;
+    box-shadow: 0.25rem 0.25rem 0 var(--pink);
+}
+
+.md-typeset .highlight .md-clipboard {
+    color: #928cc4;
+}
+
+.md-typeset :not(pre) > code {
+    border-radius: 0.3rem;
+}
+
+.md-typeset table:not([class]) {
+    border: 0.1rem solid var(--line);
+    border-radius: 0.6rem;
+    box-shadow: 0.25rem 0.25rem 0 var(--yellow);
+}
+
+/* Every table takes the width of the page */
+.md-typeset__table {
+    display: block;
+}
+
+.md-typeset__table table:not([class]) {
+    display: table;
+    width: 100%;
+}
+
+.md-typeset table:not([class]) th {
+    background: var(--table-head-bg-color);
+}
+
+.md-typeset table:not([class]) th code {
+    white-space: nowrap;
+}
+
+/* A table of measures, in a <div class="numbers" markdown>: "190 ms" is not
+   broken either */
+.md-typeset .numbers td:not(:first-child) {
+    white-space: nowrap;
+}
+
+.md-typeset .numbers table:not([class]) th,
+.md-typeset .numbers table:not([class]) td {
+    padding-inline: 0.6em;
+}
+
+/* What the first column of a table names (a build argument, a stack, a
+   method) is code: on one line, not broken in the middle of a word */
+.md-typeset table:not([class]) td:first-child code {
+    white-space: nowrap;
+}
+
+/* The sizes of docs/reference/sizes.md, that castor site:build lists: a bar
+   of ink for what each stack downloads */
+.md-typeset .sizes table:not([class]) {
+    box-shadow: 0.25rem 0.25rem 0 var(--green);
+}
+
+.md-typeset .size-bar {
+    display: inline-block;
+    width: calc(var(--ratio) * 4.5rem);
+    min-width: 0.2rem;
+    height: 0.7rem;
+    margin-right: 0.5rem;
+    border: 0.1rem solid var(--line);
+    border-radius: 0.2rem;
+    background: var(--pink);
+    vertical-align: middle;
+}
+
+.md-typeset .tabbed-labels > label {
+    font-weight: 700;
+}
+
+/* The home page, docs/.overrides/home.html */
+
+.md-main__inner:has(.home) {
+    max-width: none;
+    margin: 0;
+}
+
+.home {
+    overflow-x: clip;
+}
+
+.md-typeset.md-content__inner:has(.home-hero) {
+    margin: 0;
+    padding: 0;
+}
+
+.md-typeset.md-content__inner:has(.home-hero)::before {
+    display: none;
+}
+
+.home .headerlink {
+    display: none;
+}
+
+.md-typeset .home-section h2,
+.md-typeset .home-cta h2 {
+    margin: 0 0 1.5rem;
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    font-weight: 900;
+}
+
+.home__inner {
+    max-width: 54rem;
+    margin: 0 auto;
+    padding: 0 1.2rem;
+}
+
+.md-typeset a.home-button {
+    display: inline-block;
+    margin: 0.5rem 0.8rem 0.5rem 0;
+    padding: 0.7em 1.3em;
+    border: 0.15rem solid var(--ink);
+    border-radius: 0.8rem;
+    background: #fff;
+    box-shadow: 0.3rem 0.3rem 0 var(--violet);
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.md-typeset a.home-button--primary {
+    background: var(--yellow);
+    box-shadow: 0.3rem 0.3rem 0 var(--pink);
+}
+
+.md-typeset a.home-button:hover,
+.md-typeset a.home-button:focus-visible {
+    color: var(--ink);
+    box-shadow: 0.45rem 0.45rem 0 var(--violet);
+    transform: translate(-0.15rem, -0.15rem);
+}
+
+.md-typeset a.home-button--primary:hover,
+.md-typeset a.home-button--primary:focus-visible {
+    box-shadow: 0.45rem 0.45rem 0 var(--pink);
+}
+
+.md-typeset a.home-button:active {
+    box-shadow: 0 0 0 var(--violet);
+    transform: translate(0.3rem, 0.3rem);
+}
+
+/* The hero: on ink, in both schemes */
+
+.home-hero {
+    position: relative;
+    padding: 4.5rem 0 5.5rem;
+    background:
+        radial-gradient(#ffffff1f 0.06rem, transparent 0.07rem) 0 0 / 1.1rem 1.1rem,
+        var(--ink);
+    color: #ece7ff;
+}
+
+/* A blob of yellow ink, and a ring of pink */
+.home-hero::before,
+.home-hero::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+}
+
+.home-hero::before {
+    top: 2.5rem;
+    right: max(1rem, calc(50% - 30rem));
+    width: 22rem;
+    aspect-ratio: 1;
+    border-radius: 46% 54% 60% 40% / 52% 40% 60% 48%;
+    background: var(--yellow);
+    opacity: 0.9;
+}
+
+.home-hero::after {
+    bottom: -2.5rem;
+    left: 42%;
+    width: 7rem;
+    aspect-ratio: 1;
+    border: 1.1rem solid var(--pink);
+    border-radius: 50%;
+    opacity: 0.85;
+}
+
+.home-hero__inner {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    gap: 3rem;
+    align-items: center;
+}
+
+.md-typeset .home-kicker {
+    margin: 0 0 1rem;
+    color: var(--yellow);
+    font-family: var(--md-code-font-family);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+/* The size of the title follows the width of its column: "browser" is
+   never broken */
+.home-hero__inner > :first-child {
+    container-type: inline-size;
+}
+
+.md-typeset .home-hero h1 {
+    margin: 0;
+    color: #fff;
+    font-size: min(4.6rem, 15cqi);
+    font-weight: 800;
+    line-height: 1.02;
+    overflow-wrap: normal;
+}
+
+/* The text is printed twice, in two inks: the second one is data-text */
+.md-typeset .riso {
+    position: relative;
+    display: inline-block;
+    color: var(--violet);
+    font-size: 1.35em;
+    font-weight: 900;
+}
+
+.md-typeset .riso::after {
+    content: attr(data-text);
+    position: absolute;
+    inset: 0;
+    color: var(--pink);
+    mix-blend-mode: screen;
+    pointer-events: none;
+    transform: translate(0.05em, 0.04em);
+}
+
+.md-typeset .home-lead {
+    max-width: 30rem;
+    margin: 1.5rem 0 1.8rem;
+    color: #cfc9f5;
+    font-size: 1.05rem;
+}
+
+.md-typeset .home-hero a.home-button {
+    border-color: #fff;
+}
+
+/* The code, in a window */
+.md-typeset .home-window {
+    position: relative;
+    border: 0.15rem solid #fff;
+    border-radius: 1rem;
+    background: #120f29;
+    box-shadow: 0.6rem 0.6rem 0 var(--pink);
+    transform: rotate(1.2deg);
+}
+
+.md-typeset .home-window::before {
+    content: "index.html";
+    display: block;
+    padding: 0.6rem 0.9rem 0.6rem 3.8rem;
+    border-bottom: 0.1rem solid #ffffff26;
+    background:
+        radial-gradient(circle, #ff6b6b 0.24rem, transparent 0.27rem) 1rem 50% / 0.8rem 0.8rem no-repeat,
+        radial-gradient(circle, #ffc83a 0.24rem, transparent 0.27rem) 1.8rem 50% / 0.8rem 0.8rem no-repeat,
+        radial-gradient(circle, #12b886 0.24rem, transparent 0.27rem) 2.6rem 50% / 0.8rem 0.8rem no-repeat;
+    color: #928cc4;
+    font-family: var(--md-code-font-family);
+    font-size: 0.65rem;
+}
+
+.md-typeset .home-window .highlight {
+    --md-code-bg-color: transparent;
+    margin: 0;
+}
+
+.md-typeset .home-window .highlight pre {
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+}
+
+.md-typeset .home-window .md-clipboard,
+.md-typeset .home-window .md-code__nav {
+    display: none;
+}
+
+.md-typeset .home-window__output {
+    margin: 0;
+    padding: 0.7rem 1rem;
+    border-top: 0.1rem solid #ffffff26;
+    color: #7ee2b8;
+    font-family: var(--md-code-font-family);
+    font-size: 0.8rem;
+}
+
+.md-typeset .home-window__output::before {
+    content: "→ ";
+    color: #928cc4;
+}
+
+.md-typeset .home-window__output::after {
+    content: "▍";
+    margin-left: 0.2rem;
+    animation: home-blink 1s steps(1) infinite;
+}
+
+@keyframes home-blink {
+    50% {
+        opacity: 0;
+    }
+}
+
+/* A sticker, stuck on the window */
+.md-typeset .home-sticker {
+    position: absolute;
+    z-index: 1;
+    top: -1.8rem;
+    right: -1.2rem;
+    display: grid;
+    place-items: center;
+    width: 5.6rem;
+    aspect-ratio: 1;
+    margin: 0;
+    border: 0.15rem solid var(--ink);
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0.25rem 0.25rem 0 var(--ink);
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 900;
+    line-height: 1.1;
+    text-align: center;
+    transform: rotate(-14deg);
+}
+
+/* A band of yellow, that scrolls */
+
+.home-marquee {
+    position: relative;
+    z-index: 2;
+    overflow: hidden;
+    margin: -1.6rem -1rem 0;
+    border-block: 0.15rem solid var(--ink);
+    background: var(--yellow);
+    transform: rotate(-1.5deg);
+}
+
+.home-marquee__track {
+    display: flex;
+    width: max-content;
+    animation: home-marquee 40s linear infinite;
+}
+
+.md-typeset .home-marquee span {
+    padding: 0.8rem 0 0.8rem 2.4rem;
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.md-typeset .home-marquee span::after {
+    content: "✦";
+    margin-left: 2.4rem;
+    color: var(--pink);
+}
+
+@keyframes home-marquee {
+    to {
+        transform: translateX(-50%);
+    }
+}
+
+/* The sections */
+
+.home-section {
+    padding: 4.5rem 0;
+}
+
+.home-section--dotted {
+    border-block: 0.15rem solid var(--line);
+    background: radial-gradient(var(--md-default-fg-color--lightest) 0.06rem, transparent 0.07rem) 0 0 / 1.1rem 1.1rem;
+}
+
+.home-steps,
+.home-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 1.8rem;
+}
+
+.home-step,
+.home-card {
+    --c: var(--violet);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 1.3rem 1.5rem;
+    border: 0.15rem solid var(--line);
+    border-radius: 1rem;
+    background: var(--paper);
+    box-shadow: 0.4rem 0.4rem 0 var(--c);
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.home-step:nth-child(3n + 2),
+.home-card:nth-child(3n + 2) {
+    --c: var(--pink);
+}
+
+.home-step:nth-child(3n),
+.home-card:nth-child(3n) {
+    --c: var(--yellow);
+}
+
+.home-card:hover {
+    box-shadow: 0.6rem 0.6rem 0 var(--c);
+    transform: translate(-0.2rem, -0.2rem);
+}
+
+.md-typeset .home-step h3,
+.md-typeset .home-card h3 {
+    margin: 0 0 0.6rem;
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 800;
+}
+
+.md-typeset .home-step h3 a,
+.md-typeset .home-card h3 a {
+    color: var(--md-default-fg-color);
+    text-decoration: none;
+}
+
+/* The whole card is the link of its title */
+.md-typeset .home-card h3 a::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+}
+
+.md-typeset .home-step p,
+.md-typeset .home-card p {
+    margin: 0 0 0.8rem;
+}
+
+.md-typeset .home-step p:last-child {
+    margin: auto 0 0;
+}
+
+/* The numbers of the steps, printed off register */
+.home-steps {
+    counter-reset: step;
+}
+
+.md-typeset .home-step::before {
+    counter-increment: step;
+    content: counter(step);
+    margin-bottom: 0.4rem;
+    color: var(--c);
+    font-family: var(--font-display);
+    font-size: 2.6rem;
+    font-weight: 900;
+    line-height: 1;
+    text-shadow: 0.12rem 0.12rem 0 var(--line);
+}
+
+.md-typeset .home-card__meta {
+    position: relative;
+    z-index: 1;
+    margin: auto 0 0;
+    color: var(--md-default-fg-color--light);
+    font-family: var(--md-code-font-family);
+    font-size: 0.7rem;
+}
+
+/* The end: on violet */
+
+.home-cta {
+    padding: 4.5rem 0 5rem;
+    background:
+        radial-gradient(#ffffff26 0.06rem, transparent 0.07rem) 0 0 / 1.1rem 1.1rem,
+        var(--violet);
+    color: #fff;
+    text-align: center;
+}
+
+.md-typeset .home-cta h2 {
+    margin-bottom: 1rem;
+    color: #fff;
+    font-size: clamp(2rem, 6vw, 3.6rem);
+}
+
+.md-typeset .home-cta__command {
+    display: inline-block;
+    margin: 0 0 1.8rem;
+    padding: 0.6rem 1.2rem;
+    border: 0.15rem solid var(--ink);
+    border-radius: 0.8rem;
+    background: var(--ink);
+    box-shadow: 0.3rem 0.3rem 0 var(--yellow);
+    color: #7ee2b8;
+    font-family: var(--md-code-font-family);
+    font-size: clamp(0.9rem, 2.5vw, 1.2rem);
+}
+
+.md-typeset .home-cta__command::before {
+    content: "$ ";
+    color: #928cc4;
+}
+
+.md-typeset .home-cta a.home-button {
+    border-color: var(--ink);
+    box-shadow: 0.3rem 0.3rem 0 var(--ink);
+}
+
+@media screen and (max-width: 59.9844em) {
+    .home-hero__inner {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .home-hero::before {
+        top: auto;
+        bottom: 6rem;
+        width: 14rem;
+    }
+
+    .md-typeset .home-sticker {
+        right: -0.4rem;
+        width: 4.6rem;
+    }
+
+    .md-typeset .home-marquee span {
+        font-size: 0.95rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .home-marquee__track,
+    .md-typeset .home-window__output::after {
+        animation: none;
+    }
+}

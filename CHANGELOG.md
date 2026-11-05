@@ -61,9 +61,23 @@
   its opcache too.
 * BC break: `targets()` of a stack takes `Target`s, `->targets(Target::Web)`,
   instead of strings, and `artifact()` a `Target`. `Stack::TARGETS` is gone.
+* Add the website, https://lyrixx.github.io/php-wasm-builder/, that
+  `.github/workflows/pages.yml` deploys on GitHub Pages: the examples, the
+  pages built with the builder, and the documentation, in Markdown in
+  `docs/`, that zensical renders. `castor site:build` builds it, `castor
+  site:serve` serves it under the path where GitHub Pages does. The service
+  worker of the Symfony example only hands requests to its own page: on
+  github.io, the pages of other repositories are of the same origin.
+* The documentation shows how to use the builder from a project with castor,
+  as well as with Composer and Docker only.
 * The Symfony example has a few pages, and runs on its own page too,
   `standalone/`, with its URLs in the address bar: its service worker runs PHP
   itself, and answers every request. Both pages share the database.
+* `castor wasm:sizes` gives the gzipped size too, and `--json` prints the
+  sizes as JSON. The website shows them: `castor site:build` builds every
+  stack, and measures them.
+* The README is short, and in Markdown: what this is, how to try it, and
+  where things are. What it said is in the documentation, on the website.
 
 ## 0.9.0 (2026-11-02)
 

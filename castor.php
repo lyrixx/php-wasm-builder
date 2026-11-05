@@ -9,8 +9,11 @@ use Castor\Exception\ProblemException;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Filesystem\Path;
+use Symfony\Component\Finder\SplFileInfo;
 
 use function Castor\context;
+use function Castor\finder;
+use function Castor\fs;
 use function Castor\import;
 use function Castor\io;
 use function Castor\notify;
@@ -19,10 +22,18 @@ use function Castor\run;
 // The wasm:* tasks, that build the stacks of stacks.php, the one of each
 // example, in examples/*/stack.php, and the ones of stacks.override.php when
 // there is one (it is not versioned: the stacks of whoever uses this
-// repository as it is). A project that requires this package only gets
-// build(), see src/functions.php.
+// repository as it is), and the site:* tasks, that build the website. A
+// project that requires this package only gets build(), see
+// src/functions.php.
 
 defined('CASTOR_USE_CHDIR') || define('CASTOR_USE_CHDIR', false);
+
+// Where GitHub Pages serves the website: the name of the repository
+const SITE_PATH = '/php-wasm-builder/';
+
+// It renders the documentation, docs/, as zensical.toml says. Pinned, as
+// emsdk is.
+const ZENSICAL_IMAGE = 'zensical/zensical:0.0.74';
 
 // Composer autoloads them when the package is required by another project
 import(__DIR__ . '/src');
@@ -143,39 +154,37 @@ function stacks_task(
 }
 
 #[AsTask(name: 'sizes', namespace: 'wasm', description: 'Compares the size of what is built with ' . DEFAULT_STACK)]
-function sizes_task(): void
-{
-    io()->title('Size of the .wasm files');
+function sizes_task(
+    #[AsOption(description: 'Print them as JSON')]
+    bool $json = false,
+): void {
+    $sizes = stack_sizes();
 
-    $size = static fn (Stack $stack, Target $target): ?int => is_file($path = $stack->artifact($target, 'wasm')) ? filesize($path) : null;
+    if ($json) {
+        io()->writeln(json_encode($sizes, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
 
-    $rows = [];
-    foreach (stacks() as $stack) {
-        // The web build is the one that matters, and the one everybody has
-        $target = null !== $size($stack, Target::Web) ? Target::Web : Target::Node;
-        if (null === $bytes = $size($stack, $target)) {
-            continue;
-        }
-
-        $reference = $size(stack(DEFAULT_STACK), $target);
-        $rows[] = [
-            $stack->name,
-            \sprintf('%.1f MB', $bytes / 1024 / 1024),
-            match (true) {
-                DEFAULT_STACK === $stack->name => '-',
-                null === $reference => 'n/a',
-                default => \sprintf('%+.1f %%', ($bytes / $reference - 1) * 100),
-            },
-        ];
+        return;
     }
 
-    if ([] === $rows) {
+    io()->title('Size of the .wasm files');
+
+    if ([] === $sizes) {
         io()->warning('Nothing is built yet, run "castor wasm:build".');
 
         return;
     }
 
-    io()->table(['Stack', 'Size', 'vs ' . DEFAULT_STACK], $rows);
+    $rows = [];
+    foreach ($sizes as $size) {
+        $rows[] = [
+            $size['stack'],
+            \sprintf('%.1f MB', $size['wasm_bytes'] / 1024 / 1024),
+            \sprintf('%.1f MB', $size['gzipped_bytes'] / 1024 / 1024),
+            compared_to_default_stack($size, $sizes) ?? '-',
+        ];
+    }
+
+    io()->table(['Stack', 'Size', 'Gzipped', 'vs ' . DEFAULT_STACK], $rows);
 }
 
 #[AsTask(name: 'run', namespace: 'wasm', description: 'Runs a PHP file, or some code with -r, in a built stack')]
@@ -230,9 +239,7 @@ function serve_task(
     if (null === $example) {
         $rows = [];
         foreach (examples() as $name) {
-            // What the page says it is
-            $page = file_get_contents(builder_root() . "/examples/{$name}/public/index.html");
-            $rows[] = [$name, preg_match('{<title>(.*?)</title>}s', $page, $matches) ? trim($matches[1]) : '', example_stack($name)->name];
+            $rows[] = [$name, example_title($name), example_stack($name)->name];
         }
 
         io()->title('Examples');
@@ -250,13 +257,7 @@ function serve_task(
     }
 
     io()->title(\sprintf('Serving the example "%s"', $example));
-
-    // The built-in server only says it once started
-    if (false !== $socket = @fsockopen('127.0.0.1', $port, timeout: 1)) {
-        fclose($socket);
-
-        throw new ProblemException(\sprintf('Something already listens to the port %d: give another one, with --port %d for example.', $port, $port + 1));
-    }
+    check_port_is_free($port);
 
     // Built every time: what the page embeds may have changed, or it may have
     // been built with other options
@@ -318,6 +319,87 @@ function check_task(
     io()->success(1 === \count($stacks) ? \sprintf('The stack "%s" works.', $stacks[0]->name) : \sprintf('The %d stacks work.', \count($stacks)));
 
     return 0;
+}
+
+#[AsTask(name: 'build', namespace: 'site', description: 'Builds the website in build/site/: the documentation, and the pages of the examples, once checked')]
+function site_build_task(
+    #[AsOption(description: 'Override a value of the bake file, as "docker buildx bake --set" does (the CI gives the cache this way), can be repeated', mode: InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY)]
+    array $set = [],
+): void {
+    io()->title('Building the website');
+
+    // Every stack: docs/reference/sizes.md shows what each one weighs
+    build_with_dependencies(array_values(stacks()), $set);
+
+    // Nothing is deployed if a page does not answer
+    foreach (array_map(example_stack(...), examples()) as $stack) {
+        check_stack($stack);
+        check_api($stack);
+    }
+
+    // Keep in sync with site_dir in zensical.toml
+    $site = build_dir() . '/site';
+    fs()->remove($site);
+
+    // --strict: a broken link fails the build
+    run(
+        ['docker', 'run', '--rm', '--user', posix_getuid() . ':' . posix_getgid(), '--volume', builder_root() . ':/docs', ZENSICAL_IMAGE, 'build', '--strict'],
+        context: context()->withQuiet(),
+    );
+
+    // The home page lists them, with what they download: zensical does not
+    // know it
+    $cards = '';
+    foreach (examples() as $example) {
+        fs()->mirror(builder_root() . "/examples/{$example}/public", "{$site}/examples/{$example}");
+        $cards .= example_card($example);
+    }
+    $home = str_replace('<!-- site:build lists the examples here -->', $cards, file_get_contents("{$site}/index.html"), $replaced);
+    if (1 !== $replaced) {
+        throw new \LogicException('docs/index.md must say once where the examples go.');
+    }
+    fs()->dumpFile("{$site}/index.html", $home);
+
+    // What is built: zensical does not know it either
+    $page = str_replace('<!-- site:build lists the sizes here -->', sizes_table(stack_sizes()), file_get_contents("{$site}/reference/sizes/index.html"), $replaced);
+    if (1 !== $replaced) {
+        throw new \LogicException('docs/reference/sizes.md must say once where the sizes go.');
+    }
+    fs()->dumpFile("{$site}/reference/sizes/index.html", $page);
+
+    io()->success(\sprintf('The website is in %s, %.1f MB.', relative($site), array_sum(array_map(
+        static fn (SplFileInfo $file): int => $file->getSize(),
+        iterator_to_array(finder()->files()->in($site), false),
+    )) / 1024 / 1024));
+}
+
+#[AsTask(name: 'serve', namespace: 'site', description: 'Builds the website, then serves it on 127.0.0.1, under the path where GitHub Pages serves it')]
+function site_serve_task(
+    #[AsOption(description: 'The port to listen to')]
+    int $port = 8000,
+    #[AsOption(description: 'Serve what is built, without building it again')]
+    bool $noBuild = false,
+): int {
+    io()->title('Serving the website');
+    check_port_is_free($port);
+
+    if (!$noBuild || !is_dir(build_dir() . '/site')) {
+        site_build_task();
+    }
+
+    // GitHub Pages serves it under the name of the repository: the relative
+    // URLs, and the scope of the service worker of the Symfony example, must
+    // work there
+    $root = build_dir() . '/pages';
+    fs()->remove($root);
+    fs()->symlink(build_dir() . '/site', $root . rtrim(SITE_PATH, '/'));
+
+    io()->success([
+        \sprintf('The website is on http://127.0.0.1:%d%s', $port, SITE_PATH),
+        'It changes with "castor site:build". Ctrl+C stops the server.',
+    ]);
+
+    return run(['php', '-S', "127.0.0.1:{$port}", '-t', $root], context: context()->withAllowFailure())->getExitCode();
 }
 
 /**
@@ -435,6 +517,139 @@ function complete_opcache(): array
 function complete_targets(): array
 {
     return array_column(Target::cases(), 'value');
+}
+
+/**
+ * What the page of an example says it is.
+ */
+function example_title(string $example): string
+{
+    $page = file_get_contents(builder_root() . "/examples/{$example}/public/index.html");
+
+    return preg_match('{<title>(.*?)</title>}s', $page, $matches) ? trim($matches[1]) : '';
+}
+
+/**
+ * The size of the .wasm file of each built stack: the one of its web target,
+ * that a browser downloads, or of its node one when it only has this one.
+ *
+ * @return list<array{stack: string, php: string, target: string, wasm_bytes: int, gzipped_bytes: int}>
+ */
+function stack_sizes(): array
+{
+    $sizes = [];
+    foreach (stacks() as $stack) {
+        foreach ([Target::Web, Target::Node] as $target) {
+            if (!is_file($file = $stack->artifact($target, 'wasm'))) {
+                continue;
+            }
+
+            $wasm = file_get_contents($file);
+            $sizes[] = [
+                'stack' => $stack->name,
+                'php' => $stack->php ?? dockerfile_default('PHP_VERSION'),
+                'target' => $target->value,
+                'wasm_bytes' => \strlen($wasm),
+                // What GitHub Pages sends: it gzips .wasm files
+                'gzipped_bytes' => \strlen(gzencode($wasm)),
+            ];
+
+            break;
+        }
+    }
+
+    return $sizes;
+}
+
+/**
+ * How much bigger a stack is than the default one, built for the same target.
+ *
+ * @param array{stack: string, target: string, wasm_bytes: int}       $size
+ * @param list<array{stack: string, target: string, wasm_bytes: int}> $sizes every one of them
+ *
+ * @return string|null null for the default stack, or when it is not built for this target
+ */
+function compared_to_default_stack(array $size, array $sizes): ?string
+{
+    foreach ($sizes as $reference) {
+        if (DEFAULT_STACK === $reference['stack'] && $reference['target'] === $size['target'] && DEFAULT_STACK !== $size['stack']) {
+            return \sprintf('%+.1f %%', ($size['wasm_bytes'] / $reference['wasm_bytes'] - 1) * 100);
+        }
+    }
+
+    return null;
+}
+
+/**
+ * The table of docs/reference/sizes.md: a bar shows what each stack downloads.
+ *
+ * @param list<array{stack: string, php: string, target: string, wasm_bytes: int, gzipped_bytes: int}> $sizes
+ */
+function sizes_table(array $sizes): string
+{
+    $largest = max(array_column($sizes, 'gzipped_bytes'));
+    $defaultStack = DEFAULT_STACK;
+
+    $rows = '';
+    foreach ($sizes as $size) {
+        $rows .= \sprintf(
+            '<tr><td><code>%s</code></td><td>%s</td><td>%.1f MB</td><td><span class="size-bar" style="--ratio: %.3f"></span>%.1f MB</td><td>%s</td></tr>' . "\n",
+            htmlspecialchars($size['stack']),
+            htmlspecialchars($size['php']),
+            $size['wasm_bytes'] / 1024 / 1024,
+            $size['gzipped_bytes'] / $largest,
+            $size['gzipped_bytes'] / 1024 / 1024,
+            compared_to_default_stack($size, $sizes) ?? '',
+        );
+    }
+
+    return <<<HTML
+        <div class="md-typeset__scrollwrap sizes numbers"><div class="md-typeset__table"><table>
+        <thead><tr><th>Stack</th><th>PHP</th><th><code>.wasm</code></th><th>Gzipped</th><th>vs {$defaultStack}</th></tr></thead>
+        <tbody>
+        {$rows}</tbody>
+        </table></div></div>
+        HTML;
+}
+
+/**
+ * The card of an example, on the home page of the website: what its page says
+ * it is, and what it downloads. Keep in sync with the cards of docs/index.md.
+ */
+function example_card(string $example): string
+{
+    $page = file_get_contents(builder_root() . "/examples/{$example}/public/index.html");
+    if (!preg_match('{<meta name="description" content="([^"]+)">}', $page, $matches)) {
+        throw new ProblemException(\sprintf('The page of the example "%s" has no description, a <meta name="description">: the home page of the website shows it.', $example));
+    }
+
+    $title = example_title($example);
+    $stack = example_stack($example);
+    // What GitHub Pages sends: it gzips .wasm files
+    $wasm = file_get_contents($stack->artifact(Target::Web, 'wasm'));
+    $meta = \sprintf('PHP %s, %.1f MB to download', $stack->php ?? dockerfile_default('PHP_VERSION'), \strlen(gzencode($wasm)) / 1024 / 1024);
+
+    return <<<HTML
+        <div class="home-card">
+        <h3><a href="examples/{$example}/">{$title}</a></h3>
+        <p>{$matches[1]}</p>
+        <p class="home-card__meta">{$meta}</p>
+        </div>
+
+        HTML;
+}
+
+/**
+ * @throws ProblemException when something listens to the port: the built-in
+ *                          server only says it once started
+ */
+function check_port_is_free(int $port): void
+{
+    if (false !== $socket = @fsockopen('127.0.0.1', $port, timeout: 1)) {
+        fclose($socket);
+
+        throw new ProblemException(\sprintf('Something already listens to the port %d: give another one, with --port %d for example.', $port, $port + 1));
+    }
 }
 
 /**

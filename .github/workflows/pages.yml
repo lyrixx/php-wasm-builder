@@ -1,0 +1,68 @@
+name: Pages
+
+# Builds the website, the pages of the examples and the documentation, and
+# deploys it to GitHub Pages. Nothing is deployed if a page does not answer:
+# site:build checks their stacks.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and the one in progress is not cancelled
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+defaults:
+  run:
+    # pipefail, unlike the default shell
+    shell: bash
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@v4
+
+      # The GitHub Actions cache of buildx needs the runtime token and URLs,
+      # that only actions get
+      - uses: crazy-max/ghaction-github-runtime@v4
+
+      - uses: castor-php/setup-castor@v1
+
+      # The checks run on node, with fetch-files.mjs: the version it is made for
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # Only reads the cache: build.yml fills it, one scope per stack, on each
+      # push to main. A scope that does not exist is only a miss.
+      - name: Build
+        run: |
+          cache=()
+          for stack in $(castor --no-ansi wasm:stacks --json | jq -r '.[]'); do
+            cache+=(--set "*.cache-from+=type=gha,scope=$stack")
+          done
+          castor site:build "${cache[@]}"
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: build/site
+
+      - id: deployment
+        uses: actions/deploy-pages@v5

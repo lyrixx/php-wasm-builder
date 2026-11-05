@@ -1,4 +1,5 @@
-# Builds PHP as WebAssembly (see README.rst for the build arguments).
+# Builds PHP as WebAssembly (see docs/reference/build-arguments.md for the
+# build arguments).
 #
 # Stages:
 #

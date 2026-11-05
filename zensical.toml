@@ -1,0 +1,105 @@
+# The website: zensical renders docs/ in build/site/, and castor site:build
+# adds the page of each example, in examples/<name>/.
+
+[project]
+site_name = "PHP WASM Builder"
+site_url = "https://lyrixx.github.io/php-wasm-builder/"
+site_description = "PHP, compiled to WebAssembly: the version and the extensions you ask for, and your code in it, in a page or in node."
+docs_dir = "docs"
+site_dir = "build/site"
+repo_url = "https://github.com/lyrixx/php-wasm-builder"
+repo_name = "lyrixx/php-wasm-builder"
+edit_uri = "edit/main/docs/"
+extra_css = ["stylesheets/extra.css"]
+
+nav = [
+  { "Home" = "index.md" },
+  { "Get started" = [
+    "get-started/index.md",
+    "get-started/node.md",
+    "get-started/page.md",
+    "get-started/embed.md",
+  ] },
+  { "In your project" = [
+    "your-project/index.md",
+    "your-project/build.md",
+    "your-project/page.md",
+    "your-project/check.md",
+    "your-project/deploy.md",
+  ] },
+  { "JavaScript API" = [
+    "javascript-api/index.md",
+    "javascript-api/worker.md",
+    "javascript-api/persist.md",
+    "javascript-api/http.md",
+    "javascript-api/symfony.md",
+  ] },
+  { "Reference" = [
+    "reference/extensions.md",
+    "reference/build-arguments.md",
+    "reference/opcache.md",
+    "reference/sizes.md",
+    "reference/limitations.md",
+  ] },
+  { "This repository" = [
+    "repository/index.md",
+    "repository/stacks.md",
+    "repository/examples.md",
+    "repository/credits.md",
+  ] },
+]
+
+[project.theme]
+language = "en"
+# The templates: zensical does not publish a directory whose name starts
+# with a dot
+custom_dir = "docs/.overrides"
+# The fonts are in docs/assets/fonts/, see docs/stylesheets/extra.css
+font = false
+logo = "assets/logo.svg"
+favicon = "assets/logo.svg"
+features = [
+  "content.action.edit",
+  "content.code.copy",
+  "content.tabs.link",
+  "navigation.footer",
+  "navigation.instant",
+  "navigation.sections",
+  "navigation.tabs",
+  "navigation.top",
+  "navigation.tracking",
+  "search.highlight",
+]
+
+# The colors are in docs/stylesheets/extra.css
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+[project.markdown_extensions]
+admonition = {}
+attr_list = {}
+def_list = {}
+md_in_html = {}
+pymdownx.emoji.emoji_generator = "zensical.extensions.emoji.to_svg"
+pymdownx.emoji.emoji_index = "zensical.extensions.emoji.twemoji"
+pymdownx.highlight.anchor_linenums = true
+# For the PHP code that does not start with <?php
+pymdownx.highlight.extend_pygments_lang = [{ name = "php-inline", lang = "php", options = { startinline = true } }]
+pymdownx.inlinehilite = {}
+pymdownx.superfences = {}
+pymdownx.tabbed.alternate_style = true
+tables = {}
+toc.permalink = true
