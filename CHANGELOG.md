@@ -10,6 +10,11 @@
   deflate.
 * Add the `zlib` extension.
 
+### Minor
+
+* Document what PHP can not do with the network, and what the backward
+  compatibility covers.
+
 ## 0.11.0 (2026-11-05)
 
 ### Features
