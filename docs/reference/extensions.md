@@ -175,7 +175,7 @@ It gives Argon2 to `password_hash()` too: `PASSWORD_ARGON2ID` and `PASSWORD_ARGO
 64 MiB by default.
 
 Argon2 takes all of its memory at once, and the memory of the module does not grow. In the 128 MB by
-default, 120 MiB fits, so only `SODIUM_CRYPTO_PWHASH_MEMLIMIT_INTERACTIVE` does:
+default, 116 MiB fits, so only `SODIUM_CRYPTO_PWHASH_MEMLIMIT_INTERACTIVE` does:
 
 <div class="numbers" markdown>
 
@@ -188,9 +188,9 @@ default, 120 MiB fits, so only `SODIUM_CRYPTO_PWHASH_MEMLIMIT_INTERACTIVE` does:
 </div>
 
 The times are with the `SODIUM_CRYPTO_PWHASH_OPSLIMIT_*` of the same name, and what is embedded takes
-memory too. Above what fits, PHP does not fail, the module aborts (`Aborted(OOM)`): `memory_limit`
-does not count what Argon2 takes. It is the same for
-`sodium_crypto_pwhash_scryptsalsa208sha256()`.
+memory too, and so does what a run took before: the C library keeps it. Above what fits, it throws a
+`SodiumException` (`internal error`), and the module goes on: `memory_limit` does not count what
+Argon2 takes. It is the same for `sodium_crypto_pwhash_scryptsalsa208sha256()`.
 
 ## SQLite
 
