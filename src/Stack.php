@@ -20,7 +20,7 @@ final readonly class Stack
     /**
      * Keep in sync with the "resolve" stage of the Dockerfile.
      */
-    public const EXTENSIONS = ['bcmath', 'calendar', 'ctype', 'dom', 'exif', 'fileinfo', 'filter', 'gd', 'iconv', 'intl', 'libxml', 'mbstring', 'openssl', 'pdo', 'pdo_sqlite', 'session', 'simplexml', 'sqlite3', 'tokenizer', 'xml', 'xmlreader', 'xmlwriter'];
+    public const EXTENSIONS = ['bcmath', 'calendar', 'ctype', 'dom', 'exif', 'fileinfo', 'filter', 'gd', 'iconv', 'intl', 'libxml', 'mbstring', 'openssl', 'pdo', 'pdo_sqlite', 'phar', 'session', 'simplexml', 'sodium', 'sqlite3', 'tokenizer', 'xml', 'xmlreader', 'xmlwriter', 'zip', 'zlib'];
 
     /**
      * @param list<string> $extensions

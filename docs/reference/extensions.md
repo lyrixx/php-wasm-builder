@@ -20,13 +20,17 @@ These are the extensions that can be listed in `EXTENSIONS` (see
 | openssl      | See [OpenSSL](#openssl).  |
 | PDO          |                           |
 | pdo_sqlite   | See [SQLite](#sqlite).    |
+| phar         | See [phar](#phar).        |
 | session      | See [session](#session).  |
 | SimpleXML    | Built by default.         |
+| sodium       | See [sodium](#sodium).    |
 | sqlite3      | See [SQLite](#sqlite).    |
 | tokenizer    |                           |
 | xml          | Built by default.         |
 | xmlreader    | Built by default.         |
 | xmlwriter    | Built by default.         |
+| zip          | See [zip](#zip).          |
+| zlib         | See [zlib](#zlib).        |
 
 They are always there, whatever `EXTENSIONS` says: Core, date, hash, json, lexbor (PHP 8.5 and
 later), pcre, random, Reflection, SPL, standard, uri (PHP 8.5 and later), and Zend OPcache (PHP 8.5
@@ -120,6 +124,31 @@ is about 2.6 MB bigger (1 MB gzipped):
 docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter openssl"
 ```
 
+## phar
+
+phar needs no library: the `.wasm` file is about 200 KB bigger (70 KB gzipped). `runFile()` runs a
+`.phar` file, and `phar://` reads what is in it, `include` too. The phars that gzip compresses need
+[zlib](#zlib), and there is no bzip2:
+
+```
+docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter phar zlib"
+```
+
+`phar.readonly` is on, as in PHP, and `ini_set()` can not turn it off: `new Phar()` throws an
+`UnexpectedValueException` when it would write. A `php.ini` turns it off, written before PHP runs:
+
+```js
+const php = await createPhp();
+php.FS.mkdirTree('/usr/local/lib');
+php.FS.writeFile('/usr/local/lib/php.ini', 'phar.readonly=0\n');
+```
+
+`PharData`, for tar and zip archives, writes without it.
+
+Tools run, with the extensions they ask for: `composer.phar about`, that warns that the `php` command
+does not run it, and `phpunit.phar --help`, with ctype, dom, filter, libxml, mbstring, tokenizer and
+xmlwriter.
+
 ## session
 
 session needs no library: the `.wasm` file is about 70 KB bigger. There is no HTTP response, so the
@@ -130,6 +159,38 @@ memory of the module:
 ```
 docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter session"
 ```
+
+## sodium
+
+sodium links libsodium, without assembly nor threads. It takes its random numbers from
+`crypto.getRandomValues()`, in a page, in a worker and in node. There is no AES-GCM:
+`sodium_crypto_aead_aes256gcm_is_available()` is false, it needs a CPU instruction. The `.wasm` file
+is about 250 KB bigger (100 KB gzipped):
+
+```
+docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter sodium"
+```
+
+It gives Argon2 to `password_hash()` too: `PASSWORD_ARGON2ID` and `PASSWORD_ARGON2I`, that take
+64 MiB by default.
+
+Argon2 takes all of its memory at once, and the memory of the module does not grow. In the 128 MB by
+default, 120 MiB fits, so only `SODIUM_CRYPTO_PWHASH_MEMLIMIT_INTERACTIVE` does:
+
+<div class="numbers" markdown>
+
+| `SODIUM_CRYPTO_PWHASH_MEMLIMIT_*` | Takes   | `MEMORY` it needs | In node |
+|-----------------------------------|--------:|------------------:|--------:|
+| `INTERACTIVE`                     | 64 MiB  | `128mb`           | 0.1 s   |
+| `MODERATE`                        | 256 MiB | `272mb`           | 0.7 s   |
+| `SENSITIVE`                       | 1 GiB   | `1040mb`          | 5 s     |
+
+</div>
+
+The times are with the `SODIUM_CRYPTO_PWHASH_OPSLIMIT_*` of the same name, and what is embedded takes
+memory too. Above what fits, PHP does not fail, the module aborts (`Aborted(OOM)`): `memory_limit`
+does not count what Argon2 takes. It is the same for
+`sodium_crypto_pwhash_scryptsalsa208sha256()`.
 
 ## SQLite
 
@@ -144,3 +205,32 @@ docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring si
 
 A database is a file of the WASM filesystem, in memory: it is gone with the page, unless the page
 keeps it in IndexedDB (see [Keep files across reloads](../javascript-api/persist.md)).
+
+## zip
+
+zip links libzip, with zlib, and only deflate, the method of most archives: `ZipArchive` reads and
+writes them in the WASM filesystem, and `zip://` reads them. The `.wasm` file is about 170 KB bigger
+(65 KB gzipped):
+
+```
+docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter zip"
+```
+
+bzip2, xz and zstd are left out: an archive that uses them opens, and `getFromName()` is false for
+those entries. So is AES encryption, there is no crypto library. The entries of an archive encrypted
+with AES do not read, and `setEncryptionName()` returns false. Check it: `close()` then writes the
+entry **in clear**, and returns true. Only the traditional PKWARE encryption works, and it is weak.
+
+A corrupt archive does not open, and a corrupt entry gives a warning and false. PHP 8.3 does not check
+what it reads, whatever it runs on: `getFromName()` gives what it could read, and `extractTo()`
+returns true.
+
+## zlib
+
+zlib links zlib. `gzencode()`, `gzcompress()`, `gzdeflate()` and their opposites, `gzopen()`,
+`compress.zlib://` and the `zlib.*` stream filters work on strings, and on the files of the WASM
+filesystem. The `.wasm` file is about 85 KB bigger (35 KB gzipped):
+
+```
+docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter zlib"
+```

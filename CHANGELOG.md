@@ -10,6 +10,11 @@
   not abort, and the next run starts with all of its memory.
 * BC break: `memory_limit` defaults to 7/8 of what the module has after its data
   and what it embeds, `107M` with the 128 MB by default, instead of `128M`.
+* Add the `phar` extension.
+* Add the `sodium` extension, with libsodium 1.0.22 (`LIBSODIUM_VERSION`).
+* Add the `zip` extension, with libzip 1.12.1 (`LIBZIP_VERSION`), and only
+  deflate.
+* Add the `zlib` extension.
 
 ### Fixes
 

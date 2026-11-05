@@ -17,6 +17,8 @@
 #   libpng
 #   libjpeg
 #   libwebp
+#   libzip
+#   libsodium
 #   php         configures and compiles PHP
 #   objects     compiles run.c and spawn.c
 #   warm        runs WARMUP, and compiles the PHP files with opcache
@@ -43,27 +45,33 @@ mkdir -p /plan
 flags=""
 gd=0
 libiconv=0
+libsodium=0
 libxml2=0
+libzip=0
 oniguruma=0
 icu=0
 openssl=0
 pdo=0
 sqlite=0
+zlib=0
 # Sorted, so that the same extensions always give the same ./configure flags.
 # Keep in sync with Stack::EXTENSIONS, in src/Stack.php
 for extension in $(printf '%s\n' $EXTENSIONS | sort -u); do
     case $extension in
-        bcmath|calendar|ctype|exif|fileinfo|filter|session|tokenizer) flags="$flags --enable-$extension" ;;
-        dom|simplexml|xml|xmlreader|xmlwriter)                        flags="$flags --enable-$extension"; libxml2=1 ;;
-        gd)                                                           flags="$flags --enable-gd --with-jpeg --with-webp"; gd=1 ;;
-        iconv)                                                        flags="$flags --with-iconv=/local/install"; libiconv=1 ;;
-        libxml)                                                       libxml2=1 ;;
-        mbstring)                                                     flags="$flags --enable-mbstring"; oniguruma=1 ;;
-        intl)                                                         flags="$flags --enable-intl"; icu=1 ;;
-        openssl)                                                      flags="$flags --with-openssl"; openssl=1 ;;
-        pdo)                                                          pdo=1 ;;
-        pdo_sqlite)                                                   flags="$flags --with-pdo-sqlite"; pdo=1; sqlite=1 ;;
-        sqlite3)                                                      flags="$flags --with-sqlite3"; sqlite=1 ;;
+        bcmath|calendar|ctype|exif|fileinfo|filter|phar|session|tokenizer) flags="$flags --enable-$extension" ;;
+        dom|simplexml|xml|xmlreader|xmlwriter)                             flags="$flags --enable-$extension"; libxml2=1 ;;
+        gd)                                                                flags="$flags --enable-gd --with-jpeg --with-webp"; gd=1; zlib=1 ;;
+        iconv)                                                             flags="$flags --with-iconv=/local/install"; libiconv=1 ;;
+        libxml)                                                            libxml2=1 ;;
+        mbstring)                                                          flags="$flags --enable-mbstring"; oniguruma=1 ;;
+        intl)                                                              flags="$flags --enable-intl"; icu=1 ;;
+        openssl)                                                           flags="$flags --with-openssl"; openssl=1 ;;
+        pdo)                                                               pdo=1 ;;
+        pdo_sqlite)                                                        flags="$flags --with-pdo-sqlite"; pdo=1; sqlite=1 ;;
+        sodium)                                                            flags="$flags --with-sodium"; libsodium=1 ;;
+        sqlite3)                                                           flags="$flags --with-sqlite3"; sqlite=1 ;;
+        zip)                                                               flags="$flags --with-zip"; libzip=1; zlib=1 ;;
+        zlib)                                                              flags="$flags --with-zlib"; zlib=1 ;;
         *) echo "Unknown extension '$extension'" >&2; exit 1 ;;
     esac
 done
@@ -92,8 +100,18 @@ if [ $sqlite = 1 ]; then
     link="$link /local/install/lib/libsqlite3.a"
 fi
 if [ $gd = 1 ]; then
-    # libpng needs zlib, and libwebp libsharpyuv: they come after them
-    link="$link /local/install/lib/libpng16.a /local/install/lib/libz.a /local/install/lib/libjpeg.a /local/install/lib/libwebp.a /local/install/lib/libsharpyuv.a"
+    # libwebp needs libsharpyuv: it comes after it
+    link="$link /local/install/lib/libpng16.a /local/install/lib/libjpeg.a /local/install/lib/libwebp.a /local/install/lib/libsharpyuv.a"
+fi
+if [ $libzip = 1 ]; then
+    link="$link /local/install/lib/libzip.a"
+fi
+if [ $zlib = 1 ]; then
+    # libpng and libzip need it: it comes after them
+    link="$link /local/install/lib/libz.a"
+fi
+if [ $libsodium = 1 ]; then
+    link="$link /local/install/lib/libsodium.a"
 fi
 if [ $icu = 1 ]; then
     # The icu stage builds both: libicudata.a is the empty stub that ICU
@@ -136,11 +154,14 @@ echo "$opcache" > /plan/opcache
 echo "$link" > /plan/link
 echo "$gd" > /plan/gd
 echo "$libiconv" > /plan/libiconv
+echo "$libsodium" > /plan/libsodium
 echo "$libxml2" > /plan/libxml2
+echo "$libzip" > /plan/libzip
 echo "$oniguruma" > /plan/oniguruma
 echo "$icu" > /plan/icu
 echo "$openssl" > /plan/openssl
 echo "$sqlite" > /plan/sqlite
+echo "$zlib" > /plan/zlib
 
 echo "./configure:$flags"
 echo "link:$link"
@@ -312,13 +333,13 @@ emar rcs /local/install/lib/libsqlite3.a sqlite3.o
 cp sqlite3.h sqlite3ext.h /local/install/include/
 EOF
 
-# Compile zlib, that libpng needs
+# Compile zlib, for zlib, and that libpng and libzip need
 FROM base AS zlib
 ARG ZLIB_VERSION=1.3.2
-COPY --from=resolve /plan/gd /plan/gd
+COPY --from=resolve /plan/zlib /plan/zlib
 RUN <<EOF
 set -eu
-[ "$(cat /plan/gd)" = 1 ] || exit 0
+[ "$(cat /plan/zlib)" = 1 ] || exit 0
 git clone https://github.com/madler/zlib --branch v$ZLIB_VERSION --single-branch --depth 1
 cd zlib
 emconfigure ./configure --static --prefix=/local/install
@@ -375,6 +396,43 @@ emcmake cmake -S . -B out -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/loc
 emmake make -C out -j`nproc` install
 EOF
 
+# Compile libzip, for zip
+FROM base AS libzip
+ARG LIBZIP_VERSION=1.12.1
+COPY --from=resolve /plan/libzip /plan/libzip
+COPY --from=zlib /local/install /local/install
+RUN <<EOF
+set -eu
+[ "$(cat /plan/libzip)" = 1 ] || exit 0
+git clone https://github.com/nih-at/libzip --branch v$LIBZIP_VERSION --single-branch --depth 1
+cd libzip
+# Only deflate: every other method, and AES encryption, need one more library
+emcmake cmake -S . -B out -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/local/install -DCMAKE_INSTALL_LIBDIR=lib \
+    -DCMAKE_FIND_ROOT_PATH=/local/install \
+    -DBUILD_SHARED_LIBS=OFF -DENABLE_BZIP2=OFF -DENABLE_LZMA=OFF -DENABLE_ZSTD=OFF \
+    -DENABLE_COMMONCRYPTO=OFF -DENABLE_GNUTLS=OFF -DENABLE_OPENSSL=OFF -DENABLE_WINDOWS_CRYPTO=OFF \
+    -DBUILD_DOC=OFF -DBUILD_EXAMPLES=OFF -DBUILD_OSSFUZZ=OFF -DBUILD_REGRESS=OFF -DBUILD_TOOLS=OFF
+emmake make -C out -j`nproc` install
+EOF
+
+# Compile libsodium, for sodium
+FROM base AS libsodium
+ARG LIBSODIUM_VERSION=1.0.22
+COPY --from=resolve /plan/libsodium /plan/libsodium
+RUN <<EOF
+set -eu
+[ "$(cat /plan/libsodium)" = 1 ] || exit 0
+curl -fsSL --retry 3 --connect-timeout 30 -o libsodium.tgz \
+    https://github.com/jedisct1/libsodium/releases/download/$LIBSODIUM_VERSION-RELEASE/libsodium-$LIBSODIUM_VERSION.tar.gz
+tar -xzf libsodium.tgz
+cd libsodium-$LIBSODIUM_VERSION
+# The flags of its dist-build/emscripten.sh: no assembly, no threads. Not its
+# --enable-minimal: PHP needs what it leaves out.
+emconfigure ./configure --prefix=/local/install --disable-shared --without-pthreads --disable-asm --disable-pie --disable-ssp
+emmake make -j`nproc`
+emmake make install
+EOF
+
 # Configure and compile PHP
 FROM php-src AS php
 COPY --from=oniguruma /local/install /local/install
@@ -383,10 +441,12 @@ COPY --from=icu /local/install /local/install
 COPY --from=libiconv /local/install /local/install
 COPY --from=openssl /local/install /local/install
 COPY --from=sqlite /local/install /local/install
+COPY --from=zlib /local/install /local/install
 COPY --from=libjpeg /local/install /local/install
-# With zlib
 COPY --from=libpng /local/install /local/install
 COPY --from=libwebp /local/install /local/install
+COPY --from=libzip /local/install /local/install
+COPY --from=libsodium /local/install /local/install
 COPY --from=resolve /plan/configure /plan/configure
 
 ENV ONIG_LIBS="-L/local/install"
@@ -396,8 +456,14 @@ ENV LIBXML_CFLAGS="-I/local/install/include/libxml2"
 # What pkg-config would give, SQLite is not installed with its .pc file
 ENV SQLITE_CFLAGS="-I/local/install/include"
 ENV SQLITE_LIBS="-L/local/install/lib -lsqlite3"
+# What pkg-config would give, without -lzip: ./configure declares the functions
+# it looks for as char f(), and with libzip before its test what wasm-ld writes
+# does not load in wasm-opt. It then finds none of them, without failing, and
+# ZipArchive has no setMtimeName(), setEncryptionName()…
+ENV LIBZIP_CFLAGS="-I/local/install/include"
+ENV LIBZIP_LIBS="-L/local/install/lib"
 # intl finds ICU, and its version, with pkg-config, openssl finds OpenSSL, and
-# gd its libraries
+# gd, sodium and zlib their libraries
 ENV EM_PKG_CONFIG_PATH=/local/install/lib/pkgconfig
 
 RUN cd php-src && \
