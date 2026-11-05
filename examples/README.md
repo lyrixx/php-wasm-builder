@@ -6,7 +6,7 @@ your own would be:
 | File | What it is |
 | --- | --- |
 | `stack.php` | The stack of the page: the PHP version, the extensions, what to embed. castor builds it in `public/build/`. |
-| `public/` | What the browser loads: the page, and `build/php-web.mjs` and `build/php-web.wasm` once built (not in git). |
+| `public/` | What the browser loads: the page, and `build/php-web.mjs`, `build/php-web.wasm` and `build/php-sw.js` once built (not in git). |
 | `app/` | When there is one, the PHP code that the stack embeds, that PHP sees at `/app`. |
 
 - [`playground/`](playground/): write PHP, and run it. Every extension.

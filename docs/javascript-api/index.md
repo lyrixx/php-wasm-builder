@@ -53,6 +53,17 @@ across the reloads of the page, with the build for the web only (see
 `createPhp()` takes the options of the `Module` of emscripten too, for example `locateFile` to load
 the `.wasm` file from somewhere else.
 
+## In a frame
+
+The build for the web shows an application in an `<iframe>`, as on a web server, with a service
+worker (see [An application in a frame](frame.md)):
+
+| What                                                                | What it does                                                                                    |
+|---------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|
+| `serveInFrame(php, { frame, documentRoot, under, start, headers })` | From `php-web.mjs`: starts the service worker, answers what it hands over, and opens the frame. |
+| `forwardToPhp({ under, except })`                                   | From `php-sw.js`, that a service worker imports: hands what the frame asks for to the page.     |
+| `keepCookies(cookies, headers)`, `withCookies(headers, cookies)`    | From `php-web.mjs`: the cookies of the application, for a service worker that runs PHP itself.  |
+
 ## When it aborts
 
 A run that takes all of the stack of the module (see [Limitations](../reference/limitations.md))

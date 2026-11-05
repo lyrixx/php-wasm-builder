@@ -21,3 +21,6 @@ The page runs a file of `/app`, gives PHP its input on stdin, and gets what PHP 
 
 `public/` is the website: any static server serves it, `php -S 127.0.0.1:8000 -t public` for
 example.
+
+An application with its own pages, a Symfony one for example, shows in a frame instead (see
+[An application in a frame](../javascript-api/frame.md)).

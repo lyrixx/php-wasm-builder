@@ -15,6 +15,16 @@
 * Add the `zip` extension, with libzip 1.12.1 (`LIBZIP_VERSION`), and only
   deflate.
 * Add the `zlib` extension.
+* Add `serveInFrame()`, in `php-web.mjs`: it shows an application in an
+  `<iframe>`, with a service worker.
+* Add `php-sw.js`, built for the web next to `php-web.mjs`: the service worker
+  of a project imports it, and calls `forwardToPhp()`.
+* Add `keepCookies()` and `withCookies()`, in `php-web.mjs`: the cookies of the
+  application, for a service worker that runs PHP itself.
+* Add `Target::files()` and `Stack::targetArtifacts()`. `artifacts()` lists
+  `php-sw.js` too.
+* The Symfony example uses them: `public/cookies.mjs` is gone, and the cookies
+  of its framed page are under another key: a visitor starts a new session.
 
 ### Fixes
 

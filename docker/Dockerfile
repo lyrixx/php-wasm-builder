@@ -23,7 +23,8 @@
 #   objects     compiles run.c and spawn.c
 #   warm        runs WARMUP, and compiles the PHP files with opcache
 #               (OPCACHE=precompiled), in node, with warm.mjs
-#   link        links the .mjs/.wasm files with api.js, and what is embedded
+#   link        links the .mjs/.wasm files with api.js, and what is embedded,
+#               and copies php-sw.js for the web
 #
 # Every stage only reads the parts of the plan it needs, and the plan is made
 # of small files: changing EXTENSIONS, TARGETS, ... only rebuilds what actually
@@ -128,13 +129,13 @@ fi
 
 # <output file name> <emscripten environment> [<flags>], by target. IDBFS
 # keeps files in IndexedDB, across the reloads of a page (the persist option of
-# createPhp()), and worker.js runs PHP in a Web Worker (createPhpInWorker()),
-# what the worker environment says it runs in. Keep in sync with
-# the cases of src/Target.php
+# createPhp()), worker.js runs PHP in a Web Worker (createPhpInWorker()), what
+# the worker environment says it runs in, and frame.js shows an application in
+# a frame (serveInFrame()). Keep in sync with the cases of src/Target.php
 : > /plan/targets
 for target in $TARGETS; do
     case $target in
-        web)  echo "php-web web,worker -lidbfs.js --extern-post-js worker.js" >> /plan/targets ;;
+        web)  echo "php-web web,worker -lidbfs.js --extern-post-js worker.js --extern-post-js frame.js" >> /plan/targets ;;
         node) echo "php-node node" >> /plan/targets ;;
         *)    echo "Unknown target '$target', supported targets: web node" >&2; exit 1 ;;
     esac
@@ -498,12 +499,12 @@ EOF
 # and api.js.
 #
 # The functions of run.c and what api.js needs are exported from the .wasm
-# file. createPhp() is what the .mjs file exports, and createPhpInWorker() for
-# the web. The C stack is 64 KB by default: PHP goes deeper, through the
-# callbacks of its functions (Symfony when it compiles its container), and the
-# stack then overflows on the memory of PHP, its objects call null functions.
-# It is checked: a stack that overflows aborts the module, as one that takes
-# all the memory does.
+# file. createPhp() is what the .mjs file exports, and createPhpInWorker(),
+# serveInFrame(), keepCookies() and withCookies() for the web. The C stack is
+# 64 KB by default: PHP goes deeper, through the callbacks of its functions
+# (Symfony when it compiles its container), and the stack then overflows on the
+# memory of PHP, its objects call null functions. It is checked: a stack that
+# overflows aborts the module, as one that takes all the memory does.
 COPY <<'EOF' /local/src/link.sh
 set -eu
 output=$1
@@ -554,7 +555,7 @@ EOF
 FROM objects AS link
 ARG EMBED_AT=""
 ARG MEMORY=128mb
-COPY api.js worker.js /local/src/
+COPY api.js frame.js php-sw.js worker.js /local/src/
 COPY --from=warm /embed /embed
 COPY --from=warm /opcache /opcache
 COPY --from=resolve /plan/targets /plan/targets
@@ -566,6 +567,8 @@ mkdir -p /build
 while read -r output environment flags; do
     sh link.sh /build/$output.mjs $environment -O2 -s EXPORTED_RUNTIME_METHODS=FS $flags \
         ${EMBED_AT:+--embed-file "/embed@$EMBED_AT"} ${opcache:-}
+    # Keep in sync with Target::files(), in src/Target.php
+    [ "$output" != php-web ] || cp php-sw.js /build/
 done < /plan/targets
 EOF
 

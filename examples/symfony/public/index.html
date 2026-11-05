@@ -133,8 +133,9 @@
             built. opcache compiles the files as they run.
         </li>
         <li>
-            A service worker, <code>sw.js</code>, hands what the frame asks for
-            to this page, that runs <code>php.request()</code> in a Web Worker
+            <code>serveInFrame()</code> starts a service worker, <code>sw.js</code>,
+            that hands what the frame asks for to this page, that runs
+            <code>php.request()</code> in a Web Worker
             (<code>createPhpInWorker()</code>): the page does not freeze.
         </li>
         <li>
@@ -149,13 +150,10 @@
     </footer>
 
     <script type="module">
-        import { createPhpInWorker } from './build/php-web.mjs';
-        import { keepCookies, withCookies } from './cookies.mjs';
+        import { createPhpInWorker, serveInFrame } from './build/php-web.mjs';
 
         const message = document.getElementById('message');
         const frame = document.getElementById('frame');
-        // Where the frame is: the service worker hands to PHP what is asked for there
-        const app = new URL('app/', location.href).pathname;
 
         // In a worker: the page, and the frame, do not freeze while PHP
         // runs. /symfony, where the database and the sessions are, is kept in
@@ -171,45 +169,20 @@
             throw new Error(message.textContent);
         }
 
-        // The cookies of the frame, see cookies.mjs
-        const cookies = new Map(JSON.parse(localStorage.getItem('symfony cookies') ?? '[]'));
-
-        // What the service worker hands over, and answers with
-        navigator.serviceWorker.onmessage = async (event) => {
-            const [port] = event.ports;
-            const request = event.data;
-            // What the About page of the application shows. Keep in sync with
-            // ../app/src/Controller/AboutController.php
-            const headers = [...withCookies(request.headers, cookies), ['X-PHP-Runs-In', 'a Web Worker of the page, and the service worker hands it what the frame asks for']];
-
-            try {
-                const response = await php.request({ ...request, headers }, { documentRoot: '/app/public', basePath: app.slice(0, -1) });
-                keepCookies(cookies, response.headers);
-                localStorage.setItem('symfony cookies', JSON.stringify([...cookies]));
-                // What Symfony logs
-                if ('' !== response.stderr) {
-                    console.warn(response.stderr);
-                }
-
-                port.postMessage(response, [response.body.buffer]);
-            } catch (error) {
-                port.postMessage({ status: 500, headers: [['Content-Type', 'text/plain']], body: `PHP failed: ${error.message}` });
-                throw error;
-            }
-        };
-
-        message.textContent = 'Starting the service worker…';
-        const registration = await navigator.serviceWorker.register('./sw.js', { scope: app });
-        const worker = registration.installing ?? registration.waiting ?? registration.active;
-        if ('activated' !== worker.state) {
-            await new Promise((resolve) => worker.addEventListener('statechange', () => 'activated' === worker.state && resolve()));
-        }
-
         frame.addEventListener('load', () => {
             document.getElementById('address').textContent = frame.contentWindow.location.pathname + frame.contentWindow.location.search;
         });
-        frame.src = app;
-        message.textContent = '';
+
+        message.textContent = 'Starting the service worker…';
+        await serveInFrame(php, {
+            frame,
+            documentRoot: '/app/public',
+            // What the About page of the application shows. Keep in sync with
+            // ../app/src/Controller/AboutController.php
+            headers: { 'X-PHP-Runs-In': 'a Web Worker of the page, and the service worker hands it what the frame asks for' },
+        }).finally(() => {
+            message.textContent = '';
+        });
     </script>
 </body>
 </html>
