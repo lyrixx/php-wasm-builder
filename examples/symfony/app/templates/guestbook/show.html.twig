@@ -1,0 +1,15 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ message.author }} · Guestbook{% endblock %}
+
+{% block body %}
+    {% for flash in app.flashes('success') %}
+        <p class="flash">{{ flash }}</p>
+    {% endfor %}
+
+    <h1>{{ message.author }}</h1>
+    <time>{{ message.createdAt|date('Y-m-d H:i') }}</time>
+    <p class="message">{{ message.text }}</p>
+
+    <p><a href="{{ path('guestbook') }}">← Every message</a></p>
+{% endblock %}

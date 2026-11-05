@@ -1,6 +1,6 @@
 // The API of the module: runFile() and runCode() run PHP as the php command
 // does, and return what it writes, request() runs it as a web server does,
-// and returns its response. See "JavaScript API" in README.rst.
+// and returns its response. See docs/javascript-api/index.md.
 //
 // Given to emcc with --pre-js: this runs as the module is created, before it
 // starts. Module is what createPhp() is given, and what it returns once the

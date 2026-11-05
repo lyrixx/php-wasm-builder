@@ -23,17 +23,11 @@ final readonly class Stack
     public const EXTENSIONS = ['bcmath', 'calendar', 'ctype', 'dom', 'fileinfo', 'filter', 'iconv', 'intl', 'libxml', 'mbstring', 'openssl', 'pdo', 'pdo_sqlite', 'session', 'simplexml', 'sqlite3', 'tokenizer', 'xml', 'xmlreader', 'xmlwriter'];
 
     /**
-     * The targets, and the name of the files they produce. Keep in sync with
-     * the "resolve" stage of the Dockerfile.
-     */
-    public const TARGETS = ['web' => 'php-web', 'node' => 'php-node'];
-
-    /**
      * @param list<string> $extensions
      * @param string|null  $embed      absolute path of the directory to embed
      * @param string|null  $embedAt    where the embedded directory is in the WASM filesystem, as /app
      * @param list<string> $warmup     a file of the embedded directory, and its arguments
-     * @param list<string> $targets
+     * @param list<Target> $targets
      * @param string       $outputDir  absolute path of the directory the files are written to
      */
     private function __construct(
@@ -61,7 +55,7 @@ final readonly class Stack
             embedAt: null,
             warmup: [],
             opcache: null,
-            targets: array_keys(self::TARGETS),
+            targets: Target::cases(),
             memory: null,
             icuData: null,
             outputDir: build_dir() . '/' . $name,
@@ -133,11 +127,9 @@ final readonly class Stack
         return $this->with(opcache: $opcache);
     }
 
-    public function targets(string ...$targets): self
+    public function targets(Target ...$targets): self
     {
-        self::validate('target', $targets, array_keys(self::TARGETS));
-
-        return $this->with(targets: array_values(array_unique($targets)));
+        return $this->with(targets: array_map(Target::from(...), array_values(array_unique(array_column($targets, 'value')))));
     }
 
     public function memory(string $memory): self
@@ -162,11 +154,11 @@ final readonly class Stack
     }
 
     /**
-     * @return string the absolute path of a file this stack produces, for example artifact('web', 'wasm')
+     * @return string the absolute path of a file this stack produces, for example artifact(Target::Web, 'wasm')
      */
-    public function artifact(string $target, string $extension): string
+    public function artifact(Target $target, string $extension): string
     {
-        return $this->outputDir . '/' . self::TARGETS[$target] . '.' . $extension;
+        return $this->outputDir . '/' . $target->fileName() . '.' . $extension;
     }
 
     /**

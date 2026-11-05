@@ -1,3 +1,4 @@
 build/
 .castor.stub.php
 /stacks.override.php
+/.cache/

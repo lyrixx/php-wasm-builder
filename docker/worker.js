@@ -1,6 +1,6 @@
 // createPhpInWorker(): PHP in a Web Worker, off the main thread of the page.
 // It starts this same module in a worker, that runs createPhp() there and
-// answers what the page asks. See "PHP in a worker" in README.rst.
+// answers what the page asks. See docs/javascript-api/worker.md.
 //
 // Given to emcc with --extern-post-js, for the build for the web only: this is
 // after the code of emscripten, at the top level of php-web.mjs.

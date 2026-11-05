@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- The inks of docs/stylesheets/extra.css, printed off register -->
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#5b3cf0" stroke="#1f1b3d" stroke-width="4"/>
+  <g font-family="ui-monospace, Menlo, Consolas, monospace" font-size="22" font-weight="800" text-anchor="middle">
+    <text x="34" y="42" fill="#ff4f9a">php</text>
+    <text x="32" y="40" fill="#ffc83a">php</text>
+  </g>
+</svg>

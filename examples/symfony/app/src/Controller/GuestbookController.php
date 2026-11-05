@@ -22,8 +22,8 @@ final class GuestbookController extends AbstractController
         // Who signed last, in this session
         $message->author = $session->get('author', '');
         $form = $this->createFormBuilder($message)
-            ->add('author')
-            ->add('text', TextareaType::class)
+            ->add('author', null, ['label' => 'Your name'])
+            ->add('text', TextareaType::class, ['label' => 'Your message'])
             ->add('sign', SubmitType::class)
             ->getForm()
             ->handleRequest($request);
@@ -34,23 +34,23 @@ final class GuestbookController extends AbstractController
             $session->set('author', $message->author);
             $this->addFlash('success', 'Thanks for signing!');
 
-            return $this->redirectToRoute('guestbook');
+            return $this->redirectToRoute('message', ['id' => $message->id]);
         }
-
-        $session->set('views', $session->get('views', 0) + 1);
 
         return $this->render('guestbook/index.html.twig', [
             'form' => $form,
             'messages' => $entityManager->getRepository(Message::class)->findBy([], ['id' => 'DESC']),
-            'views' => $session->get('views'),
         ]);
     }
 
-    #[Route('/forget-me', name: 'forget_me', methods: ['POST'])]
-    public function forgetMe(Request $request): Response
+    #[Route('/messages/{id<\d+>}', name: 'message')]
+    public function show(int $id, EntityManagerInterface $entityManager): Response
     {
-        $request->getSession()->invalidate();
+        $message = $entityManager->getRepository(Message::class)->find($id)
+            ?? throw $this->createNotFoundException(\sprintf('There is no message %d.', $id));
 
-        return $this->redirectToRoute('guestbook');
+        return $this->render('guestbook/show.html.twig', [
+            'message' => $message,
+        ]);
     }
 }

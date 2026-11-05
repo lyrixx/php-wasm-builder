@@ -2,10 +2,15 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>{% block title %}Guestbook{% endblock %}</title>
         <link rel="stylesheet" href="{{ asset('styles.css') }}">
     </head>
     <body>
+        <nav>
+            <a href="{{ path('guestbook') }}"{% if app.current_route in ['guestbook', 'message'] %} aria-current="page"{% endif %}>Guestbook</a>
+            <a href="{{ path('about') }}"{% if app.current_route == 'about' %} aria-current="page"{% endif %}>About</a>
+        </nav>
         {% block body %}{% endblock %}
         <footer>
             Symfony {{ constant('Symfony\\Component\\HttpKernel\\Kernel::VERSION') }},

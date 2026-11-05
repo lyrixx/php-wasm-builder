@@ -3,6 +3,6 @@ framework:
     csrf_protection: true
     session:
         handler_id: session.handler.native_file
-        # Kept in IndexedDB by the page, keep in sync with persist in
-        # ../public/index.html
+        # Kept in IndexedDB, keep in sync with persist in ../public/index.html
+        # and ../public/standalone/sw.js
         save_path: /symfony/sessions

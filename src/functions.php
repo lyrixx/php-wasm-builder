@@ -55,7 +55,7 @@ function build(array $stacks, array $set = []): array
         fs()->chmod($stack->outputDir, 0o777, umask());
 
         // The output directory is only ever added to: forget about the targets that are not built anymore
-        foreach (array_diff(array_keys(Stack::TARGETS), $stack->targets) as $target) {
+        foreach (array_filter(Target::cases(), static fn (Target $target): bool => !\in_array($target, $stack->targets, true)) as $target) {
             fs()->remove([$stack->artifact($target, 'mjs'), $stack->artifact($target, 'wasm')]);
         }
     }
