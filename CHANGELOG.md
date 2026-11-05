@@ -44,6 +44,7 @@
 * The notes example is gone: the Symfony one keeps its database too.
 * The documentation is in `docs/`, in Markdown, rendered by zensical. It shows
   how to use the builder with castor, and with Composer and Docker only.
+* The website shows this changelog.
 * The README is short, and in Markdown.
 * Document that PHP can write over what is embedded, in memory.
 * A link to the website shows an image, that `castor site:social-image`

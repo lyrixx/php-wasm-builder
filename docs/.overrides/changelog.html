@@ -1,0 +1,10 @@
+{#- docs/repository/changelog.md only includes CHANGELOG.md: what the edit
+    button of this page edits -#}
+{% extends "main.html" %}
+
+{% block content %}
+  <a href="{{ config.repo_url }}/edit/main/CHANGELOG.md" title="{{ lang.t('action.edit') }}" class="md-content__button md-icon" rel="edit">
+    {% include ".icons/material/file-edit-outline.svg" %}
+  </a>
+  {{ page.content }}
+{% endblock %}

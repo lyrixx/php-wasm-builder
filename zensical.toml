@@ -45,6 +45,7 @@ nav = [
     "repository/index.md",
     "repository/stacks.md",
     "repository/examples.md",
+    "repository/changelog.md",
     "repository/credits.md",
   ] },
 ]
@@ -99,6 +100,9 @@ pymdownx.highlight.anchor_linenums = true
 # For the PHP code that does not start with <?php
 pymdownx.highlight.extend_pygments_lang = [{ name = "php-inline", lang = "php", options = { startinline = true } }]
 pymdownx.inlinehilite = {}
+# The root of the repository: docs/repository/changelog.md includes CHANGELOG.md
+pymdownx.snippets.base_path = ["."]
+pymdownx.snippets.check_paths = true
 pymdownx.superfences = {}
 pymdownx.tabbed.alternate_style = true
 tables = {}
