@@ -19,6 +19,11 @@ on:
       - LICENSE
       - docs/**
       - zensical.toml
+  # GitHub drops a cache entry that is not used for 7 days, and pages.yml only
+  # reads the cache: without this, after a week of documentation only, each
+  # deployment builds every stack from scratch
+  schedule:
+    - cron: '0 5 * * 1,4'
   workflow_dispatch:
 
 permissions:
