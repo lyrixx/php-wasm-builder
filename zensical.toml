@@ -35,6 +35,9 @@ nav = [
     "javascript-api/frame.md",
     "javascript-api/symfony.md",
   ] },
+  { "Guides" = [
+    "guides/cloudflare-worker.md",
+  ] },
   { "Reference" = [
     "reference/extensions.md",
     "reference/build-arguments.md",

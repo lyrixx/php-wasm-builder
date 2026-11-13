@@ -1,5 +1,15 @@
 # Limitations
 
+## Dates
+
+A timestamp is a 32 bits integer (see [Integers](#integers)): it only counts from 1901-12-13 to
+2038-01-19. Out of this range, `strtotime()` and `mktime()` return `false`, with a warning (`Epoch
+doesn't fit in a PHP integer`), and `getTimestamp()` throws a `DateRangeError`. Code that checks a
+date with `strtotime()` refuses `2054-08-02`, a valid date.
+
+`DateTimeImmutable` and `DateTime` do not count with timestamps: they parse, compare, `modify()`,
+`diff()` and `format()` any date, even with `U`.
+
 ## Fibers
 
 WebAssembly cannot pause and resume code the way Fibers require, so the build uses
