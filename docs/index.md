@@ -133,6 +133,16 @@ These pages run PHP in the browser, built with PHP WASM Builder.
 <p>Fixes the microtypography of an HTML text.</p>
 <p class="home-card__meta"><a href="https://github.com/jolicode/JoliTypo/blob/main/website/public/js/php.js">website/public/js/php.js</a> runs PHP</p>
 </div>
+<div class="home-card">
+<h3><a href="https://lyrixx.github.io/php-wasm-demo/symfony-demo/">The Symfony Demo</a></h3>
+<p>The official Symfony Demo, as it is: a blog with its admin, Doctrine and SQLite, Stimulus and 30 languages.</p>
+<p class="home-card__meta"><a href="https://github.com/lyrixx/php-wasm-demo/blob/main/public/symfony-demo/index.html">public/symfony-demo/index.html</a> runs PHP</p>
+</div>
+<div class="home-card">
+<h3><a href="https://lyrixx.github.io/php-wasm-demo/easyadmin/">EasyAdmin</a></h3>
+<p>The back office of a record shop that never existed: a sales dashboard, filters and batch actions.</p>
+<p class="home-card__meta"><a href="https://github.com/lyrixx/php-wasm-demo/blob/main/public/easyadmin/index.html">public/easyadmin/index.html</a> runs PHP</p>
+</div>
 </div>
 
 </div>

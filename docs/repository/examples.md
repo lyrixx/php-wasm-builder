@@ -20,15 +20,6 @@ castor wasm:serve symfony --opcache precompiled
 
 The page changes with a reload, its PHP when the server starts again.
 
-## In another repository
-
-[php-wasm-demo](https://github.com/lyrixx/php-wasm-demo) has bigger Symfony applications, built with
-this repository (see [A Symfony application](../guides/symfony.md#bigger-applications)):
-
-- [The Symfony Demo](https://lyrixx.github.io/php-wasm-demo/symfony-demo/),
-  [symfony/demo](https://github.com/symfony/demo) as it is.
-- [EasyAdmin](https://lyrixx.github.io/php-wasm-demo/easyadmin/), the back office of a record shop.
-
 ## This website
 
 `castor site:build` builds it in `build/site/`: zensical renders `docs/`, in Docker, and the page of
