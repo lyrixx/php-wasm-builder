@@ -3,7 +3,7 @@
 `php.request()` runs PHP as a web server does: the code gets `$_GET`, `$_POST`, `$_COOKIE`,
 `$_FILES` and `php://input`, and what it sends with `header()`, `setcookie()` or
 `http_response_code()` makes the response. A framework runs as it is, from its front controller
-(see [Symfony](symfony.md)):
+(see [A Symfony application](../guides/symfony.md)):
 
 ```js
 const response = await php.request({

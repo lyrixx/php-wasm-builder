@@ -7,7 +7,7 @@ when there is one. Its `README.md` says how it is wired.
 | Example                    | What it is                                                                                                                                                                                       |
 |----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [`playground`](../examples/playground/) | An editor, with a script that shows what PHP has there: change it, and run it. Its stack has every [supported extension](../reference/extensions.md), intl without ICU's data.          |
-| [`symfony`](../examples/symfony/)       | A Symfony application, a guestbook with Doctrine and SQLite, in a frame, and [on its own page](../examples/symfony/standalone/) (see [Symfony](../javascript-api/symfony.md)). Its stack embeds `app/` at `/app`, once castor installed its `vendor/`, with the composer of Docker. |
+| [`symfony`](../examples/symfony/)       | A Symfony application, a guestbook with Doctrine and SQLite, in a frame, and [on its own page](../examples/symfony/standalone/) (see [A Symfony application](../guides/symfony.md)). Its stack embeds `app/` at `/app`, once castor installed its `vendor/`, with the composer of Docker. |
 
 `castor wasm:serve` builds the page of an example, in a second when nothing changed, and serves it
 on <http://127.0.0.1:8000/>, with the built-in server of PHP. As with `castor wasm:build`, `--php`,
@@ -19,6 +19,15 @@ castor wasm:serve symfony --opcache precompiled
 ```
 
 The page changes with a reload, its PHP when the server starts again.
+
+## In another repository
+
+[php-wasm-demo](https://github.com/lyrixx/php-wasm-demo) has bigger Symfony applications, built with
+this repository (see [A Symfony application](../guides/symfony.md#bigger-applications)):
+
+- [The Symfony Demo](https://lyrixx.github.io/php-wasm-demo/symfony-demo/),
+  [symfony/demo](https://github.com/symfony/demo) as it is.
+- [EasyAdmin](https://lyrixx.github.io/php-wasm-demo/easyadmin/), the back office of a record shop.
 
 ## This website
 

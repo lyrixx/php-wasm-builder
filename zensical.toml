@@ -33,10 +33,10 @@ nav = [
     "javascript-api/persist.md",
     "javascript-api/http.md",
     "javascript-api/frame.md",
-    "javascript-api/symfony.md",
   ] },
   { "Guides" = [
     "guides/cloudflare-worker.md",
+    "guides/symfony.md",
   ] },
   { "Reference" = [
     "reference/extensions.md",

@@ -11,7 +11,7 @@ of compiling the PHP files again. `OPCACHE` says when it compiles them:
 
 ## What it changes
 
-With the [Symfony example](../javascript-api/symfony.md), in node:
+With the [Symfony example](../guides/symfony.md), in node:
 
 <div class="numbers" markdown>
 
