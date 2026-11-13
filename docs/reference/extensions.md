@@ -16,7 +16,7 @@ These are the extensions that can be listed in `EXTENSIONS` (see
 | iconv        | See [iconv](#iconv).      |
 | intl         | See [intl](#intl).        |
 | libxml       |                           |
-| mbstring     | Built by default.         |
+| mbstring     | Built by default. See [mbstring](#mbstring). |
 | openssl      | See [OpenSSL](#openssl).  |
 | PDO          |                           |
 | pdo_sqlite   | See [SQLite](#sqlite).    |
@@ -110,6 +110,16 @@ collators, transliterators and `grapheme_*()` functions do not work. The intl of
 
 ```
 docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring simplexml xml xmlreader xmlwriter intl" --set default.args.ICU_DATA=none
+```
+
+## mbstring
+
+mbstring is in the default extensions, and it is the biggest of them: with PHP 8.5, the `.wasm` file
+is about 1.5 MB bigger with it (750 KB gzipped), its conversion tables and oniguruma, a quarter of
+what a browser downloads. A build for code that does not call it leaves it out:
+
+```
+docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom simplexml xml xmlreader xmlwriter"
 ```
 
 ## OpenSSL
