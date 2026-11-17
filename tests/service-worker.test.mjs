@@ -73,7 +73,7 @@ function serviceWorkerScope(storage = new Map()) {
         },
         clients: { claim: async () => calls.push('claim') },
         location: new URL(`${scope}sw.js`),
-        registration: { scope },
+        registration: { scope, unregister: async () => calls.push('unregister') },
         skipWaiting: async () => calls.push('skipWaiting'),
     };
     const caches = {
@@ -118,6 +118,17 @@ function served({ storage, createApplication = async () => php, options = {} } =
 }
 
 const json = async (response) => (await response).json();
+
+// What the browser asks for when a page loads, that a Request can not be made
+// as
+const navigation = (url) => Object.defineProperty(new Request(url), 'mode', { value: 'navigate' });
+
+/**
+ * What the server answers for the script of the service worker, that it asks
+ * for with fetch().
+ */
+const serving = (t, script) => t.mock.method(globalThis, 'fetch', async () => script());
+const javascript = (type = 'text/javascript') => () => new Response('', { headers: { 'Content-Type': type } });
 
 webTest('serveInServiceWorker() adds its listeners as it is called, and takes the pages as soon as it is activated', async () => {
     const sw = served();
@@ -249,6 +260,81 @@ webTest('serveInServiceWorker() says so when a Response can not have what PHP an
     assert.equal(response.status, 500);
     assert.match(await response.text(), /^The request fails: ./);
     assert.equal(error.mock.callCount(), 1);
+});
+
+webTest('serveInServiceWorker() checks at each navigation that its script is still there, without the HTTP cache, then answers with PHP', async (t) => {
+    t.mock.method(console, 'warn', () => {});
+    const checks = serving(t, javascript());
+    const sw = served();
+
+    assert.equal((await json(sw.fetch(navigation(`${scope}guestbook`)))).script, '/repository/standalone/index.php');
+    // What the page loads: its navigation checked it
+    await json(sw.fetch(new Request(`${scope}guestbook?page=2`)));
+
+    assert.equal(checks.mock.callCount(), 1);
+    const [url, { signal, ...options }] = checks.mock.calls[0].arguments;
+    assert.equal(url, `${scope}sw.js`);
+    assert.deepEqual(options, { cache: 'no-store', redirect: 'manual' });
+    // The navigation waits for it
+    assert.ok(signal instanceof AbortSignal);
+    assert.equal(sw.calls.includes('unregister'), false);
+});
+
+webTest('serveInServiceWorker() unregisters itself at a navigation once its script is gone, before PHP starts, and sends the navigation to the server', async (t) => {
+    const warn = t.mock.method(console, 'warn', () => {});
+    const gone = {
+        'a 404': () => new Response('Not Found', { status: 404 }),
+        'a 410': () => new Response('Gone', { status: 410 }),
+        // What php -S answers for a file it does not have: the index.html of
+        // its directory
+        'a page': () => new Response('<!doctype html>', { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }),
+        'no type': () => new Response(null),
+        // What fetch() resolves with, with redirect: 'manual'
+        'a redirection': () => ({ type: 'opaqueredirect', status: 0, ok: false, headers: new Headers() }),
+    };
+
+    const server = serving(t, javascript());
+    for (const [name, script] of Object.entries(gone)) {
+        server.mock.mockImplementation(async () => script());
+        let starts = 0;
+        const sw = served({
+            createApplication: async () => {
+                ++starts;
+
+                return php;
+            },
+        });
+
+        const response = await sw.fetch(navigation(`${scope}guestbook?page=2`));
+
+        assert.equal(response.status, 302, name);
+        assert.equal(response.headers.get('Location'), `${scope}guestbook?page=2`, name);
+        assert.deepEqual(sw.calls, ['unregister'], name);
+        assert.equal(starts, 0, name);
+    }
+    assert.match(warn.mock.calls[0].arguments[0], /is unregistered: its script, .*\/standalone\/sw\.js, is gone\./);
+});
+
+webTest('serveInServiceWorker() goes on answering with any JavaScript type, offline, and when the server fails', async (t) => {
+    const warn = t.mock.method(console, 'warn', () => {});
+    const there = {
+        'a JavaScript type': javascript('application/javascript; charset=utf-8'),
+        'an older JavaScript type': javascript('text/ecmascript'),
+        'offline': () => {
+            throw new TypeError('Failed to fetch');
+        },
+        'a server that fails': () => new Response('Service Unavailable', { status: 503 }),
+    };
+
+    const server = serving(t, javascript());
+    for (const [name, script] of Object.entries(there)) {
+        server.mock.mockImplementation(async () => script());
+        const sw = served();
+
+        assert.equal((await json(sw.fetch(navigation(scope)))).script, '/repository/standalone/index.php', name);
+        assert.equal(sw.calls.includes('unregister'), false, name);
+    }
+    assert.ok(warn.mock.calls.some((call) => /can not check that its script is still there: Failed to fetch/.test(call.arguments[0])));
 });
 
 webTest('startServiceWorker() registers the service worker as a module, without the HTTP cache, and resolves once it is activated', async () => {
