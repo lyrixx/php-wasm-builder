@@ -93,3 +93,13 @@ Errors
 :   PHP that does not start, or a response that the browser refuses, as a header that is not ASCII,
     is a 500 that says why, and the error is in the console of the service worker. What PHP writes
     on stderr, the logs of Symfony for example, goes to `console.warn()`.
+
+A `sw.js` that is gone
+:   The browser keeps a service worker whose script it can not update, and the service worker
+    answers the pages of its scope, the one that would unregister it too. At each navigation, before
+    PHP starts, it asks for its script, without the HTTP cache: on a 404, a 410, a redirection, or
+    what is not JavaScript, as the `index.html` that `php -S` answers for a file it does not have,
+    it unregisters itself and sends the navigation to the server. A project that removes its `sw.js`
+    leaves its visitors this way, and so does another project served on the origin since, as
+    `127.0.0.1:8000`. A network or a server that fails, or that does not answer within 3 s, keeps
+    it. It costs a request at each navigation.

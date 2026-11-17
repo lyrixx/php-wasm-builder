@@ -8,10 +8,35 @@
 // with --extern-post-js. No export, and names that the sw.js of a project does
 // not have: in a classic script, its functions are globals.
 
+// What a browser takes as the script of a service worker, the JavaScript MIME
+// types of the MIME Sniffing standard: it refuses any other
+const SERVICE_WORKER_SCRIPT_TYPES = [
+    'application/ecmascript',
+    'application/javascript',
+    'application/x-ecmascript',
+    'application/x-javascript',
+    'text/ecmascript',
+    'text/javascript',
+    'text/javascript1.0',
+    'text/javascript1.1',
+    'text/javascript1.2',
+    'text/javascript1.3',
+    'text/javascript1.4',
+    'text/javascript1.5',
+    'text/jscript',
+    'text/livescript',
+    'text/x-ecmascript',
+    'text/x-javascript',
+];
+// The navigation waits for the check: a server that hangs keeps the service
+// worker, as one that fails
+const SERVICE_WORKER_SCRIPT_CHECK_TIMEOUT_IN_MS = 3000;
+
 /**
  * Answers what is asked for in the scope of the service worker, but its files,
  * with what answer() resolves with. The service worker takes the pages of its
- * scope as soon as it is activated, a new version too.
+ * scope as soon as it is activated, a new version too, and leaves them once
+ * its script is gone.
  *
  * @param {string[]} except what is in the scope and needs no PHP, relative to
  *                          the service worker: files of the website
@@ -29,13 +54,61 @@ function answerInScope(except, answer) {
         const { url } = event.request;
         if (url.startsWith(scope) && !files.some((file) => url.startsWith(file))) {
             // A header that a Response refuses, PHP that aborts…
-            event.respondWith(answer(event.request).catch((error) => {
+            event.respondWith(answerUnlessScriptIsGone(event.request, answer).catch((error) => {
                 console.error(error);
 
                 return errorResponse(`The request fails: ${error.message}`);
             }));
         }
     });
+}
+
+/**
+ * Unregisters the service worker at a navigation once its script is gone: a
+ * project that removed it, or another project served on the origin since, as
+ * 127.0.0.1:8000 on a development machine. The browser keeps a service worker
+ * whose script does not update, and it would answer the page that could
+ * unregister it. Before PHP starts: it would start with the files of the other
+ * project.
+ */
+async function answerUnlessScriptIsGone(request, answer) {
+    if ('navigate' !== request.mode || !await isScriptGone()) {
+        return answer(request);
+    }
+
+    await self.registration.unregister();
+    console.warn(`The service worker is unregistered: its script, ${self.location.href}, is gone.`);
+
+    // Not fetch(request): the page would be controlled, and what it loads
+    // would come here. The browser follows the redirection to the server,
+    // without a service worker. A 302: a form is not sent again, to what may
+    // be another project
+    return Response.redirect(request.url, 302);
+}
+
+/**
+ * Whether the browser would refuse the script of the service worker now: not
+ * there, not JavaScript, as the index.html that `php -S` answers for a file it
+ * does not have, or redirected. Not when the network or the server fails: the
+ * script may still be there.
+ */
+async function isScriptGone() {
+    const signal = AbortSignal.timeout(SERVICE_WORKER_SCRIPT_CHECK_TIMEOUT_IN_MS);
+    let response;
+    try {
+        response = await fetch(self.location.href, { cache: 'no-store', redirect: 'manual', signal });
+    } catch (error) {
+        console.warn(`The service worker can not check that its script is still there: ${error.message}`);
+
+        return false;
+    }
+
+    if ('opaqueredirect' === response.type || [404, 410].includes(response.status)) {
+        return true;
+    }
+    const type = response.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase();
+
+    return response.ok && !SERVICE_WORKER_SCRIPT_TYPES.includes(type);
 }
 
 /**

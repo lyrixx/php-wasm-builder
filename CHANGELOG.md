@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+* The service workers of `serveInFrame()` and `serveInServiceWorker()`
+  unregister themselves at a navigation once their `sw.js` is gone: a 404, a
+  410, a redirection, or what is not JavaScript. The browser kept them, and
+  they answered the pages of their scope with PHP, for a project that removed
+  them, or for another project served on the origin since.
+
 ## 0.13.0 (2026-11-17)
 
 ### Features

@@ -53,28 +53,31 @@ webTest('withCookies() replaces the cookies that the browser sends', () => {
 
 /**
  * Evaluates php-sw.js as a service worker of the directory, for the application
- * in app/, with these clients.
+ * in app/, with these clients. fetch() is what the server answers for its
+ * script.
  */
-async function serviceWorker({ pages = [], options = {}, scope = app } = {}) {
+async function serviceWorker({ pages = [], options = {}, scope = app, fetch = async () => new Response('', { headers: { 'Content-Type': 'text/javascript' } }) } = {}) {
     const listeners = {};
+    const calls = [];
     const self = {
         addEventListener: (type, listener) => {
             listeners[type] = listener;
         },
         clients: { matchAll: async () => pages },
         location: new URL(`${directory}sw.js`),
-        registration: { scope },
+        registration: { scope, unregister: async () => calls.push('unregister') },
     };
     // What the service worker needs of it, synchronous
     class MessageChannel {
         port1 = {};
         port2 = { postMessage: (data) => this.port1.onmessage({ data }) };
     }
-    const context = vm.createContext({ console, MessageChannel, Response, URL, self });
+    const context = vm.createContext({ AbortSignal, console, fetch, MessageChannel, Response, URL, self });
     vm.runInContext(await readFile(new URL('php-sw.js', build), 'utf8'), context);
     context.forwardToPhp(options);
 
     return {
+        calls,
         listeners,
         // What it responds with, undefined when it leaves it to the network
         fetch(request) {
@@ -186,6 +189,20 @@ webTest('forwardToPhp() says so when a Response can not have what PHP answers, i
     assert.equal(response.status, 500);
     assert.match(await response.text(), /^The request fails: ./);
     assert.equal(error.mock.callCount(), 1);
+});
+
+webTest('forwardToPhp() unregisters itself at the navigation of the frame once its script is gone, without handing it to the page', async (t) => {
+    t.mock.method(console, 'warn', () => {});
+    const receiver = page(directory);
+    const sw = await serviceWorker({ pages: [receiver], fetch: async () => new Response('Not Found', { status: 404 }) });
+    const navigation = Object.defineProperty(new Request(`${app}admin`), 'mode', { value: 'navigate' });
+
+    const response = await sw.fetch(navigation);
+
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get('Location'), `${app}admin`);
+    assert.deepEqual(sw.calls, ['unregister']);
+    assert.deepEqual(receiver.requests, []);
 });
 
 webTest('serveInFrame() registers sw.js for the application, without the HTTP cache, then opens the frame', async () => {

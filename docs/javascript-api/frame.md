@@ -92,6 +92,13 @@ An update
     activated. A new version that does not load leaves the current one, with a warning in the
     console.
 
+A `sw.js` that is gone
+:   At each navigation of the frame, the service worker asks for its script, without the HTTP cache.
+    On a 404, a 410, a redirection, or what is not JavaScript, it unregisters itself and the frame
+    loads from the server: a project that removed it, or another project served on the origin
+    since, as `127.0.0.1:8000`. A network or a server that fails, or that does not answer within 3 s,
+    keeps it.
+
 A service worker that does not start
 :   The frame says why, instead of staying white, and the promise is rejected: a `sw.js` that is not
     there, a browser that has no service worker for this page, as on `http://` out of `localhost`.
