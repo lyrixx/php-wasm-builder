@@ -11,8 +11,17 @@ const php = await createPhp({ persist: '/my-page' });
 Each tab has its own copy of the files. A run reads IndexedDB before PHP runs, what the other tabs
 wrote, and writes in it after, one run at a time across the tabs of the page (with a Web Lock): no
 tab writes over what another one wrote. `php.FS` sees the files as the last run of the tab left
-them: what another tab wrote since is only there once a run has read it. The Symfony example keeps
-its SQLite database and its sessions this way (see [A Symfony application](../guides/symfony.md)).
+them: none before the first run, and what another tab wrote since is only there once a run has read
+it. The Symfony example keeps its SQLite database and its sessions this way (see
+[A Symfony application](../guides/symfony.md)).
+
+What `php.FS` writes in the directory is not kept: the next run reads IndexedDB, and removes from
+the directory what IndexedDB does not have. PHP writes what is to be kept, a directory too:
+
+```js
+// Not php.FS.mkdirTree('/my-page/uploads'): the run would remove it
+await php.runCode("@mkdir('/my-page/uploads');");
+```
 
 The directory names the IndexedDB database: two pages of the same origin that keep the same
 directory share its files. Name it after the page: `/composer-diff` rather than `/data`, when the

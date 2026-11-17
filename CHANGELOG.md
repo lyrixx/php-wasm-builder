@@ -16,6 +16,8 @@
   `The request fails`.
 * Document how to run PHP in a Cloudflare Worker, that dates stop in 2038, what
   mbstring weighs, and why there is no build argument to optimize for size.
+* Document that what `php.FS` writes in the directory that `persist` keeps is
+  removed by the next run: PHP writes what is to be kept.
 
 ## 0.12.2 (2026-11-05)
 
