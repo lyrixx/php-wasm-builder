@@ -70,7 +70,7 @@ async function serviceWorker({ pages = [], options = {}, scope = app } = {}) {
         port1 = {};
         port2 = { postMessage: (data) => this.port1.onmessage({ data }) };
     }
-    const context = vm.createContext({ MessageChannel, Response, URL, self });
+    const context = vm.createContext({ console, MessageChannel, Response, URL, self });
     vm.runInContext(await readFile(new URL('php-sw.js', build), 'utf8'), context);
     context.forwardToPhp(options);
 
@@ -177,13 +177,15 @@ webTest('forwardToPhp() answers without a body when the status has none', async 
     }
 });
 
-webTest('forwardToPhp() says so when a Response can not have what PHP answers', async () => {
+webTest('forwardToPhp() says so when a Response can not have what PHP answers, in the console too', async (t) => {
+    const error = t.mock.method(console, 'error', () => {});
     const sw = await serviceWorker({ pages: [page(directory, () => ({ status: 200, headers: [['X-Emoji', '🐘']], body: new Uint8Array() }))] });
 
     const response = await sw.fetch(new Request(app));
 
     assert.equal(response.status, 500);
-    assert.match(await response.text(), /refuses what PHP answers/);
+    assert.match(await response.text(), /^The request fails: ./);
+    assert.equal(error.mock.callCount(), 1);
 });
 
 /**

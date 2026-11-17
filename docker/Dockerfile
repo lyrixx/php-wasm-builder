@@ -24,7 +24,7 @@
 #   warm        runs WARMUP, and compiles the PHP files with opcache
 #               (OPCACHE=precompiled), in node, with warm.mjs
 #   link        links the .mjs/.wasm files with api.js, and what is embedded,
-#               and copies php-sw.js for the web
+#               and makes php-sw.js for the web
 #
 # Every stage only reads the parts of the plan it needs, and the plan is made
 # of small files: changing EXTENSIONS, TARGETS, ... only rebuilds what actually
@@ -570,7 +570,7 @@ EOF
 FROM objects AS link
 ARG EMBED_AT=""
 ARG MEMORY=128mb
-COPY api.js frame.js php-sw.js worker.js /local/src/
+COPY api.js frame.js php-sw.js sw-common.js worker.js /local/src/
 COPY --from=warm /embed /embed
 COPY --from=warm /opcache /opcache
 COPY --from=resolve /plan/targets /plan/targets
@@ -582,8 +582,9 @@ mkdir -p /build
 while read -r output environment flags; do
     sh link.sh /build/$output.mjs $environment -O2 -s EXPORTED_RUNTIME_METHODS=FS $flags \
         ${EMBED_AT:+--embed-file "/embed@$EMBED_AT"} ${opcache:-}
-    # Keep in sync with Target::files(), in src/Target.php
-    [ "$output" != php-web ] || cp php-sw.js /build/
+    # Keep in sync with Target::files(), in src/Target.php. It shares
+    # sw-common.js with php-web.mjs
+    [ "$output" != php-web ] || cat sw-common.js php-sw.js > /build/php-sw.js
 done < /plan/targets
 EOF
 
