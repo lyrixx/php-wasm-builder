@@ -27,7 +27,9 @@ the `schedule:interrupt` command of Laravel 13 stores.
 The memory of the module does not grow (`MEMORY`, see [Build arguments](build-arguments.md)), and PHP
 shares it with the C library: SQLite, libxml, ICU… `memory_limit` leaves it some: it defaults to 7/8
 of what the module has after its data and what it embeds, `107M` with the 128 MB by default. A
-`php.ini` changes it, at `/usr/local/lib/php.ini`.
+`php.ini` changes it: the one of the stack, `ini(['memory_limit' => '256M'])` (`PHP_INI`, see
+[Build arguments](build-arguments.md)), or one that the page writes at `/usr/local/lib/php.ini`, in
+its place.
 
 Going over it is the usual fatal error (`Allowed memory size of … exhausted`). With a `memory_limit`
 that the memory of the module can not give, or an allocation bigger than what is left, it is

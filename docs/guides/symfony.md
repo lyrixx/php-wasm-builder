@@ -60,13 +60,51 @@ framework:
         save_path: /symfony/sessions
 ```
 
-The console creates the database before the first request, with `runFile()`, and compiles the
-container of Symfony on the way:
+The console creates the database before the first request, with `runFile()`:
 
 ```js
 const php = await createPhp({ persist: '/symfony' });
 await php.runFile('/app/bin/console', { args: ['doctrine:schema:update', '--force', '--no-interaction'] });
 ```
+
+PHP starts again at each load of the page, or of the service worker. In node, the example then runs
+the console in 435 ms, and its first request in 205 ms. The console only has to run once per build
+of the application: the example names the build in the cache of Symfony, with a cache warmer that
+`warmup()` runs, and keeps the name of the build it last ran the console for next to the database.
+Without the console, the first request takes 310 ms, as it compiles some of what the console
+compiled: about 300 ms less.
+
+```php
+// src/BuildIdWarmer.php
+final readonly class BuildIdWarmer implements CacheWarmerInterface
+{
+    public function isOptional(): bool
+    {
+        return false;
+    }
+
+    public function warmUp(string $cacheDir, ?string $buildDir = null): array
+    {
+        file_put_contents(($buildDir ?? $cacheDir) . '/build-id', bin2hex(random_bytes(8)));
+
+        return [];
+    }
+}
+```
+
+```js
+// In PHP: php.FS does not see what IndexedDB has before the first run
+const { stdout: started } = await php.runCode("echo (int) (file_get_contents('/app/var/cache/prod/build-id') === @file_get_contents('/symfony/build-id'));");
+if ('1' !== started) {
+    await php.runFile('/app/bin/console', { args: ['doctrine:schema:update', '--force', '--no-interaction'] });
+    await php.runCode("copy('/app/var/cache/prod/build-id', '/symfony/build-id');");
+}
+```
+
+The build runs `warmup()` again each time what is embedded changes: the name changes with the
+application. `warmup()` compiles the container of Symfony too, that the console would compile
+otherwise. A project that prepares what it embeds, in a task of castor, can write the name there
+instead. Both pages of the example run it, from `examples/symfony/public/start.mjs`.
 
 There are two ways to show the application then: the example has both, and they share `/symfony`.
 
@@ -104,94 +142,43 @@ forwardToPhp();
 
 The application is on its own page, with its URLs in the address bar, the history and the reloads
 of any website. The service worker is the web server of the application: it runs PHP itself, and
-answers every request under its directory. It is a module, that imports `php-web.mjs`:
+answers every request under its directory, with `serveInServiceWorker()` (see
+[PHP in a service worker](../javascript-api/service-worker.md)). It is a module, that imports
+`php-web.mjs`:
 
 ```js
 // sw.js
-import createPhp, { keepCookies, withCookies } from './build/php-web.mjs';
+import createPhp, { serveInServiceWorker } from './build/php-web.mjs';
 
-// Where the application is in the URLs: the scope of this service worker
-const base = new URL('./', self.location).pathname;
-const cookieJar = new URL('cookies', self.location).href;
+serveInServiceWorker(async () => {
+    const php = await createPhp({ persist: '/symfony' });
+    await php.runFile('/app/bin/console', { args: ['doctrine:schema:update', '--force', '--no-interaction'] });
 
-let started;
-let cookies;
-
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
-
-self.addEventListener('fetch', (event) => {
-    const url = new URL(event.request.url);
-    if (url.origin === self.location.origin && url.pathname.startsWith(base)) {
-        event.respondWith(serve(event.request));
-    }
-});
-
-async function serve(request) {
-    started ??= (async () => {
-        const php = await createPhp({ persist: '/symfony' });
-        await php.runFile('/app/bin/console', { args: ['doctrine:schema:update', '--force', '--no-interaction'] });
-
-        return php;
-    })();
-    const php = await started;
-
-    cookies ??= await caches.match(cookieJar).then((response) => response?.json()).then((pairs) => new Map(pairs ?? []));
-
-    const headers = withCookies([...request.headers], cookies);
-    // What a service worker does not see as a header
-    if (!request.headers.has('Referer') && request.referrer.startsWith(self.location.origin)) {
-        headers.push(['Referer', request.referrer]);
-    }
-
-    const response = await php.request({
-        method: request.method,
-        url: request.url,
-        headers,
-        body: ['GET', 'HEAD'].includes(request.method) ? '' : await request.arrayBuffer(),
-    }, { documentRoot: '/app/public', basePath: base.slice(0, -1) });
-
-    keepCookies(cookies, response.headers);
-    await (await caches.open('symfony')).put(cookieJar, Response.json([...cookies]));
-
-    const location = response.headers.find(([name]) => 'location' === name.toLowerCase())?.[1];
-    if (undefined !== location && [301, 302, 303, 307, 308].includes(response.status)) {
-        return Response.redirect(new URL(location, request.url), response.status);
-    }
-
-    return new Response([204, 304].includes(response.status) ? null : response.body, { status: response.status, headers: response.headers });
-}
+    return php;
+}, { documentRoot: '/app/public' });
 ```
 
-`examples/symfony/public/standalone/sw.js` is the whole of it, with what it does when PHP does not
-start.
-
-- **The cookies**: the browser drops the cookies of a response that a service worker makes. The
-  service worker keeps them, and gives them back to each request, with `keepCookies()` and
-  `withCookies()` (see [The cookies, without the frame](../javascript-api/frame.md#the-cookies-without-the-frame)).
-  It has no `localStorage`: they are in the Cache API.
-- **The `Referer`**: the stateless CSRF protection, that the recipes of Symfony enable, checks it
-  when there is no `Origin`.
-- **The browser stops a service worker that has nothing to do**, after 30 s in Chrome, and PHP with
-  it: the next request starts PHP again, a few hundred milliseconds, and PHP finds its files in
-  IndexedDB.
+PHP starts with the first request. The browser stops a service worker that has nothing to do, after
+30 s in Chrome, and PHP with it: the next request starts PHP again, and PHP finds its files in
+IndexedDB. `serveInServiceWorker()` keeps the cookies of the application, in the
+Cache API, and gives PHP the `Referer`: the stateless CSRF protection, that the recipes of Symfony
+enable, checks it when there is no `Origin`.
 
 `index.html` only shows until the service worker answers: it registers it, then reloads.
 
 ```js
 // index.html
-const registration = await navigator.serviceWorker.register('./sw.js', { type: 'module', scope: './' });
-const worker = registration.installing ?? registration.waiting ?? registration.active;
-if ('activated' !== worker.state) {
-    await new Promise((resolve) => worker.addEventListener('statechange', () => 'activated' === worker.state && resolve()));
-}
+import { startServiceWorker } from './build/php-web.mjs';
+
+await startServiceWorker();
 
 // The service worker answers now: with Symfony
 location.reload();
 ```
 
-`register()` fails in the browsers that do not run a module in a service worker: they have the
-framed page.
+`startServiceWorker()` fails in the browsers that do not run a module in a service worker: they have
+the framed page. `examples/symfony/public/standalone/` is the whole of it, with what the page says
+when it fails.
 
 ## Bigger applications
 

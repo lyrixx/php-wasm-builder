@@ -27,9 +27,10 @@ forwardToPhp();
 
 The frame shows `app/`, next to the page, where links, forms, redirections and the history work as
 anywhere. The service worker takes what the frame asks for to the page, and the page runs it with
-`php.request()`. PHP does not run in the service worker: a browser stops one that has nothing to do,
-and PHP would forget its files. In a worker of the page (see [PHP in a worker](worker.md)), the page
-does not freeze while it runs.
+`php.request()`. PHP does not run in the service worker: it runs as long as the page is open, where
+a browser stops a service worker that has nothing to do. In a worker of the page (see
+[PHP in a worker](worker.md)), the page does not freeze while it runs. The application can be on its
+own page too, with PHP in the service worker (see [PHP in a service worker](service-worker.md)).
 
 `sw.js` is the only file to add, next to `index.html`: a service worker only controls the URLs under
 its own directory, so it can not be `build/php-sw.js`. The `Service-Worker-Allowed` header lifts
@@ -97,8 +98,8 @@ A service worker that does not start
 
 ## The cookies, without the frame
 
-A service worker that runs PHP itself needs them too. `php-web.mjs` exports what `serveInFrame()`
-uses, for a `Map` of cookies by name, kept where the service worker can:
+`serveInFrame()` and `serveInServiceWorker()` keep them. `php-web.mjs` exports what they use, for
+what runs `php.request()` another way, with a `Map` of cookies by name:
 
 ```js
 import createPhp, { keepCookies, withCookies } from './build/php-web.mjs';
@@ -108,4 +109,3 @@ keepCookies(cookies, response.headers);
 ```
 
 `withCookies()` takes a list of names and values, and replaces the cookies that the browser sends.
-`examples/symfony/public/standalone/sw.js` keeps them in the Cache API.

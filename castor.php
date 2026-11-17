@@ -143,6 +143,7 @@ function stacks_task(
             'Warmup' => implode(' ', $stack->warmup) ?: null,
             'Opcache' => Opcache::None !== $stack->opcache ? $stack->opcache?->value : null,
             'Memory' => $stack->memory ?? dockerfile_default('MEMORY'),
+            'php.ini' => implode(', ', array_map(static fn (string $name, string $value): string => "{$name}={$value}", array_keys($stack->ini), $stack->ini)) ?: null,
         ];
         foreach (array_filter($details) as $label => $value) {
             io()->writeln(\sprintf('   <comment>%-12s</comment>%s', $label, $value));
@@ -425,7 +426,8 @@ function site_social_image_task(): void
 
 /**
  * Runs the tests of the JavaScript API, tests/api.test.mjs,
- * tests/frame.test.mjs and tests/worker.test.mjs, on every build of a stack.
+ * tests/frame.test.mjs, tests/service-worker.test.mjs and
+ * tests/worker.test.mjs, on every build of a stack.
  *
  * @throws ProblemException with the tests that fail
  */
@@ -436,7 +438,7 @@ function check_api(Stack $stack): void
     foreach ($stack->targets as $target) {
         $build = $stack->artifact($target, 'mjs');
         $process = run(
-            ['node', '--import', builder_root() . '/node/fetch-files.mjs', '--test', builder_root() . '/tests/api.test.mjs', builder_root() . '/tests/frame.test.mjs', builder_root() . '/tests/worker.test.mjs'],
+            ['node', '--import', builder_root() . '/node/fetch-files.mjs', '--test', builder_root() . '/tests/api.test.mjs', builder_root() . '/tests/frame.test.mjs', builder_root() . '/tests/service-worker.test.mjs', builder_root() . '/tests/worker.test.mjs'],
             context: context()->withEnvironment(['BUILD' => $build])->withQuiet()->withAllowFailure(),
         );
         if (!$process->isSuccessful()) {

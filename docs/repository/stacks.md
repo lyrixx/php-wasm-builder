@@ -27,8 +27,8 @@ return [
 ```
 
 A stack never changes: each method returns a new one, so a stack is derived from another one with
-`renamed()`. `extensions()` adds to the extensions the stack already has, the other methods replace
-what it has. Each method sets a [build argument](../reference/build-arguments.md):
+`renamed()`. `extensions()` and `ini()` add to what the stack already has, the other methods replace
+it. Each method sets a [build argument](../reference/build-arguments.md):
 
 | Method                                    | Build argument            |
 |-------------------------------------------|---------------------------|
@@ -36,6 +36,7 @@ what it has. Each method sets a [build argument](../reference/build-arguments.md
 | `extensions('intl')`                      | `EXTENSIONS`              |
 | `targets(Target::Web)`                    | `TARGETS`                 |
 | `memory('256mb')`                         | `MEMORY`                  |
+| `ini(['memory_limit' => '256M'])`         | `PHP_INI`                 |
 | `icuData(IcuData::None)`                  | `ICU_DATA`                |
 | `opcache(Opcache::Precompiled)`           | `OPCACHE`                 |
 | `embed('build/dist', at: '/app')`         | `EMBED_AT`, and the `embed` context |
@@ -101,4 +102,4 @@ the examples, in CI too:
 | `php-8.5`                                               | PHP 8.5, with the default extensions: what `docker buildx bake` builds too.          |
 | `php-8.4`, `php-8.3`                                    | The same thing, on older PHP versions.                                              |
 | `php-8.5-intl`                                          | Adds intl, with ICU's data (see [intl](../reference/extensions.md#intl)).           |
-| `php-8.5-opcache-runtime`, `php-8.5-opcache-precompiled` | opcache keeps what it compiles in files (see [opcache](../reference/opcache.md)).  |
+| `php-8.5-opcache-runtime`, `php-8.5-opcache-precompiled` | opcache keeps what it compiles in files (see [opcache](../reference/opcache.md)). The second one has settings of `php.ini` too. |

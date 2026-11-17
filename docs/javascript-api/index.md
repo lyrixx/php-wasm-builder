@@ -63,7 +63,17 @@ worker (see [An application in a frame](frame.md)):
 |---------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|
 | `serveInFrame(php, { frame, documentRoot, under, start, headers })` | From `php-web.mjs`: starts the service worker, answers what it hands over, and opens the frame. |
 | `forwardToPhp({ under, except })`                                   | From `php-sw.js`, that a service worker imports: hands what the frame asks for to the page.     |
-| `keepCookies(cookies, headers)`, `withCookies(headers, cookies)`    | From `php-web.mjs`: the cookies of the application, for a service worker that runs PHP itself.  |
+| `keepCookies(cookies, headers)`, `withCookies(headers, cookies)`    | From `php-web.mjs`: the cookies of the application, for what runs `php.request()` another way.  |
+
+## In a service worker
+
+The build for the web runs PHP in a service worker too, the web server of an application on its own
+page (see [PHP in a service worker](service-worker.md)):
+
+| What                                                                          | What it does                                                                                              |
+|-------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| `serveInServiceWorker(createApplication, { documentRoot, except, headers })` | From `php-web.mjs`, in the service worker: starts PHP with the first request, and answers every request of its scope. |
+| `startServiceWorker(script)`                                                  | From `php-web.mjs`, in the page: registers the service worker, and resolves once it is activated.         |
 
 ## When it aborts
 

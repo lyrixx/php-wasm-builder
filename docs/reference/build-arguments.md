@@ -20,6 +20,7 @@ docker buildx bake --set default.args.TARGETS=node                          # on
 | `MEMORY`      | `128mb`                                                    | The memory of the WASM module, initial and maximum. `memory_limit` follows it, see [Memory](limitations.md#memory).                                                                                                         |
 | `ICU_DATA`    | `all`                                                      | The data of ICU that intl links: `all` or `none` (see [intl](extensions.md#intl)).                                                                                                                                          |
 | `OPCACHE`     | `none`                                                     | When opcache compiles the PHP files, with PHP 8.5 and later: `none`, `runtime` or `precompiled` (see [opcache](opcache.md)).                                                                                               |
+| `PHP_INI`     | empty                                                      | Settings of `php.ini`, `name=value` lines, as in a `php.ini`: `E_ALL` and `On` work. They are in `/usr/local/lib/php.ini`, where PHP reads it at each run, and `WARMUP` runs with them. A `php.ini` that the page writes there replaces them. |
 
 ## What to embed
 

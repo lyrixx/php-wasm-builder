@@ -24,7 +24,7 @@
 #   warm        runs WARMUP, and compiles the PHP files with opcache
 #               (OPCACHE=precompiled), in node, with warm.mjs
 #   link        links the .mjs/.wasm files with api.js, and what is embedded,
-#               and copies php-sw.js for the web
+#               and makes php-sw.js for the web
 #
 # Every stage only reads the parts of the plan it needs, and the plan is made
 # of small files: changing EXTENSIONS, TARGETS, ... only rebuilds what actually
@@ -130,12 +130,14 @@ fi
 # <output file name> <emscripten environment> [<flags>], by target. IDBFS
 # keeps files in IndexedDB, across the reloads of a page (the persist option of
 # createPhp()), worker.js runs PHP in a Web Worker (createPhpInWorker()), what
-# the worker environment says it runs in, and frame.js shows an application in
-# a frame (serveInFrame()). Keep in sync with the cases of src/Target.php
+# the worker environment says it runs in, frame.js shows an application in a
+# frame (serveInFrame()), and service-worker.js runs it in a service worker
+# (serveInServiceWorker()), with what sw-common.js shares with php-sw.js. Keep
+# in sync with the cases of src/Target.php
 : > /plan/targets
 for target in $TARGETS; do
     case $target in
-        web)  echo "php-web web,worker -lidbfs.js --extern-post-js worker.js --extern-post-js frame.js" >> /plan/targets ;;
+        web)  echo "php-web web,worker -lidbfs.js --extern-post-js worker.js --extern-post-js frame.js --extern-post-js sw-common.js --extern-post-js service-worker.js" >> /plan/targets ;;
         node) echo "php-node node" >> /plan/targets ;;
         *)    echo "Unknown target '$target', supported targets: web node" >&2; exit 1 ;;
     esac
@@ -515,11 +517,12 @@ EOF
 #
 # The functions of run.c and what api.js needs are exported from the .wasm
 # file. createPhp() is what the .mjs file exports, and createPhpInWorker(),
-# serveInFrame(), keepCookies() and withCookies() for the web. The C stack is
-# 64 KB by default: PHP goes deeper, through the callbacks of its functions
-# (Symfony when it compiles its container), and the stack then overflows on the
-# memory of PHP, its objects call null functions. It is checked: a stack that
-# overflows aborts the module, as one that takes all the memory does.
+# serveInFrame(), serveInServiceWorker(), startServiceWorker(), keepCookies()
+# and withCookies() for the web. The C stack is 64 KB by default: PHP goes
+# deeper, through the callbacks of its functions (Symfony when it compiles its
+# container), and the stack then overflows on the memory of PHP, its objects
+# call null functions. It is checked: a stack that overflows aborts the
+# module, as one that takes all the memory does.
 COPY <<'EOF' /local/src/link.sh
 set -eu
 output=$1
@@ -544,11 +547,13 @@ COPY --from=resolve /plan/link /plan/link
 # opcache compiles every PHP file (OPCACHE=precompiled). This build of PHP sees
 # the directory to embed and the cache of opcache out of the WASM filesystem
 # (NODEFS): what it writes in them is embedded. Nothing happens without
-# WARMUP, nor OPCACHE=precompiled.
+# WARMUP, nor OPCACHE=precompiled. It runs with the settings of php.ini
+# (PHP_INI), that warm.mjs reads.
 FROM objects AS warm
 ARG EMBED_AT=""
 ARG MEMORY=128mb
 ARG OPCACHE=none
+ARG PHP_INI=""
 ARG WARMUP=""
 COPY api.js warm.mjs /local/src/
 COPY --from=embed / /embed
@@ -565,12 +570,13 @@ sh link.sh /warm/php.mjs node -O0 -lnodefs.js -s EXPORTED_RUNTIME_METHODS=FS,NOD
 node warm.mjs /warm/php.mjs "$EMBED_AT" "$OPCACHE" $WARMUP
 EOF
 
-# Link everything, with what is embedded, and the cache of opcache that the
-# warm stage made
+# Link everything, with what is embedded, the cache of opcache that the warm
+# stage made, and the settings of php.ini (PHP_INI, "name=value" lines)
 FROM objects AS link
 ARG EMBED_AT=""
 ARG MEMORY=128mb
-COPY api.js frame.js php-sw.js worker.js /local/src/
+ARG PHP_INI=""
+COPY api.js frame.js php-sw.js service-worker.js sw-common.js worker.js /local/src/
 COPY --from=warm /embed /embed
 COPY --from=warm /opcache /opcache
 COPY --from=resolve /plan/targets /plan/targets
@@ -579,11 +585,17 @@ set -eu
 mkdir -p /build
 # Keep in sync with OPCACHE_FILE_CACHE, in the "resolve" stage
 [ -z "$(ls -A /opcache)" ] || opcache="--embed-file /opcache@/opcache"
+# Where PHP reads it: its prefix is /usr/local. Keep in sync with warm.mjs
+if [ -n "$PHP_INI" ]; then
+    printf '%s\n' "$PHP_INI" > /php.ini
+    ini="--embed-file /php.ini@/usr/local/lib/php.ini"
+fi
 while read -r output environment flags; do
     sh link.sh /build/$output.mjs $environment -O2 -s EXPORTED_RUNTIME_METHODS=FS $flags \
-        ${EMBED_AT:+--embed-file "/embed@$EMBED_AT"} ${opcache:-}
-    # Keep in sync with Target::files(), in src/Target.php
-    [ "$output" != php-web ] || cp php-sw.js /build/
+        ${EMBED_AT:+--embed-file "/embed@$EMBED_AT"} ${opcache:-} ${ini:-}
+    # Keep in sync with Target::files(), in src/Target.php. It shares
+    # sw-common.js with php-web.mjs
+    [ "$output" != php-web ] || cat sw-common.js php-sw.js > /build/php-sw.js
 done < /plan/targets
 EOF
 

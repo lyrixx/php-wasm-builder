@@ -290,11 +290,11 @@ test('a run gives back the memory it takes, however it ends', async () => {
     }
 });
 
-test('the build for the web exports createPhpInWorker(), serveInFrame() and the cookies, not the one for node', async () => {
-    const { createPhpInWorker, keepCookies, serveInFrame, withCookies } = await import(build);
+test('the build for the web exports createPhpInWorker(), what serves an application, and the cookies, not the one for node', async () => {
+    const { createPhpInWorker, keepCookies, serveInFrame, serveInServiceWorker, startServiceWorker, withCookies } = await import(build);
     const expected = build.pathname.endsWith('/php-web.mjs') ? 'function' : 'undefined';
 
-    assert.deepEqual([createPhpInWorker, keepCookies, serveInFrame, withCookies].map((exported) => typeof exported), Array(4).fill(expected));
+    assert.deepEqual([createPhpInWorker, keepCookies, serveInFrame, serveInServiceWorker, startServiceWorker, withCookies].map((exported) => typeof exported), Array(6).fill(expected));
 });
 
 test('opcache is disabled, unless it has its file cache', async () => {

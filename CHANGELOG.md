@@ -2,10 +2,26 @@
 
 ## Unreleased
 
+### Features
+
+* Add `serveInServiceWorker()`, for a service worker that runs PHP itself, the
+  web server of an application on its own page, and `startServiceWorker()`, for
+  the page that registers it: they do what
+  `examples/symfony/public/standalone/` did by hand. The cookies are in the
+  `php cookies` cache of the Cache API.
+* Add the `PHP_INI` build argument, `ini()` of a stack: settings of `php.ini`,
+  in `/usr/local/lib/php.ini`, that `WARMUP` runs with too.
+
 ### Minor
 
+* `forwardToPhp()` logs in the console what fails, and the 500 it answers says
+  `The request fails`.
 * Document how to run PHP in a Cloudflare Worker, that dates stop in 2038, what
   mbstring weighs, and why there is no build argument to optimize for size.
+* Document that what `php.FS` writes in the directory that `persist` keeps is
+  removed by the next run: PHP writes what is to be kept.
+* The Symfony example runs the console once per build, not each time PHP
+  starts, as the guide shows.
 
 ## 0.12.2 (2026-11-05)
 

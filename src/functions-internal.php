@@ -154,6 +154,7 @@ function bake_definition(array $stacks): string
                 'EMBED_AT' => $stack->embedAt ?? '',
                 'WARMUP' => [] === $stack->warmup ? null : implode(' ', $stack->warmup),
                 'OPCACHE' => $stack->opcache?->value,
+                'PHP_INI' => [] === $stack->ini ? null : implode("\n", array_map(static fn (string $name, string $value): string => "{$name}={$value}", array_keys($stack->ini), $stack->ini)),
             ], static fn (?string $value): bool => null !== $value),
             'output' => ['type=local,dest=' . $stack->outputDir],
         ];
