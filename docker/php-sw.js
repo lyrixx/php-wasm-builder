@@ -1,8 +1,9 @@
 // forwardToPhp(): the service worker of serveInFrame(), in docker/frame.js. It
 // takes what the frame asks for to the page, that runs PHP, and answers with
-// what PHP answers. It runs no PHP: a browser stops a service worker that has
-// nothing to do, and PHP would forget its files. See
-// docs/javascript-api/frame.md.
+// what PHP answers. It runs no PHP: PHP runs as long as the page is open, where
+// a browser stops a service worker that has nothing to do. See
+// docs/javascript-api/frame.md, and serveInServiceWorker() for PHP in the
+// service worker.
 //
 // The build for the web puts it next to php-web.mjs, after sw-common.js. A
 // script of the project imports it, and is what the browser registers: a

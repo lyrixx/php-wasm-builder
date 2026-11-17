@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Features
+
+* Add `serveInServiceWorker()`, for a service worker that runs PHP itself, the
+  web server of an application on its own page, and `startServiceWorker()`, for
+  the page that registers it: they do what
+  `examples/symfony/public/standalone/` did by hand. The cookies are in the
+  `php cookies` cache of the Cache API.
+
 ### Minor
 
 * `forwardToPhp()` logs in the console what fails, and the 500 it answers says

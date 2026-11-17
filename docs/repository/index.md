@@ -9,8 +9,10 @@ Everything that compiles PHP is in `docker/`, everything else drives it:
   `warm.mjs` runs `WARMUP` when it is built.
 - The `.mjs` file is the [JavaScript API](../javascript-api/index.md), from `docker/api.js`:
   `createPhp()` starts PHP, `runFile()`, `runCode()` and `request()` run it. `docker/worker.js`
-  runs it [in a worker](../javascript-api/worker.md), and `docker/frame.js`, with
-  `docker/php-sw.js`, shows an application [in a frame](../javascript-api/frame.md).
+  runs it [in a worker](../javascript-api/worker.md), `docker/frame.js`, with `docker/php-sw.js`,
+  shows an application [in a frame](../javascript-api/frame.md), and `docker/service-worker.js` runs
+  it [in a service worker](../javascript-api/service-worker.md). `docker/sw-common.js` is what both
+  service workers do.
 - A *stack* names a set of build arguments, in PHP (see [Stacks](stacks.md)). `stacks.php` has the
   builds that this repository checks, in CI too, and castor builds them with the tasks of
   `castor.php`, from the functions of `src/`. A project that requires the package declares its own

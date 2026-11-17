@@ -33,6 +33,7 @@ nav = [
     "javascript-api/persist.md",
     "javascript-api/http.md",
     "javascript-api/frame.md",
+    "javascript-api/service-worker.md",
   ] },
   { "Guides" = [
     "guides/cloudflare-worker.md",

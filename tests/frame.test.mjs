@@ -5,6 +5,8 @@ import { before, test } from 'node:test';
 import { pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 
+import { browser, container, directory, origin, registered, worker } from './browser.mjs';
+
 // The tests of what shows an application in a frame, serveInFrame() and
 // php-sw.js, on the build for the web of the default stack unless BUILD says
 // which. A build for node has none of it:
@@ -19,8 +21,6 @@ const build = process.env.BUILD ? pathToFileURL(path.resolve(process.env.BUILD))
 const isWeb = build.pathname.endsWith('/php-web.mjs');
 const webTest = (name, callback) => test(name, { skip: !isWeb && 'only the build for the web has it' }, callback);
 
-const origin = 'https://lyrixx.github.io';
-const directory = `${origin}/repository/`;
 const app = `${directory}app/`;
 
 let createPhp;
@@ -187,61 +187,6 @@ webTest('forwardToPhp() says so when a Response can not have what PHP answers, i
     assert.match(await response.text(), /^The request fails: ./);
     assert.equal(error.mock.callCount(), 1);
 });
-
-/**
- * A browser with this service worker container, for a page of the directory.
- * The storage is what localStorage has.
- */
-function browser(serviceWorkerContainer) {
-    const storage = new Map();
-    const globals = {
-        document: {
-            baseURI: directory,
-            createElement: () => ({
-                set textContent(text) {
-                    this.outerHTML = `<p>${text}</p>`;
-                },
-            }),
-        },
-        localStorage: {
-            getItem: (key) => storage.get(key) ?? null,
-            setItem: (key, value) => storage.set(key, value),
-        },
-        navigator: { ...(undefined === serviceWorkerContainer ? {} : { serviceWorker: serviceWorkerContainer }) },
-    };
-    for (const [name, value] of Object.entries(globals)) {
-        Object.defineProperty(globalThis, name, { value, configurable: true });
-    }
-
-    return storage;
-}
-
-function worker(state) {
-    return Object.assign(new EventTarget(), {
-        state,
-        become(newState) {
-            this.state = newState;
-            this.dispatchEvent(new Event('statechange'));
-        },
-    });
-}
-
-function container(registration) {
-    return {
-        calls: [],
-        listeners: [],
-        addEventListener(type, listener) {
-            this.listeners.push(listener);
-        },
-        async register(...args) {
-            this.calls.push(args);
-
-            return registration;
-        },
-    };
-}
-
-const registered = (changes = {}) => ({ installing: null, waiting: null, active: worker('activated'), update: async () => {}, ...changes });
 
 webTest('serveInFrame() registers sw.js for the application, without the HTTP cache, then opens the frame', async () => {
     const serviceWorkerContainer = container(registered());

@@ -3,8 +3,9 @@
 // it with php.request(). See docs/javascript-api/frame.md.
 //
 // Given to emcc with --extern-post-js, for the build for the web only, as
-// worker.js. It also has the cookies of the application, that a service worker
-// that runs PHP itself needs too.
+// worker.js. It also has the cookies of the application, that the service
+// worker of serveInServiceWorker() keeps too, and waits for the service worker
+// as startServiceWorker() does, in service-worker.js.
 
 /**
  * Starts the service worker, runs what it hands over, then opens the frame. The
@@ -51,7 +52,7 @@ export async function serveInFrame(php, { frame, documentRoot, under = 'app/', s
     };
 
     try {
-        await startServiceWorker(under, answer);
+        await startFrameServiceWorker(under, answer);
     } catch (error) {
         const paragraph = document.createElement('p');
         paragraph.textContent = `The application does not start: ${error.message}`;
@@ -62,41 +63,20 @@ export async function serveInFrame(php, { frame, documentRoot, under = 'app/', s
     frame.src = new URL(start, app);
 }
 
-async function startServiceWorker(under, answer) {
-    if (!('serviceWorker' in navigator)) {
-        throw new Error('This browser has no service worker here: it takes HTTPS, or localhost, and some browsers have none in a private window.');
-    }
-
-    navigator.serviceWorker.addEventListener('message', answer);
+async function startFrameServiceWorker(under, answer) {
+    const container = serviceWorkers();
+    container.addEventListener('message', answer);
 
     // Without updateViaCache, the browser takes an imported script, php-sw.js
     // once a project updates, from its HTTP cache
-    const registration = await navigator.serviceWorker.register('sw.js', { scope: under, updateViaCache: 'none' });
+    const registration = await container.register('sw.js', { scope: under, updateViaCache: 'none' });
     // register() does not look for a new version: the browser does it after a
     // navigation in the scope, the frame would load with the old one
     if (null !== registration.active) {
         await registration.update().catch((error) => console.warn(`The service worker stays as it is: ${error.message}`));
     }
 
-    await serviceWorkerActivated(registration);
-}
-
-// Not navigator.serviceWorker.ready: the page is out of the scope, it never
-// resolves
-async function serviceWorkerActivated(registration) {
-    const worker = registration.installing ?? registration.waiting ?? registration.active;
-    if (null === worker) {
-        throw new Error('The service worker does not install.');
-    }
-    if ('activated' === worker.state) {
-        return;
-    }
-
-    await new Promise((resolve) => {
-        worker.addEventListener('statechange', () => ['activated', 'redundant'].includes(worker.state) && resolve());
-    });
-
-    // Redundant: it failed, or a newer one from another tab replaced it
+    // The page is out of the scope
     await serviceWorkerActivated(registration);
 }
 

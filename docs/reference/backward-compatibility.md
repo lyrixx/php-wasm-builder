@@ -16,6 +16,9 @@ says it, with `BC break:`.
   `keepCookies()` and `withCookies()` of `php-web.mjs`, `forwardToPhp()` of `php-sw.js`, and their
   options. So is where a project puts its files, `sw.js` next to `index.html`, and the key of the
   cookies in `localStorage`: with another one, the visitors would lose their session.
+- [What runs PHP in a service worker](../javascript-api/service-worker.md):
+  `serveInServiceWorker()` and `startServiceWorker()` of `php-web.mjs`, and their options. So is
+  where the cookies are, the `php cookies` cache of the Cache API, under the URL of the scope.
 - `Stack`, `Target`, `Opcache` and `IcuData`, and the functions of `src/functions.php`: what a
   project uses, see [Use it in your project](../your-project/index.md).
 - `node/run.mjs` and `node/fetch-files.mjs`: their arguments, and what they do.
