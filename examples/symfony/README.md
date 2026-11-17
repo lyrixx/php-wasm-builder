@@ -11,7 +11,7 @@ PHP in the page, and on its own page, with PHP in a service worker.
 | `public/index.html` | The framed page: it starts PHP, and shows the application in a frame, with `serveInFrame()`. |
 | `public/sw.js` | The service worker of the framed page, that hands what the frame asks for to the page, with `build/php-sw.js`. |
 | `public/standalone/index.html` | What shows until the service worker of `standalone/` answers. |
-| `public/standalone/sw.js` | The service worker that runs PHP, and answers every request under `standalone/`. |
+| `public/standalone/sw.js` | The service worker that runs PHP, and answers every request under `standalone/`, with `serveInServiceWorker()`. |
 | `public/build/` | What castor builds: `php-web.mjs`, `php-web.wasm` and `php-sw.js` (not in git). |
 
 How a request of the framed page goes through:
@@ -27,7 +27,8 @@ How a request of the framed page goes through:
 
 How a request of `standalone/` goes through:
 
-1. `standalone/index.html` registers `standalone/sw.js`, then reloads.
+1. `standalone/index.html` registers `standalone/sw.js` with
+   `startServiceWorker()`, then reloads.
 2. The service worker starts PHP, with the same `/symfony`, creates the
    database, and answers the request with `php.request()`. It answers every
    other request under `standalone/` the same way: the URLs are the ones of
