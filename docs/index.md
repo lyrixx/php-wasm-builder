@@ -134,6 +134,11 @@ These pages run PHP in the browser, built with PHP WASM Builder.
 <p class="home-card__meta"><a href="https://github.com/jolicode/JoliTypo/blob/main/website/public/js/php.js">website/public/js/php.js</a> runs PHP</p>
 </div>
 <div class="home-card">
+<h3><a href="https://jolicode.github.io/structured-data/">structured-data</a></h3>
+<p>Validates the structured data of a page against schema.org and the Google Rich Results requirements.</p>
+<p class="home-card__meta"><a href="https://github.com/jolicode/structured-data/blob/main/website/assets/php.js">website/assets/php.js</a> runs PHP</p>
+</div>
+<div class="home-card">
 <h3><a href="https://lyrixx.github.io/php-wasm-demo/symfony-demo/">The Symfony Demo</a></h3>
 <p>The official Symfony Demo, as it is: a blog with its admin, Doctrine and SQLite, Stimulus and 30 languages.</p>
 <p class="home-card__meta"><a href="https://github.com/lyrixx/php-wasm-demo/blob/main/public/symfony-demo/index.html">public/symfony-demo/index.html</a> runs PHP</p>
