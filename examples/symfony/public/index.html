@@ -151,23 +151,20 @@
 
     <script type="module">
         import { createPhpInWorker, serveInFrame } from './build/php-web.mjs';
+        import { start } from './start.mjs';
 
         const message = document.getElementById('message');
         const frame = document.getElementById('frame');
 
         // In a worker: the page, and the frame, do not freeze while PHP
-        // runs. /symfony, where the database and the sessions are, is kept in
-        // IndexedDB: keep in sync with ../app/.env and
-        // ../app/config/packages/framework.yaml
+        // runs. /symfony is kept in IndexedDB: keep in sync with ./start.mjs
         const php = await createPhpInWorker({ persist: '/symfony' });
 
         message.textContent = 'Creating the database…';
-        // It compiles the container of Symfony too, that the requests use
-        const { exitCode, stdout } = await php.runFile('/app/bin/console', { args: ['doctrine:schema:update', '--force', '--no-interaction'] });
-        if (0 !== exitCode) {
-            message.textContent = `The console exits with ${exitCode}: ${stdout}`;
-            throw new Error(message.textContent);
-        }
+        await start(php).catch((error) => {
+            message.textContent = error.message;
+            throw error;
+        });
 
         frame.addEventListener('load', () => {
             document.getElementById('address').textContent = frame.contentWindow.location.pathname + frame.contentWindow.location.search;

@@ -60,13 +60,51 @@ framework:
         save_path: /symfony/sessions
 ```
 
-The console creates the database before the first request, with `runFile()`, and compiles the
-container of Symfony on the way:
+The console creates the database before the first request, with `runFile()`:
 
 ```js
 const php = await createPhp({ persist: '/symfony' });
 await php.runFile('/app/bin/console', { args: ['doctrine:schema:update', '--force', '--no-interaction'] });
 ```
+
+PHP starts again at each load of the page, or of the service worker. In node, the example then runs
+the console in 435 ms, and its first request in 205 ms. The console only has to run once per build
+of the application: the example names the build in the cache of Symfony, with a cache warmer that
+`warmup()` runs, and keeps the name of the build it last ran the console for next to the database.
+Without the console, the first request takes 310 ms, as it compiles some of what the console
+compiled: about 300 ms less.
+
+```php
+// src/BuildIdWarmer.php
+final readonly class BuildIdWarmer implements CacheWarmerInterface
+{
+    public function isOptional(): bool
+    {
+        return false;
+    }
+
+    public function warmUp(string $cacheDir, ?string $buildDir = null): array
+    {
+        file_put_contents(($buildDir ?? $cacheDir) . '/build-id', bin2hex(random_bytes(8)));
+
+        return [];
+    }
+}
+```
+
+```js
+// In PHP: php.FS does not see what IndexedDB has before the first run
+const { stdout: started } = await php.runCode("echo (int) (file_get_contents('/app/var/cache/prod/build-id') === @file_get_contents('/symfony/build-id'));");
+if ('1' !== started) {
+    await php.runFile('/app/bin/console', { args: ['doctrine:schema:update', '--force', '--no-interaction'] });
+    await php.runCode("copy('/app/var/cache/prod/build-id', '/symfony/build-id');");
+}
+```
+
+The build runs `warmup()` again each time what is embedded changes: the name changes with the
+application. `warmup()` compiles the container of Symfony too, that the console would compile
+otherwise. A project that prepares what it embeds, in a task of castor, can write the name there
+instead. Both pages of the example run it, from `examples/symfony/public/start.mjs`.
 
 There are two ways to show the application then: the example has both, and they share `/symfony`.
 
@@ -121,8 +159,8 @@ serveInServiceWorker(async () => {
 ```
 
 PHP starts with the first request. The browser stops a service worker that has nothing to do, after
-30 s in Chrome, and PHP with it: the next request starts PHP again, runs the console again, and PHP
-finds its files in IndexedDB. `serveInServiceWorker()` keeps the cookies of the application, in the
+30 s in Chrome, and PHP with it: the next request starts PHP again, and PHP finds its files in
+IndexedDB. `serveInServiceWorker()` keeps the cookies of the application, in the
 Cache API, and gives PHP the `Referer`: the stateless CSRF protection, that the recipes of Symfony
 enable, checks it when there is no `Origin`.
 

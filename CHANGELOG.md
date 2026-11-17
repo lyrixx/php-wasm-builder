@@ -20,6 +20,8 @@
   mbstring weighs, and why there is no build argument to optimize for size.
 * Document that what `php.FS` writes in the directory that `persist` keeps is
   removed by the next run: PHP writes what is to be kept.
+* The Symfony example runs the console once per build, not each time PHP
+  starts, as the guide shows.
 
 ## 0.12.2 (2026-11-05)
 

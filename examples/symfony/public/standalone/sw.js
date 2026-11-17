@@ -8,18 +8,12 @@
 // framed page, ../index.html, runs PHP in a worker of the page instead.
 
 import createPhp, { serveInServiceWorker } from '../build/php-web.mjs';
+import { start } from '../start.mjs';
 
 serveInServiceWorker(async () => {
-    // /symfony, where the database and the sessions are, is kept in
-    // IndexedDB, and shared with the framed page. Keep in sync with
-    // ../index.html, ../../app/.env and
-    // ../../app/config/packages/framework.yaml
+    // Shared with the framed page. Keep in sync with ../start.mjs
     const php = await createPhp({ persist: '/symfony' });
-    // It compiles the container of Symfony too, that the requests use
-    const { exitCode, stdout } = await php.runFile('/app/bin/console', { args: ['doctrine:schema:update', '--force', '--no-interaction'] });
-    if (0 !== exitCode) {
-        throw new Error(`The console exits with ${exitCode}: ${stdout}`);
-    }
+    await start(php);
 
     return php;
 }, {
