@@ -134,6 +134,11 @@ function check_stack(Stack $stack): void
         $problems['compress.zlib:// does not write and read a file'] = 'extension_loaded("zlib") && file_put_contents("compress.zlib:///tmp/check.gz", "php") === 3 && file_get_contents("compress.zlib:///tmp/check.gz") === "php"';
     }
 
+    // The settings of php.ini, as PHP reads them: E_ALL is a number, On is "1"
+    foreach ($stack->ini as $name => $value) {
+        $problems["php.ini does not set {$name}"] = \sprintf('ini_get(%1$s) === parse_ini_string(%2$s)[%1$s]', var_export($name, true), var_export("{$name}={$value}", true));
+    }
+
     // Prints the problems whose expression is false
     $code = \sprintf('echo json_encode(array_keys(array_filter([%s])));', implode(', ', array_map(
         static fn (string $problem, string $expression): string => var_export($problem, true) . " => !({$expression})",

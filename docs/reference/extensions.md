@@ -145,7 +145,9 @@ docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring si
 ```
 
 `phar.readonly` is on, as in PHP, and `ini_set()` can not turn it off: `new Phar()` throws an
-`UnexpectedValueException` when it would write. A `php.ini` turns it off, written before PHP runs:
+`UnexpectedValueException` when it would write. A `php.ini` turns it off: the one of the stack,
+`ini(['phar.readonly' => 'Off'])` (`PHP_INI`, see [Build arguments](build-arguments.md)), or one
+written before PHP runs, in its place:
 
 ```js
 const php = await createPhp();

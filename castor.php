@@ -143,6 +143,7 @@ function stacks_task(
             'Warmup' => implode(' ', $stack->warmup) ?: null,
             'Opcache' => Opcache::None !== $stack->opcache ? $stack->opcache?->value : null,
             'Memory' => $stack->memory ?? dockerfile_default('MEMORY'),
+            'php.ini' => implode(', ', array_map(static fn (string $name, string $value): string => "{$name}={$value}", array_keys($stack->ini), $stack->ini)) ?: null,
         ];
         foreach (array_filter($details) as $label => $value) {
             io()->writeln(\sprintf('   <comment>%-12s</comment>%s', $label, $value));

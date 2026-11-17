@@ -3,7 +3,8 @@
 //     node warm.mjs <php.mjs> <embed at> <opcache> [<file> <arguments>...]
 //
 // It runs the file (WARMUP), a file of the directory to embed, then opcache
-// compiles every PHP file of the directory, with OPCACHE=precompiled. PHP sees
+// compiles every PHP file of the directory, with OPCACHE=precompiled, and the
+// settings of php.ini of the stack, PHP_INI, in its environment. PHP sees
 // the directory to embed, /embed, and the cache of opcache, /opcache, out of
 // the WASM filesystem (NODEFS): what it writes in them is embedded.
 
@@ -20,9 +21,10 @@ const php = await createPhp({
             module.FS.mkdirTree(at);
             module.FS.mount(module.NODEFS, { root: directory }, at);
         }
-        // What it does not write, it only says at this level
+        // Where the link stage of the Dockerfile embeds PHP_INI. What opcache
+        // does not write, it only says at this level, whatever PHP_INI says
         module.FS.mkdirTree('/usr/local/lib');
-        module.FS.writeFile('/usr/local/lib/php.ini', 'opcache.log_verbosity_level=2\n');
+        module.FS.writeFile('/usr/local/lib/php.ini', `${process.env.PHP_INI ?? ''}\nopcache.log_verbosity_level=2\n`);
     }],
 });
 

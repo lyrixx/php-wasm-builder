@@ -547,11 +547,13 @@ COPY --from=resolve /plan/link /plan/link
 # opcache compiles every PHP file (OPCACHE=precompiled). This build of PHP sees
 # the directory to embed and the cache of opcache out of the WASM filesystem
 # (NODEFS): what it writes in them is embedded. Nothing happens without
-# WARMUP, nor OPCACHE=precompiled.
+# WARMUP, nor OPCACHE=precompiled. It runs with the settings of php.ini
+# (PHP_INI), that warm.mjs reads.
 FROM objects AS warm
 ARG EMBED_AT=""
 ARG MEMORY=128mb
 ARG OPCACHE=none
+ARG PHP_INI=""
 ARG WARMUP=""
 COPY api.js warm.mjs /local/src/
 COPY --from=embed / /embed
@@ -568,11 +570,12 @@ sh link.sh /warm/php.mjs node -O0 -lnodefs.js -s EXPORTED_RUNTIME_METHODS=FS,NOD
 node warm.mjs /warm/php.mjs "$EMBED_AT" "$OPCACHE" $WARMUP
 EOF
 
-# Link everything, with what is embedded, and the cache of opcache that the
-# warm stage made
+# Link everything, with what is embedded, the cache of opcache that the warm
+# stage made, and the settings of php.ini (PHP_INI, "name=value" lines)
 FROM objects AS link
 ARG EMBED_AT=""
 ARG MEMORY=128mb
+ARG PHP_INI=""
 COPY api.js frame.js php-sw.js service-worker.js sw-common.js worker.js /local/src/
 COPY --from=warm /embed /embed
 COPY --from=warm /opcache /opcache
@@ -582,9 +585,14 @@ set -eu
 mkdir -p /build
 # Keep in sync with OPCACHE_FILE_CACHE, in the "resolve" stage
 [ -z "$(ls -A /opcache)" ] || opcache="--embed-file /opcache@/opcache"
+# Where PHP reads it: its prefix is /usr/local. Keep in sync with warm.mjs
+if [ -n "$PHP_INI" ]; then
+    printf '%s\n' "$PHP_INI" > /php.ini
+    ini="--embed-file /php.ini@/usr/local/lib/php.ini"
+fi
 while read -r output environment flags; do
     sh link.sh /build/$output.mjs $environment -O2 -s EXPORTED_RUNTIME_METHODS=FS $flags \
-        ${EMBED_AT:+--embed-file "/embed@$EMBED_AT"} ${opcache:-}
+        ${EMBED_AT:+--embed-file "/embed@$EMBED_AT"} ${opcache:-} ${ini:-}
     # Keep in sync with Target::files(), in src/Target.php. It shares
     # sw-common.js with php-web.mjs
     [ "$output" != php-web ] || cat sw-common.js php-sw.js > /build/php-sw.js

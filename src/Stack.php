@@ -9,9 +9,10 @@ use Symfony\Component\Filesystem\Path;
  * embed, which targets to build and where.
  *
  * A stack never changes: each method returns a new one, so a stack is derived
- * from another one by renaming it. The extensions it is given are added to the
- * ones it already has, anything else replaces what it has. The directories are
- * relative to the root of the project: the directory of its castor.php.
+ * from another one by renaming it. The extensions and the settings of php.ini
+ * it is given are added to the ones it already has, anything else replaces
+ * what it has. The directories are relative to the root of the project: the
+ * directory of its castor.php.
  *
  * What is not set (null) is the default of the Dockerfile.
  */
@@ -23,12 +24,13 @@ final readonly class Stack
     public const EXTENSIONS = ['bcmath', 'calendar', 'ctype', 'dom', 'exif', 'fileinfo', 'filter', 'gd', 'iconv', 'intl', 'libxml', 'mbstring', 'openssl', 'pdo', 'pdo_sqlite', 'phar', 'session', 'simplexml', 'sodium', 'sqlite3', 'tokenizer', 'xml', 'xmlreader', 'xmlwriter', 'zip', 'zlib'];
 
     /**
-     * @param list<string> $extensions
-     * @param string|null  $embed      absolute path of the directory to embed
-     * @param string|null  $embedAt    where the embedded directory is in the WASM filesystem, as /app
-     * @param list<string> $warmup     a file of the embedded directory, and its arguments
-     * @param list<Target> $targets
-     * @param string       $outputDir  absolute path of the directory the files are written to
+     * @param list<string>          $extensions
+     * @param string|null           $embed      absolute path of the directory to embed
+     * @param string|null           $embedAt    where the embedded directory is in the WASM filesystem, as /app
+     * @param list<string>          $warmup     a file of the embedded directory, and its arguments
+     * @param list<Target>          $targets
+     * @param array<string, string> $ini        settings of php.ini, by name
+     * @param string                $outputDir  absolute path of the directory the files are written to
      */
     private function __construct(
         public string $name,
@@ -40,6 +42,7 @@ final readonly class Stack
         public ?Opcache $opcache,
         public array $targets,
         public ?string $memory,
+        public array $ini,
         public ?IcuData $icuData,
         public string $outputDir,
     ) {
@@ -57,6 +60,7 @@ final readonly class Stack
             opcache: null,
             targets: Target::cases(),
             memory: null,
+            ini: [],
             icuData: null,
             outputDir: build_dir() . '/' . $name,
         );
@@ -135,6 +139,26 @@ final readonly class Stack
     public function memory(string $memory): self
     {
         return $this->with(memory: $memory);
+    }
+
+    /**
+     * Settings of php.ini, in addition to the ones the stack already has: PHP
+     * reads them at each run, WARMUP too. ->ini(['memory_limit' => '256M']).
+     *
+     * @param array<string, string|int> $settings by name, as php.ini has them: E_ALL and On work
+     */
+    public function ini(array $settings): self
+    {
+        foreach ($settings as $name => $value) {
+            if (!\is_string($name) || !preg_match('/^[a-zA-Z0-9_.]+$/', $name)) {
+                throw new \InvalidArgumentException(\sprintf('"%s" is not a valid name for a setting of php.ini, use letters, digits, "." and "_".', $name));
+            }
+            if (preg_match('/[\r\n]/', (string) $value)) {
+                throw new \InvalidArgumentException(\sprintf('The setting "%s" of php.ini can not be on several lines.', $name));
+            }
+        }
+
+        return $this->with(ini: [...$this->ini, ...array_map(strval(...), $settings)]);
     }
 
     /**

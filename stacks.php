@@ -33,5 +33,8 @@ return [
     $php85->renamed('php-8.5-opcache-runtime')->opcache(Opcache::Runtime),
     $php85->renamed('php-8.5-opcache-precompiled')
         ->embed('tests/embed', at: '/tests')
-        ->opcache(Opcache::Precompiled),
+        ->opcache(Opcache::Precompiled)
+        // Settings of php.ini, that the build of opcache runs with too: the
+        // check reads them. E_ALL is what PHP does without it
+        ->ini(['date.timezone' => 'Europe/Paris', 'error_reporting' => 'E_ALL']),
 ];

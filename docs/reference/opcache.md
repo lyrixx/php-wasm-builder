@@ -39,8 +39,9 @@ again in the same second. What is embedded dates from 1970-01-01 00:00:01 (`file
 opcache caches it from the first run, and the build compiles it with this date.
 
 `opcache_invalidate()` does nothing, and `opcache_get_status()` is false: opcache only has the
-files, no shared memory. A `php.ini` changes its settings, at `/usr/local/lib/php.ini`, written
-before the first run.
+files, no shared memory. A `php.ini` changes its settings: the one of the stack (`PHP_INI`, see
+[Build arguments](build-arguments.md)), or one written at `/usr/local/lib/php.ini` before the first
+run, in its place.
 
 On 32 bits, what the module is, the file cache of PHP 8.5.12 and before breaks the attributes of
 constants, as the `#[Deprecated]` of `symfony/polyfill-uuid`: PHP crashes on such a file, or loses

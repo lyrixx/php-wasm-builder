@@ -9,6 +9,8 @@
   the page that registers it: they do what
   `examples/symfony/public/standalone/` did by hand. The cookies are in the
   `php cookies` cache of the Cache API.
+* Add the `PHP_INI` build argument, `ini()` of a stack: settings of `php.ini`,
+  in `/usr/local/lib/php.ini`, that `WARMUP` runs with too.
 
 ### Minor
 
