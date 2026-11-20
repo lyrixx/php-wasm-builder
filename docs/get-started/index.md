@@ -7,12 +7,12 @@ repository, then:
 docker buildx bake
 ```
 
-This builds PHP 8.5.12, with the extensions listed in
+This builds PHP 8.6.0, with the extensions listed in
 [Supported extensions](../reference/extensions.md). Another version, or other extensions, are
 [build arguments](../reference/build-arguments.md). The first build compiles everything, and takes
 a while: the next ones only compile again what changed.
 
-The files end up in `build/php-8.5/`:
+The files end up in `build/php-8.6/`:
 
 - `php-web.mjs` and `php-web.wasm`, for the browser, and `php-sw.js`, for a service worker;
 - `php-node.mjs` and `php-node.wasm`, for node.

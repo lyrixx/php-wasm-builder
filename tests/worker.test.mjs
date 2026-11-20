@@ -6,12 +6,12 @@ import { pathToFileURL } from 'node:url';
 // What the worker of createPhpInWorker() answers, on the build for the web of
 // the default stack unless BUILD says which. A build for node has none of it:
 //
-//     BUILD=build/php-8.5/php-web.mjs node --import ./node/fetch-files.mjs --test tests/worker.test.mjs
+//     BUILD=build/php-8.6/php-web.mjs node --import ./node/fetch-files.mjs --test tests/worker.test.mjs
 //
 // node has no Web Worker: php-web.mjs believes it runs in one here, and is asked
 // what the page asks, on a real MessageChannel, that copies what a browser does.
 
-const build = process.env.BUILD ? pathToFileURL(path.resolve(process.env.BUILD)) : new URL('../build/php-8.5/php-web.mjs', import.meta.url);
+const build = process.env.BUILD ? pathToFileURL(path.resolve(process.env.BUILD)) : new URL('../build/php-8.6/php-web.mjs', import.meta.url);
 const isWeb = build.pathname.endsWith('/php-web.mjs');
 const webTest = (name, callback) => test(name, { skip: !isWeb && 'only the build for the web has it' }, callback);
 

@@ -13,16 +13,16 @@ castor to use this repository. castor is a single binary, installed with
 use PhpWasm\Stack;
 use PhpWasm\Target;
 
-$php85 = Stack::named('php-8.5')
-    ->php('8.5.12')
+$php86 = Stack::named('php-8.6')
+    ->php('8.6.0')
     ->extensions('calendar', 'ctype', 'dom', 'mbstring', 'simplexml', 'xml', 'xmlreader', 'xmlwriter')
     ->targets(Target::Web, Target::Node);
 
 return [
-    $php85,
+    $php86,
 
-    // Everything from php-8.5, and two more extensions
-    $php85->renamed('php-8.5-bcmath')->extensions('bcmath', 'tokenizer'),
+    // Everything from php-8.6, and two more extensions
+    $php86->renamed('php-8.6-bcmath')->extensions('bcmath', 'tokenizer'),
 ];
 ```
 
@@ -32,7 +32,7 @@ it. Each method sets a [build argument](../reference/build-arguments.md):
 
 | Method                                    | Build argument            |
 |-------------------------------------------|---------------------------|
-| `php('8.5.12')`                           | `PHP_VERSION`             |
+| `php('8.6.0')`                            | `PHP_VERSION`             |
 | `extensions('intl')`                      | `EXTENSIONS`              |
 | `targets(Target::Web)`                    | `TARGETS`                 |
 | `memory('256mb')`                         | `MEMORY`                  |
@@ -56,32 +56,32 @@ Unless a stack says otherwise, everything is built in `build/<stack>/`:
 
 ```
 castor wasm:stacks                               # lists the stacks
-castor wasm:build                                # builds php-8.5
-castor wasm:build php-8.5-intl                   # builds another one
+castor wasm:build                                # builds php-8.6
+castor wasm:build php-8.6-intl                   # builds another one
 castor wasm:build --all                          # builds all of them, in one buildx invocation (with the overrides below)
 castor wasm:check                                # builds them all, and checks them
-castor wasm:sizes                                # compares the size of the .wasm files with php-8.5
-castor wasm:run my-script.php                    # runs a file, in php-8.5
+castor wasm:sizes                                # compares the size of the .wasm files with php-8.6
+castor wasm:run my-script.php                    # runs a file, in php-8.6
 castor wasm:run -r 'echo PHP_VERSION;' --stack php-8.3
 castor wasm:serve                                # lists the examples
 castor wasm:serve playground                     # builds the page of examples/playground/, and serves it
-castor wasm:serve playground --php 8.3.35        # the same page, on PHP 8.3
+castor wasm:serve playground --php 8.3.37        # the same page, on PHP 8.3
 ```
 
 Anything in a stack can be overridden from the command line, so there is no need to declare a stack
 to try something:
 
 ```
-castor wasm:build --php 8.3.35                      # php-8.5, on PHP 8.3
+castor wasm:build --php 8.3.37                      # php-8.6, on PHP 8.3
 castor wasm:build php-8.3 --target node             # only the node target
-castor wasm:build --with tokenizer --with bcmath    # php-8.5, and two more extensions
+castor wasm:build --with tokenizer --with bcmath    # php-8.6, and two more extensions
 castor wasm:build --memory 256mb --embed my-app     # more memory, another directory to embed
-castor wasm:build php-8.5-intl --icu-data none      # intl, without ICU's data
+castor wasm:build php-8.6-intl --icu-data none      # intl, without ICU's data
 castor wasm:build --embed my-app --opcache precompiled  # opcache compiles what is embedded when it is built
 castor wasm:build --print                           # only shows the bake file
 ```
 
-What is built with overrides goes to the directory of the stack (`build/php-8.5/`,
+What is built with overrides goes to the directory of the stack (`build/php-8.6/`,
 `build/php-8.3/`), in place of what was there.
 
 `castor wasm:run` runs a file, or some code, in a stack, and offers to build it when it is not built
@@ -99,7 +99,7 @@ the examples, in CI too:
 
 | Stack                                                   | What it is                                                                          |
 |---------------------------------------------------------|-------------------------------------------------------------------------------------|
-| `php-8.5`                                               | PHP 8.5, with the default extensions: what `docker buildx bake` builds too.          |
-| `php-8.4`, `php-8.3`                                    | The same thing, on older PHP versions.                                              |
-| `php-8.5-intl`                                          | Adds intl, with ICU's data (see [intl](../reference/extensions.md#intl)).           |
-| `php-8.5-opcache-runtime`, `php-8.5-opcache-precompiled` | opcache keeps what it compiles in files (see [opcache](../reference/opcache.md)). The second one has settings of `php.ini` too. |
+| `php-8.6`                                               | PHP 8.6, with the default extensions: what `docker buildx bake` builds too.          |
+| `php-8.5`, `php-8.4`, `php-8.3`                         | The same thing, on older PHP versions.                                              |
+| `php-8.6-intl`                                          | Adds intl, with ICU's data (see [intl](../reference/extensions.md#intl)).           |
+| `php-8.6-opcache-runtime`, `php-8.6-opcache-precompiled` | opcache keeps what it compiles in files (see [opcache](../reference/opcache.md)). The second one has settings of `php.ini` too. |

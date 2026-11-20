@@ -1,6 +1,6 @@
 # Run it in a page
 
-`php-web.mjs` is a module, that a page imports. Save this page as `build/php-8.5/index.html`, next
+`php-web.mjs` is a module, that a page imports. Save this page as `build/php-8.6/index.html`, next
 to it:
 
 ```html
@@ -19,7 +19,7 @@ A browser does not load a module from a `file:` URL, so the directory must be se
 server does it, the one of PHP for example:
 
 ```
-php -S 127.0.0.1:8000 -t build/php-8.5
+php -S 127.0.0.1:8000 -t build/php-8.6
 ```
 
 Then open <http://127.0.0.1:8000/>.

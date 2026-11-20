@@ -99,7 +99,7 @@ docker buildx bake --set default.args.EXTENSIONS="calendar ctype dom mbstring si
 node node/run.mjs -r 'echo (new NumberFormatter("fr_FR", NumberFormatter::CURRENCY))->formatCurrency(1234.5, "EUR");'
 ```
 
-The `php-8.5-intl` stack (see [Stacks](../repository/stacks.md)) is the same build.
+The `php-8.6-intl` stack (see [Stacks](../repository/stacks.md)) is the same build.
 
 When the code only needs intl to be loaded, `ICU_DATA=none` leaves the data out: the `.wasm` file is
 then about 2 MB bigger than without intl (less than 1 MB gzipped), and it needs no more memory. ICU

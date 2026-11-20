@@ -3,7 +3,7 @@
 namespace PhpWasm;
 
 /**
- * What opcache compiles, the OPCACHE build argument, with PHP 8.5 and later.
+ * What opcache compiles, the OPCACHE build argument, with PHP 8.5.13 and later.
  * Keep in sync with the "resolve" stage of the Dockerfile.
  */
 enum Opcache: string

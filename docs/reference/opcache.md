@@ -1,8 +1,8 @@
 # opcache
 
-Each run starts PHP, and stops it: what opcache compiled is gone with it. With PHP 8.5 and later,
-opcache can keep it in files of the WASM filesystem, in `/opcache`, that the next runs read instead
-of compiling the PHP files again. `OPCACHE` says when it compiles them:
+Each run starts PHP, and stops it: what opcache compiled is gone with it. With PHP 8.5.13 and
+later, opcache can keep it in files of the WASM filesystem, in `/opcache`, that the next runs read
+instead of compiling the PHP files again. `OPCACHE` says when it compiles them:
 
 - `none`, the default: every run compiles what it runs;
 - `runtime`: as they run, the first run that needs a file compiles it, and writes it;
@@ -45,5 +45,5 @@ run, in its place.
 
 On 32 bits, what the module is, the file cache of PHP 8.5.12 and before breaks the attributes of
 constants, as the `#[Deprecated]` of `symfony/polyfill-uuid`: PHP crashes on such a file, or loses
-them ([GH-24745](https://github.com/php/php-src/issues/24745)). The build applies the fix of PHP
-8.5.13 to these versions.
+them ([GH-24745](https://github.com/php/php-src/issues/24745)). This is why `OPCACHE` needs PHP
+8.5.13: the build fails with an older version.

@@ -101,8 +101,9 @@ if [ $sqlite = 1 ]; then
     link="$link /local/install/lib/libsqlite3.a"
 fi
 if [ $gd = 1 ]; then
-    # libwebp needs libsharpyuv: it comes after it
-    link="$link /local/install/lib/libpng16.a /local/install/lib/libjpeg.a /local/install/lib/libwebp.a /local/install/lib/libsharpyuv.a"
+    # libwebpmux and libwebpdemux, that gd needs since PHP 8.6, need libwebp,
+    # that needs libsharpyuv: each one comes after what needs it
+    link="$link /local/install/lib/libpng16.a /local/install/lib/libjpeg.a /local/install/lib/libwebpmux.a /local/install/lib/libwebpdemux.a /local/install/lib/libwebp.a /local/install/lib/libsharpyuv.a"
 fi
 if [ $libzip = 1 ]; then
     link="$link /local/install/lib/libzip.a"
@@ -192,7 +193,7 @@ RUN mkdir -p /local/install
 # Download PHP and Set-Up Configure
 FROM base AS php-src
 # Keep in sync with the default stack, in stacks.php
-ARG PHP_VERSION=8.5.12
+ARG PHP_VERSION=8.6.0
 RUN \
     git clone https://github.com/php/php-src.git php-src --branch php-$PHP_VERSION --single-branch --depth 1 && \
     cd php-src && \
@@ -391,11 +392,12 @@ set -eu
 [ "$(cat /plan/gd)" = 1 ] || exit 0
 git clone https://github.com/webmproject/libwebp --branch v$LIBWEBP_VERSION --single-branch --depth 1
 cd libwebp
-# No threads, and only the library: its tools need more libraries
+# No threads, and only the libraries: its tools need more of them. libwebpmux
+# and libwebpdemux too, for the animations, that gd needs since PHP 8.6
 emcmake cmake -S . -B out -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/local/install -DCMAKE_INSTALL_LIBDIR=lib \
     -DWEBP_USE_THREAD=OFF -DWEBP_ENABLE_SIMD=OFF -DWEBP_BUILD_ANIM_UTILS=OFF -DWEBP_BUILD_CWEBP=OFF -DWEBP_BUILD_DWEBP=OFF \
     -DWEBP_BUILD_GIF2WEBP=OFF -DWEBP_BUILD_IMG2WEBP=OFF -DWEBP_BUILD_VWEBP=OFF -DWEBP_BUILD_WEBPINFO=OFF \
-    -DWEBP_BUILD_LIBWEBPMUX=OFF -DWEBP_BUILD_WEBPMUX=OFF -DWEBP_BUILD_EXTRAS=OFF
+    -DWEBP_BUILD_WEBPMUX=OFF -DWEBP_BUILD_EXTRAS=OFF
 emmake make -C out -j`nproc` install
 EOF
 
@@ -469,29 +471,25 @@ ENV LIBZIP_LIBS="-L/local/install/lib"
 # gd, sodium and zlib their libraries
 ENV EM_PKG_CONFIG_PATH=/local/install/lib/pkgconfig
 
-RUN cd php-src && \
-    emconfigure ./configure --host=$(emcc -dumpmachine) --enable-embed=static \
-    --disable-all --without-pcre-jit --disable-fiber-asm --disable-cgi --disable-cli --disable-phpdbg \
-    $(cat /plan/configure)
-
-# On 32 bits, the file cache of opcache breaks the attributes of constants, that
-# PHP 8.5 brings: the script that runs gets an offset for them, and the file a
-# raw pointer. PHP crashes on such a file, or loses them
-# (https://github.com/php/php-src/issues/24745). PHP 8.5.13 has this fix: it
-# goes, with the patch, once every stack has it.
-COPY php-gh-24745.patch /local/src/
+# PHP 8.6 builds embed with the objects of the CLI, for do_php_cli(): it does
+# not configure with --disable-cli. Only libphp is built (see below), they are
+# in it, and nothing links them.
 RUN <<EOF
 set -eu
 cd php-src
 version=$(sed -n 's/^#define PHP_VERSION_ID //p' main/php_version.h)
-if [ "$version" -ge 80500 ] && [ "$version" -lt 80513 ]; then
-    git apply /local/src/php-gh-24745.patch
-fi
+cli=--disable-cli
+[ "$version" -lt 80600 ] || cli=
+emconfigure ./configure --host=$(emcc -dumpmachine) --enable-embed=static \
+    --disable-all --without-pcre-jit --disable-fiber-asm --disable-cgi $cli --disable-phpdbg \
+    $(cat /plan/configure)
 EOF
 
+# Only libphp: with the CLI, PHP 8.6 would link its program too, and run it to
+# build phar.phar
 RUN \
     cd php-src && \
-    emmake make -j`nproc`
+    emmake make -j`nproc` libphp.la
 
 # The directory to embed in the WASM filesystem is the named build context
 # "embed", empty unless given. It shows up at $EMBED_AT: nothing is embedded
@@ -504,8 +502,12 @@ COPY --from=resolve /plan/opcache /plan/opcache
 COPY run.c spawn.c /local/src/
 RUN <<EOF
 set -eu
-if [ -n "$(cat /plan/opcache)" ] && ! emar t php-src/.libs/libphp.a | grep -x ZendAccelerator.o > /dev/null; then
-    echo "OPCACHE needs opcache, that PHP builds since 8.5 only" >&2
+# PHP builds opcache since 8.5 only. Before 8.5.13, on 32 bits, its file cache
+# breaks the attributes of constants: PHP crashes on such a file, or loses them
+# (https://github.com/php/php-src/issues/24745)
+version=$(sed -n 's/^#define PHP_VERSION_ID //p' php-src/main/php_version.h)
+if [ -n "$(cat /plan/opcache)" ] && [ "$version" -lt 80513 ]; then
+    echo "OPCACHE needs PHP 8.5.13 or later" >&2
     exit 1
 fi
 emcc -O2 $(cat /plan/opcache) -I php-src/. -I php-src/Zend -I php-src/main -I php-src/TSRM -c run.c -o run.o

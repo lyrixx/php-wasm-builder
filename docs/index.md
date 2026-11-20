@@ -39,7 +39,7 @@ and your code in it. A page runs it with a few lines of JavaScript, and node run
 </script>
 ```
 
-<p class="home-window__output">Hello from PHP 8.5.12</p>
+<p class="home-window__output">Hello from PHP 8.6.0</p>
 
 </div>
 
@@ -48,8 +48,8 @@ and your code in it. A page runs it with a few lines of JavaScript, and node run
 
 <div class="home-marquee" aria-hidden="true">
 <div class="home-marquee__track">
-<span>PHP 8.5</span><span>PHP 8.4</span><span>PHP 8.3</span><span>Symfony</span><span>SQLite</span><span>intl</span><span>OpenSSL</span><span>opcache</span><span>Web Workers</span><span>node</span>
-<span>PHP 8.5</span><span>PHP 8.4</span><span>PHP 8.3</span><span>Symfony</span><span>SQLite</span><span>intl</span><span>OpenSSL</span><span>opcache</span><span>Web Workers</span><span>node</span>
+<span>PHP 8.6</span><span>PHP 8.5</span><span>PHP 8.4</span><span>PHP 8.3</span><span>Symfony</span><span>SQLite</span><span>intl</span><span>OpenSSL</span><span>opcache</span><span>Web Workers</span><span>node</span>
+<span>PHP 8.6</span><span>PHP 8.5</span><span>PHP 8.4</span><span>PHP 8.3</span><span>Symfony</span><span>SQLite</span><span>intl</span><span>OpenSSL</span><span>opcache</span><span>Web Workers</span><span>node</span>
 </div>
 </div>
 

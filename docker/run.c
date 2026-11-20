@@ -163,15 +163,18 @@ static void limit_malloc(void)
 
 #ifdef ZEND_HAS_OOM
 /*
- * PHP 8.5 exits when the memory is full, that would throw through the run: this
- * is the fatal error that PHP 8.4 gives there. The memory it needs to say so
- * comes from the block that chunk_alloc() keeps.
+ * Since PHP 8.5, 8.4.27 and 8.3.36, PHP exits when the memory is full, that
+ * would throw through the run: this is the fatal error that it gave there
+ * before. The memory it needs to say so comes from the block that
+ * chunk_alloc() keeps.
  */
 static ZEND_COLD ZEND_NORETURN void out_of_memory(size_t size)
 {
     reporting_out_of_memory = true;
+#if PHP_VERSION_ID >= 80500
     /* The stack trace of a deep recursion takes more than a block */
     EG(fatal_error_backtrace_on) = false;
+#endif
     zend_try {
         zend_error_noreturn(E_ERROR, "Out of memory (allocated %zu bytes) (tried to allocate %zu bytes)", zend_memory_usage(true), size);
     } zend_end_try();
