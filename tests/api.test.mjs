@@ -327,8 +327,8 @@ test('opcache compiles a file once, for the next runs, with its file cache', asy
         return;
     }
 
-    // The first start of PHP in a module: the system_id that the cache is
-    // keyed by is another one from the second start (see run.c)
+    // The first start of PHP in a module, and the next ones: they key the cache
+    // by the same system_id (https://github.com/php/php-src/issues/24184)
     const { default: createPhp } = await import(build);
     const fresh = await createPhp();
     fresh.FS.writeFile('/tmp/compiled.php', '<?php echo "compiled";');

@@ -29,7 +29,6 @@
 
 #include "zend_exceptions.h"
 #include "zend_smart_str.h"
-#include "zend_system_id.h"
 #include "zend_virtual_cwd.h"
 #if PHP_VERSION_ID >= 80500
 #include "ext/opcache/zend_shared_alloc.h"
@@ -61,18 +60,6 @@ static struct request {
 #define REQUEST_SAPI_NAME "wasm"
 
 static int (*embed_startup)(sapi_module_struct *module);
-
-/*
- * The cache of opcache is keyed by zend_system_id, that PHP computes each
- * time the engine starts. Only the first start hashes the frameless functions
- * in it (zend_system_id.c never resets "finalized"): the next ones get another
- * one. Every run takes the one of the first, so that they all read what the
- * build compiled, and what the previous runs did. It hashes whether opcache
- * started too: the build runs PHP with opcache from its first run, as a page
- * does. PHP fixes it after 8.5.12 (https://github.com/php/php-src/pull/24184):
- * this can go once every stack has the fix.
- */
-static char system_id[32];
 
 /* Where malloc() starts, after the data of the module */
 extern char __heap_base;
@@ -415,11 +402,6 @@ static void start(int argc, char **argv, const char *filename, struct request wi
     smm_shared_globals = NULL;
 #endif
     php_embed_init(argc, argv);
-    if (!system_id[0]) {
-        memcpy(system_id, zend_system_id, sizeof(system_id));
-    } else {
-        memcpy(zend_system_id, system_id, sizeof(system_id));
-    }
     running = true;
     /* Not reset by php_embed_init(), it would keep the status of a previous call */
     EG(exit_status) = 0;
