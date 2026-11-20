@@ -7,12 +7,12 @@ import { pathToFileURL } from 'node:url';
 // The tests of the JavaScript API of a build (docker/api.js), the build of the
 // default stack for node unless BUILD says which:
 //
-//     BUILD=build/php-8.5/php-web.mjs node --import ./node/fetch-files.mjs --test tests/api.test.mjs
+//     BUILD=build/php-8.6/php-web.mjs node --import ./node/fetch-files.mjs --test tests/api.test.mjs
 //
 // persist needs a browser: IndexedDB, and the Web Locks, as
 // createPhpInWorker(): a Web Worker.
 
-const build = process.env.BUILD ? pathToFileURL(path.resolve(process.env.BUILD)) : new URL('../build/php-8.5/php-node.mjs', import.meta.url);
+const build = process.env.BUILD ? pathToFileURL(path.resolve(process.env.BUILD)) : new URL('../build/php-8.6/php-node.mjs', import.meta.url);
 
 // What tests/embed/constants.php prints
 const CONSTANTS_ATTRIBUTES = '[["first"],["second"]]';
@@ -327,8 +327,8 @@ test('opcache compiles a file once, for the next runs, with its file cache', asy
         return;
     }
 
-    // The first start of PHP in a module: the system_id that the cache is
-    // keyed by is another one from the second start (see run.c)
+    // The first start of PHP in a module, and the next ones: they key the cache
+    // by the same system_id (https://github.com/php/php-src/issues/24184)
     const { default: createPhp } = await import(build);
     const fresh = await createPhp();
     fresh.FS.writeFile('/tmp/compiled.php', '<?php echo "compiled";');

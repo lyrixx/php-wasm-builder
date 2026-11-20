@@ -32,7 +32,7 @@ loads them.
     {
         return Stack::named('app')
             // Keep in sync with config.platform.php in composer.json
-            ->php('8.5.12')
+            ->php('8.6.0')
             ->extensions('ctype', 'mbstring')
             // Relative to the project, at /app in the WASM filesystem
             ->embed('build/embed', at: '/app')
@@ -77,7 +77,7 @@ loads them.
       }
       args = {
         # Keep in sync with config.platform.php in composer.json
-        PHP_VERSION = "8.5.12"
+        PHP_VERSION = "8.6.0"
         EXTENSIONS = "ctype mbstring"
         EMBED_AT = "/app"
         # Only php-web.mjs, php-web.wasm and php-sw.js

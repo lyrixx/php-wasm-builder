@@ -44,7 +44,7 @@ function build_task(
     ?string $stack = null,
     #[AsOption(description: 'Build every stack, in one buildx invocation')]
     bool $all = false,
-    #[AsOption(description: 'Override the PHP version, for example 8.5.12')]
+    #[AsOption(description: 'Override the PHP version, for example 8.6.0')]
     ?string $php = null,
     #[AsOption(description: 'Add an extension, can be repeated', mode: InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, autocomplete: Stack::EXTENSIONS)]
     array $with = [],
@@ -228,7 +228,7 @@ function run_task(
 function serve_task(
     #[AsArgument(description: 'The example to serve, a directory of examples/', autocomplete: 'PhpWasm\examples')]
     ?string $example = null,
-    #[AsOption(description: 'Override the PHP version of the page, for example 8.3.35')]
+    #[AsOption(description: 'Override the PHP version of the page, for example 8.3.37')]
     ?string $php = null,
     #[AsOption(description: 'Add an extension to the page, can be repeated', mode: InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, autocomplete: Stack::EXTENSIONS)]
     array $with = [],
@@ -247,7 +247,7 @@ function serve_task(
         io()->table(['Example', 'Page', 'Stack'], $rows);
         io()->text([
             'Serve one with "castor wasm:serve <example>": its stack is built first, in a second when nothing changed.',
-            'As with "castor wasm:build", "--php 8.3.35", "--with intl" or "--opcache precompiled" change what its stack has.',
+            'As with "castor wasm:build", "--php 8.3.37", "--with intl" or "--opcache precompiled" change what its stack has.',
         ]);
 
         return 0;

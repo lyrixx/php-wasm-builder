@@ -9,5 +9,5 @@ echo '{"a": 1}' | node node/run.mjs -r 'var_dump(json_decode(file_get_contents("
 node node/run.mjs my-script.php     # a file of your disk
 ```
 
-It writes what PHP writes, and exits with its exit status. `--build build/php-8.5/php-web.mjs` runs
+It writes what PHP writes, and exits with its exit status. `--build build/php-8.6/php-web.mjs` runs
 the build for the web instead, the one a browser loads.

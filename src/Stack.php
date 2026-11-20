@@ -124,7 +124,7 @@ final readonly class Stack
     }
 
     /**
-     * What opcache compiles, with PHP 8.5 and later.
+     * What opcache compiles, with PHP 8.5.13 and later.
      */
     public function opcache(Opcache $opcache): self
     {

@@ -8,7 +8,7 @@ ask for, and the code you embed.
 
 ## Try it
 
-Docker builds PHP in `build/php-8.5/`, node runs it:
+Docker builds PHP in `build/php-8.6/`, node runs it:
 
 ```
 docker buildx bake
@@ -19,7 +19,7 @@ A page imports `php-web.mjs`, and runs PHP:
 
 ```html
 <script type="module">
-    import createPhp from './build/php-8.5/php-web.mjs';
+    import createPhp from './build/php-8.6/php-web.mjs';
 
     const php = await createPhp();
     const { stdout } = await php.runCode('echo PHP_VERSION;');

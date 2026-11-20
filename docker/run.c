@@ -29,7 +29,6 @@
 
 #include "zend_exceptions.h"
 #include "zend_smart_str.h"
-#include "zend_system_id.h"
 #include "zend_virtual_cwd.h"
 #if PHP_VERSION_ID >= 80500
 #include "ext/opcache/zend_shared_alloc.h"
@@ -61,18 +60,6 @@ static struct request {
 #define REQUEST_SAPI_NAME "wasm"
 
 static int (*embed_startup)(sapi_module_struct *module);
-
-/*
- * The cache of opcache is keyed by zend_system_id, that PHP computes each
- * time the engine starts. Only the first start hashes the frameless functions
- * in it (zend_system_id.c never resets "finalized"): the next ones get another
- * one. Every run takes the one of the first, so that they all read what the
- * build compiled, and what the previous runs did. It hashes whether opcache
- * started too: the build runs PHP with opcache from its first run, as a page
- * does. PHP fixes it after 8.5.12 (https://github.com/php/php-src/pull/24184):
- * this can go once every stack has the fix.
- */
-static char system_id[32];
 
 /* Where malloc() starts, after the data of the module */
 extern char __heap_base;
@@ -163,15 +150,18 @@ static void limit_malloc(void)
 
 #ifdef ZEND_HAS_OOM
 /*
- * PHP 8.5 exits when the memory is full, that would throw through the run: this
- * is the fatal error that PHP 8.4 gives there. The memory it needs to say so
- * comes from the block that chunk_alloc() keeps.
+ * Since PHP 8.5, 8.4.27 and 8.3.36, PHP exits when the memory is full, that
+ * would throw through the run: this is the fatal error that it gave there
+ * before. The memory it needs to say so comes from the block that
+ * chunk_alloc() keeps.
  */
 static ZEND_COLD ZEND_NORETURN void out_of_memory(size_t size)
 {
     reporting_out_of_memory = true;
+#if PHP_VERSION_ID >= 80500
     /* The stack trace of a deep recursion takes more than a block */
     EG(fatal_error_backtrace_on) = false;
+#endif
     zend_try {
         zend_error_noreturn(E_ERROR, "Out of memory (allocated %zu bytes) (tried to allocate %zu bytes)", zend_memory_usage(true), size);
     } zend_end_try();
@@ -412,11 +402,6 @@ static void start(int argc, char **argv, const char *filename, struct request wi
     smm_shared_globals = NULL;
 #endif
     php_embed_init(argc, argv);
-    if (!system_id[0]) {
-        memcpy(system_id, zend_system_id, sizeof(system_id));
-    } else {
-        memcpy(zend_system_id, system_id, sizeof(system_id));
-    }
     running = true;
     /* Not reset by php_embed_init(), it would keep the status of a previous call */
     EG(exit_status) = 0;

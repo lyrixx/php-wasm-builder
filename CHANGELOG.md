@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+* BC break: build PHP 8.6.0 by default, in `build/php-8.6/`. The stacks of
+  this repository follow: `php-8.6`, `php-8.6-intl`, `php-8.6-opcache-runtime`
+  and `php-8.6-opcache-precompiled`, instead of their `php-8.5` ones. `php-8.5`
+  stays, as a previous branch.
+* BC break: `OPCACHE` needs PHP 8.5.13 or later, that has the fix for the
+  attributes of constants: the build fails with an older version, it does not
+  patch PHP 8.5.12 and before anymore.
+* Support PHP 8.6: `->php('8.6.0')`, or `PHP_VERSION=8.6.0`.
+
+### Fixes
+
+* PHP 8.4.27 and 8.3.36, and the next ones, build: they have the memory limits
+  of PHP 8.5, and `run.c` did not compile with them.
+
+### Minor
+
+* Build PHP 8.5.13, 8.4.28 and 8.3.37 in the `php-8.5`, `php-8.4` and
+  `php-8.3` stacks.
+
 ## 0.13.1 (2026-11-17)
 
 ### Fixes

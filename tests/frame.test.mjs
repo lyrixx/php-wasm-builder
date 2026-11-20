@@ -11,13 +11,13 @@ import { browser, container, directory, origin, registered, worker } from './bro
 // php-sw.js, on the build for the web of the default stack unless BUILD says
 // which. A build for node has none of it:
 //
-//     BUILD=build/php-8.5/php-web.mjs node --import ./node/fetch-files.mjs --test tests/frame.test.mjs
+//     BUILD=build/php-8.6/php-web.mjs node --import ./node/fetch-files.mjs --test tests/frame.test.mjs
 //
 // node has no service worker: they run against a fake browser, that only says
 // what its code asks. What a browser does with a service worker is not tested
 // here.
 
-const build = process.env.BUILD ? pathToFileURL(path.resolve(process.env.BUILD)) : new URL('../build/php-8.5/php-web.mjs', import.meta.url);
+const build = process.env.BUILD ? pathToFileURL(path.resolve(process.env.BUILD)) : new URL('../build/php-8.6/php-web.mjs', import.meta.url);
 const isWeb = build.pathname.endsWith('/php-web.mjs');
 const webTest = (name, callback) => test(name, { skip: !isWeb && 'only the build for the web has it' }, callback);
 

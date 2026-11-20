@@ -14,7 +14,7 @@ on <http://127.0.0.1:8000/>, with the built-in server of PHP. As with `castor wa
 `--with` and `--opcache` change what the stack of the page has:
 
 ```
-castor wasm:serve playground --php 8.3.35
+castor wasm:serve playground --php 8.3.37
 castor wasm:serve symfony --opcache precompiled
 ```
 

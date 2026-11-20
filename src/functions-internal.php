@@ -18,7 +18,7 @@ use function Castor\run;
  *
  * @internal
  */
-const DEFAULT_STACK = 'php-8.5';
+const DEFAULT_STACK = 'php-8.6';
 
 /**
  * The stacks of this repository, that the tasks of castor.php build: the ones

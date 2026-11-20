@@ -5,7 +5,7 @@ The Dockerfile builds what its build arguments say. They are given to `docker bu
 [stack](../repository/stacks.md):
 
 ```
-docker buildx bake --set default.args.PHP_VERSION=8.4.26                    # another PHP version
+docker buildx bake --set default.args.PHP_VERSION=8.5.13                    # another PHP version
 docker buildx bake --set default.args.EXTENSIONS="ctype tokenizer bcmath"   # other extensions
 docker buildx bake --set default.args.TARGETS=node                          # only php-node.mjs and php-node.wasm
 ```
@@ -14,12 +14,12 @@ docker buildx bake --set default.args.TARGETS=node                          # on
 
 | Argument      | Default                                                    | What it is                                                                                                                                                                                                                  |
 |---------------|------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `PHP_VERSION` | `8.5.12`                                                   | The PHP version to build.                                                                                                                                                                                                   |
+| `PHP_VERSION` | `8.6.0`                                                    | The PHP version to build.                                                                                                                                                                                                   |
 | `EXTENSIONS`  | `calendar ctype dom mbstring simplexml xml xmlreader xmlwriter` | The extensions to build, separated by spaces (see [Supported extensions](extensions.md)). The libraries that they need (oniguruma for `mbstring`, libxml2 for the xml ones) are only built when an extension asks for them. |
 | `TARGETS`     | `web node`                                                 | The files to build: `web` for `php-web.mjs`, `php-web.wasm` and `php-sw.js`, `node` for `php-node.mjs` and `php-node.wasm`.                                                                                                 |
 | `MEMORY`      | `128mb`                                                    | The memory of the WASM module, initial and maximum. `memory_limit` follows it, see [Memory](limitations.md#memory).                                                                                                         |
 | `ICU_DATA`    | `all`                                                      | The data of ICU that intl links: `all` or `none` (see [intl](extensions.md#intl)).                                                                                                                                          |
-| `OPCACHE`     | `none`                                                     | When opcache compiles the PHP files, with PHP 8.5 and later: `none`, `runtime` or `precompiled` (see [opcache](opcache.md)).                                                                                               |
+| `OPCACHE`     | `none`                                                     | When opcache compiles the PHP files, with PHP 8.5.13 and later: `none`, `runtime` or `precompiled` (see [opcache](opcache.md)).                                                                                            |
 | `PHP_INI`     | empty                                                      | Settings of `php.ini`, `name=value` lines, as in a `php.ini`: `E_ALL` and `On` work. They are in `/usr/local/lib/php.ini`, where PHP reads it at each run, and `WARMUP` runs with them. A `php.ini` that the page writes there replaces them. |
 
 ## What to embed

@@ -13,7 +13,7 @@ JavaScript, together.
 
 ```php
 Stack::named('worker')
-    ->php('8.5.12')
+    ->php('8.6.0')
     ->extensions('ctype', 'mbstring')
     ->embed('build/embed', at: '/app')
     // The module and JavaScript share 128 MB
