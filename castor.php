@@ -35,6 +35,13 @@ const SITE_PATH = '/php-wasm-builder/';
 // emsdk is.
 const ZENSICAL_IMAGE = 'zensical/zensical:0.0.74';
 
+// What PHP calls, that emscripten does not have: emcc links a function that
+// aborts the module in its place (ERROR_ON_UNDEFINED_SYMBOLS=0, in the
+// Dockerfile). The ones of Fibers, getcontext()…, and the two that the builds
+// had when the check came. Another one, from a new version of PHP or of a
+// library, fails the check: a PHP function may reach it.
+const KNOWN_MISSING_FUNCTIONS = ['getcontext', 'getdtablesize', 'initgroups', 'makecontext', 'swapcontext'];
+
 // Composer autoloads them when the package is required by another project
 import(__DIR__ . '/src');
 
@@ -305,6 +312,7 @@ function check_task(
         try {
             check_stack($stack);
             check_api($stack);
+            check_missing_functions($stack);
         } catch (ProblemException $exception) {
             ++$failed;
             io()->listing(explode("\n", $exception->getMessage()));
@@ -322,6 +330,32 @@ function check_task(
     return 0;
 }
 
+#[AsTask(name: 'test-browser', namespace: 'wasm', description: 'Runs the tests of the pages of the examples in Chrome, the one installed: every example when none is given')]
+function test_browser_task(
+    #[AsArgument(description: 'The example to test, a directory of examples/', autocomplete: 'PhpWasm\examples')]
+    ?string $example = null,
+): int {
+    if (null !== $example && !\in_array($example, examples(), true)) {
+        throw new \InvalidArgumentException(\sprintf('Unknown example "%s", the examples are: %s.', $example, implode(', ', examples())));
+    }
+    $examples = null === $example ? examples() : [$example];
+
+    io()->title(1 === \count($examples) ? \sprintf('Testing the example "%s" in Chrome', $examples[0]) : 'Testing the examples in Chrome');
+
+    // playwright-core drives Chrome, the version of package-lock.json
+    if (!is_dir(builder_root() . '/node_modules/playwright-core')) {
+        run(['npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund'], context: context()->withWorkingDirectory(builder_root())->withQuiet());
+    }
+    foreach ($examples as $name) {
+        build_if_missing(example_stack($name));
+    }
+
+    return run(
+        ['node', '--test', ...array_map(static fn (string $name): string => builder_root() . "/tests/browser/{$name}.test.mjs", $examples)],
+        context: context()->withAllowFailure(),
+    )->getExitCode();
+}
+
 #[AsTask(name: 'build', namespace: 'site', description: 'Builds the website in build/site/: the documentation, and the pages of the examples, once checked')]
 function site_build_task(
     #[AsOption(description: 'Override a value of the bake file, as "docker buildx bake --set" does (the CI gives the cache this way), can be repeated', mode: InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY)]
@@ -336,6 +370,7 @@ function site_build_task(
     foreach (array_map(example_stack(...), examples()) as $stack) {
         check_stack($stack);
         check_api($stack);
+        check_missing_functions($stack);
     }
 
     // Keep in sync with site_dir in zensical.toml
@@ -446,6 +481,34 @@ function check_api(Stack $stack): void
 
             throw new ProblemException(\sprintf('%s: %s', basename($build), trim($process->getOutput())));
         }
+    }
+
+    io()->writeln(' ✅');
+}
+
+/**
+ * Checks that what a stack built calls no function that emscripten does not
+ * have, but the known ones.
+ *
+ * @throws ProblemException with the new ones
+ */
+function check_missing_functions(Stack $stack): void
+{
+    io()->write(\sprintf('Stack "%s": what emscripten does not have', $stack->name));
+
+    $found = [];
+    foreach ($stack->targets as $target) {
+        $build = $stack->artifact($target, 'mjs');
+        preg_match_all('/missing function: (\w+)/', file_get_contents($build), $matches);
+        if ([] !== $new = array_values(array_diff(array_unique($matches[1]), KNOWN_MISSING_FUNCTIONS))) {
+            $found[] = \sprintf('%s calls %s, that emscripten does not have: a call aborts the module. Once checked that no PHP function reaches it, add it to KNOWN_MISSING_FUNCTIONS, in castor.php.', basename($build), implode(', ', $new));
+        }
+    }
+
+    if ([] !== $found) {
+        io()->writeln(' ❌');
+
+        throw new ProblemException(implode("\n", $found));
     }
 
     io()->writeln(' ✅');

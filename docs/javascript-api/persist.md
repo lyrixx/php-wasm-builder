@@ -27,6 +27,9 @@ The directory names the IndexedDB database: two pages of the same origin that ke
 directory share its files. Name it after the page: `/composer-diff` rather than `/data`, when the
 pages of an organization are all on `<organization>.github.io`.
 
+It takes IndexedDB and the Web Locks, that a browser only has on HTTPS, or `localhost`:
+`createPhp()` is rejected without them, as with the build for node.
+
 IDBFS keeps whole files, in memory:
 
 - a file that changes is written again in full: a row inserted in a 20 MB database writes the 20 MB

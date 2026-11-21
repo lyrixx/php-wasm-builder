@@ -2,3 +2,4 @@ build/
 .castor.stub.php
 /stacks.override.php
 /.cache/
+/node_modules/

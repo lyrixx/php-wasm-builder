@@ -96,6 +96,20 @@ static void ini_defaults(HashTable *configuration_hash)
 #endif
 }
 
+/*
+ * As a web server in production: PHP logs the errors on stderr, that
+ * serveInFrame() and serveInServiceWorker() give to the console, and does not
+ * display them. A fatal error is then a 500.
+ */
+static void request_ini_defaults(HashTable *configuration_hash)
+{
+    zval tmp;
+
+    ini_defaults(configuration_hash);
+    INI_DEFAULT("display_errors", "0");
+    INI_DEFAULT("log_errors", "1");
+}
+
 #ifdef OPCACHE_FILE_CACHE
 /*
  * opcache does not start without the directory, embedded when the build
@@ -276,6 +290,8 @@ static int start_engine(sapi_module_struct *module)
     zend_set_memory_hard_limit_percent(zend_ini_long(ZEND_STRL("memory_hard_limit_percent"), false));
 #endif
     zend_set_memory_limit(PG(memory_limit));
+    /* Only the engine reads it, as it starts: not getenv(), nor $_SERVER */
+    unsetenv("USE_ZEND_ALLOC");
 
     return SUCCESS;
 }
@@ -392,7 +408,7 @@ static void start(int argc, char **argv, const char *filename, struct request wi
     php_embed_module.read_post = read_post;
     php_embed_module.read_cookies = read_cookies;
     php_embed_module.send_headers = send_headers;
-    php_embed_module.ini_defaults = ini_defaults;
+    php_embed_module.ini_defaults = request.variables ? request_ini_defaults : ini_defaults;
 #if PHP_VERSION_ID >= 80500
     /*
      * Without shared memory, opcache leaves it pointing to a variable of a
@@ -413,6 +429,13 @@ static void start(int argc, char **argv, const char *filename, struct request wi
      */
     SG(headers_sent) = 0;
     SG(request_info).no_headers = !request.variables;
+    /*
+     * What a response is unless PHP says otherwise, as a web server sets it:
+     * PHP only makes a fatal error a 500 from a 200
+     */
+    if (request.variables) {
+        SG(sapi_headers).http_response_code = 200;
+    }
     /* The "#!" line of a script (artisan, bin/console) is not printed, nor of what it includes */
     CG(skip_shebang) = 1;
 }

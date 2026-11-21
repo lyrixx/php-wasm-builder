@@ -16,7 +16,7 @@ docker buildx bake --set default.args.TARGETS=node                          # on
 |---------------|------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `PHP_VERSION` | `8.6.0`                                                    | The PHP version to build.                                                                                                                                                                                                   |
 | `EXTENSIONS`  | `calendar ctype dom mbstring simplexml xml xmlreader xmlwriter` | The extensions to build, separated by spaces (see [Supported extensions](extensions.md)). The libraries that they need (oniguruma for `mbstring`, libxml2 for the xml ones) are only built when an extension asks for them. |
-| `TARGETS`     | `web node`                                                 | The files to build: `web` for `php-web.mjs`, `php-web.wasm` and `php-sw.js`, `node` for `php-node.mjs` and `php-node.wasm`.                                                                                                 |
+| `TARGETS`     | `web node`                                                 | The files to build: `web` for `php-web.mjs`, `php-web.wasm` and `php-sw.js`, `node` for `php-node.mjs` and `php-node.wasm`. At least one.                                                                                   |
 | `MEMORY`      | `128mb`                                                    | The memory of the WASM module, initial and maximum. `memory_limit` follows it, see [Memory](limitations.md#memory).                                                                                                         |
 | `ICU_DATA`    | `all`                                                      | The data of ICU that intl links: `all` or `none` (see [intl](extensions.md#intl)).                                                                                                                                          |
 | `OPCACHE`     | `none`                                                     | When opcache compiles the PHP files, with PHP 8.5.13 and later: `none`, `runtime` or `precompiled` (see [opcache](opcache.md)).                                                                                            |
@@ -38,7 +38,9 @@ docker buildx bake --set default.contexts.embed=./my-app --set default.args.EMBE
 ## The libraries
 
 They are pinned, so that the same arguments always give the same build. The defaults are in
-`docker/Dockerfile`.
+`docker/Dockerfile`, with what each one is: the SHA-256 of an archive, the commit of a tag of git.
+The build fails when what it downloads is not that. Another version, given as a build argument, is
+built with a warning, `is not verified`: the Dockerfile does not know it.
 
 | Argument                | What it is                                                                                                                          |
 |-------------------------|-------------------------------------------------------------------------------------------------------------------------------------|

@@ -28,7 +28,7 @@ return [
 
 A stack never changes: each method returns a new one, so a stack is derived from another one with
 `renamed()`. `extensions()` and `ini()` add to what the stack already has, the other methods replace
-it. Each method sets a [build argument](../reference/build-arguments.md):
+it. A stack has the extensions it is given, none by default: not the ones of the Dockerfile. Each method sets a [build argument](../reference/build-arguments.md):
 
 | Method                                    | Build argument            |
 |-------------------------------------------|---------------------------|
@@ -60,6 +60,7 @@ castor wasm:build                                # builds php-8.6
 castor wasm:build php-8.6-intl                   # builds another one
 castor wasm:build --all                          # builds all of them, in one buildx invocation (with the overrides below)
 castor wasm:check                                # builds them all, and checks them
+castor wasm:test-browser                         # runs the tests of the examples in Chrome
 castor wasm:sizes                                # compares the size of the .wasm files with php-8.6
 castor wasm:run my-script.php                    # runs a file, in php-8.6
 castor wasm:run -r 'echo PHP_VERSION;' --stack php-8.3
@@ -92,7 +93,15 @@ yet.
 `castor wasm:check` is what tells that a stack works: once built, it runs every build of each stack
 in node, the one for the web too, and checks that `PHP_VERSION` is the one that was asked for, that
 `extension_loaded()` is true for every extension that was asked for, and that the JavaScript API
-works (`tests/api.test.mjs`). It does not run what the stack embeds.
+works (`tests/api.test.mjs`). It does not run what the stack embeds. It fails too when a build
+calls a function that emscripten does not have, and that aborts the module, but the known ones,
+as the ones of Fibers (`KNOWN_MISSING_FUNCTIONS`, in `castor.php`): a new version of PHP, or of a
+library, may need one.
+
+`castor wasm:test-browser` runs the pages of the examples in Chrome, the one installed, as a
+visitor uses them (`tests/browser/`): the service workers, IndexedDB, the Web Locks and the Web
+Worker, that node does not have. It drives Chrome with playwright-core, that `package.json` pins,
+and the CI runs it on the stack of each example.
 
 `stacks.php` has the builds of this repository, that `castor wasm:check` checks with the stacks of
 the examples, in CI too:

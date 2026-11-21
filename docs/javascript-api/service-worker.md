@@ -92,7 +92,10 @@ Redirections, and responses without a body
 Errors
 :   PHP that does not start, or a response that the browser refuses, as a header that is not ASCII,
     is a 500 that says why, and the error is in the console of the service worker. What PHP writes
-    on stderr, the logs of Symfony for example, goes to `console.warn()`.
+    on stderr, the logs of Symfony for example, goes to `console.warn()`. A request that PHP does
+    not get to the end of, an abort or a stack that overflows, is a 500 too, and the next request
+    starts PHP again, with `createApplication()`: what is in the memory of the one that failed can
+    not be trusted anymore.
 
 A `sw.js` that is gone
 :   The browser keeps a service worker whose script it can not update, and the service worker

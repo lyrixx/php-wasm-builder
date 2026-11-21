@@ -1,5 +1,75 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+* BC break: `php.request()` answers a fatal error with a 500, and PHP writes
+  the errors, the warnings too, on stderr: `display_errors` is off, as on a web
+  server in production. It answered a 200, with the error in the body. A
+  `php.ini` turns it on again: `ini(['display_errors' => 'On'])`.
+* BC break: `php.request()` runs the index of a directory, its `index.php`, or
+  answers its `index.html`, and answers the URL of the directory without its
+  slash with a 301 to it: it ran the front controller.
+* BC break: `php.request()` runs a `.php` file of the path of the URL, with what
+  follows it in `$_SERVER['PATH_INFO']`, and in `$_SERVER['PHP_SELF']`:
+  `/other.php/blog` ran the front controller.
+* BC break: `http_response_code()` is 200 in `php.request()`, until PHP sets
+  another status, as with a web server: it was `false`.
+* BC break: `php-sw.js` only declares `forwardToPhp()`: its other functions,
+  as `errorResponse()`, were globals of the `sw.js` of the project, that a
+  function of the same name replaced, or a `const` of the same name made
+  `importScripts()` fail.
+* `withCookies()` takes the headers as `php.request()` does: an object, or
+  `Headers`, too.
+* The Dockerfile checks what it downloads, for its default versions and the
+  ones of `stacks.php`: the SHA-256 of an archive, the commit of a tag of git.
+  Another version, given as a build argument, is built with a warning.
+
+### Fixes
+
+* `php.request()` runs a `.php` file followed by a slash, as `/index.php/`, with
+  `/` as `PATH_INFO`: it answered its source.
+* `php.request()` rejects its promise when it has no request to run: without
+  `documentRoot`, or with a URL without its origin. It threw, out of the
+  promise. A `basePath` that ends with a slash is refused too: every URL was a
+  404.
+* `forwardToPhp()` asks another tab of the page when one does not take the
+  request within 10 s, as one that is still starting PHP, and answers a 503
+  without any. The request waited forever.
+* `serveInServiceWorker()` starts PHP again after a request that PHP does not
+  get to the end of, an abort or a stack that overflows.
+* `createPhp({ persist })` says what it needs: IndexedDB, in a browser, and the
+  Web Locks, on HTTPS or `localhost`. It failed with
+  `IDBFS is not defined`, or at each run.
+* A header without a colon, that `header()` takes, is left out of the response
+  of `php.request()`: its name lost its last letter.
+* `startServiceWorker()` and `serveInFrame()` reject their promise when the
+  service worker fails to install before the registration forgets it: they
+  waited forever.
+* `getenv()` and `$_SERVER` do not have `USE_ZEND_ALLOC` anymore, that only the
+  engine reads.
+* The `FS` of `createPhpInWorker()` has no `then()` nor symbols: an `await`, or
+  `console.log()`, called the worker with them.
+* `php()`, `memory()` and `targets()` of a stack refuse what the build would
+  fail on: a version of PHP that is not one, a memory that WebAssembly does not
+  take, no target. The Dockerfile refuses an empty `TARGETS`: it built nothing.
+
+### Minor
+
+* `php.request()` knows the types of more files: `avif`, `htm`, `mp3`, `mp4`,
+  `otf`, `pdf`, `ttf`, `webm` and `webmanifest`.
+* `castor wasm:test-browser` runs the pages of the examples in Chrome, in CI
+  too: the service workers, IndexedDB and the Web Worker, that node does not
+  have.
+* `castor wasm:check` fails when a build calls a function that emscripten does
+  not have, but the known ones: a call aborts the module.
+* The backward compatibility page says what of `createPhp()` it covers:
+  `runFile()`, `runCode()`, `request()` and `FS`, not the rest of the module of
+  emscripten. `createPhp()` takes `stdin`, `stdout` and `stderr` for itself.
+* The JavaScript API page gave `forwardToPhp()` an `under` option, that it does
+  not have.
+
 ## 0.14.0 (2026-11-20)
 
 ### Features

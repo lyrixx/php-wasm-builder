@@ -94,6 +94,15 @@ jobs:
             --set "*.cache-from=type=gha,scope=$STACK" \
             --set "*.cache-to=type=gha,scope=$STACK,mode=max,ignore-error=true"
 
+      # The page of an example, in the Chrome of the runner: the service
+      # workers, IndexedDB and the Web Worker, that node does not have. The
+      # stack of an example is example-<its directory>
+      - name: Test in Chrome
+        if: startsWith(matrix.stack, 'example-')
+        env:
+          STACK: ${{ matrix.stack }}
+        run: castor wasm:test-browser "${STACK#example-}"
+
       # Two directories: the artifact keeps their path from the root of the
       # repository
       - uses: actions/upload-artifact@v7

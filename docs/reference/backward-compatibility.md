@@ -10,12 +10,16 @@ says it, with `BC break:`.
 - The extensions that are [built by default](extensions.md): one can be added, not removed.
 - The files that a build gives: `php-web.mjs`, `php-web.wasm`, `php-sw.js`, `php-node.mjs` and
   `php-node.wasm`.
-- The [JavaScript API](../javascript-api/index.md): `createPhp()`, `createPhpInWorker()`, what they
-  give, and their options.
+- The [JavaScript API](../javascript-api/index.md): `createPhp()` and `createPhpInWorker()`, their
+  options, and what they give: `runFile()`, `runCode()`, `request()`, `FS`, and `terminate()` of
+  `createPhpInWorker()`. The rest of what `createPhp()` gives is the module of emscripten, as
+  `HEAPU8` or `_malloc()`: it is not covered. `FS` is the filesystem of emscripten: what it does
+  follows `EMSDK_VERSION`, see below.
 - [What shows an application in a frame](../javascript-api/frame.md): `serveInFrame()`,
-  `keepCookies()` and `withCookies()` of `php-web.mjs`, `forwardToPhp()` of `php-sw.js`, and their
-  options. So is where a project puts its files, `sw.js` next to `index.html`, and the key of the
-  cookies in `localStorage`: with another one, the visitors would lose their session.
+  `keepCookies()` and `withCookies()` of `php-web.mjs`, `forwardToPhp()` of `php-sw.js`, its only
+  global, and their options. So is where a project puts its files, `sw.js` next to `index.html`,
+  and the key of the cookies in `localStorage`: with another one, the visitors would lose their
+  session.
 - [What runs PHP in a service worker](../javascript-api/service-worker.md):
   `serveInServiceWorker()` and `startServiceWorker()` of `php-web.mjs`, and their options. So is
   where the cookies are, the `php cookies` cache of the Cache API, under the URL of the scope.

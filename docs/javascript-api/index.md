@@ -31,7 +31,7 @@ constants of the php command only.
 - `exitCode`: the one given to `exit()`, 255 on a fatal error or an uncaught exception, 0 otherwise;
 - `stdout` and `stderr`: what PHP wrote, as it wrote it, as strings (UTF-8). Something binary, as an
   image, is rather written in a file, and read with `php.FS`. As with the php command, the errors
-  are on `stdout`: `display_errors` is on.
+  are on `stdout`: `display_errors` is on, unlike with `request()` (see [HTTP requests](http.md)).
 
 Each run is a request of its own: PHP starts, runs, and stops, nothing is left of its variables. The
 files stay, until the page goes away.
@@ -52,7 +52,8 @@ across the reloads of the page, with the build for the web only (see
 [Keep files across reloads](persist.md)).
 
 `createPhp()` takes the options of the `Module` of emscripten too, for example `locateFile` to load
-the `.wasm` file from somewhere else.
+the `.wasm` file from somewhere else, but `stdin`, `stdout` and `stderr`: they are what PHP reads
+and writes in each run.
 
 ## In a frame
 
@@ -62,7 +63,7 @@ worker (see [An application in a frame](frame.md)):
 | What                                                                | What it does                                                                                    |
 |---------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|
 | `serveInFrame(php, { frame, documentRoot, under, start, headers })` | From `php-web.mjs`: starts the service worker, answers what it hands over, and opens the frame. |
-| `forwardToPhp({ under, except })`                                   | From `php-sw.js`, that a service worker imports: hands what the frame asks for to the page.     |
+| `forwardToPhp({ except })`                                          | From `php-sw.js`, that a service worker imports: hands what the frame asks for to the page.     |
 | `keepCookies(cookies, headers)`, `withCookies(headers, cookies)`    | From `php-web.mjs`: the cookies of the application, for what runs `php.request()` another way.  |
 
 ## In a service worker
@@ -79,5 +80,5 @@ page (see [PHP in a service worker](service-worker.md)):
 
 A run that takes all of the stack of the module (see [Limitations](../reference/limitations.md))
 aborts it, and the promise is rejected: what is in its memory can not be trusted anymore, create
-another one. A run that takes all of its memory does not: it is a fatal error of PHP, and the module
+another one. `serveInServiceWorker()` does it: the next request starts PHP again. A run that takes all of its memory does not: it is a fatal error of PHP, and the module
 goes on (see [Memory](../reference/limitations.md#memory)).

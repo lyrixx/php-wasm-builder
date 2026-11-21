@@ -41,9 +41,10 @@ export function serveInServiceWorker(createApplication, { documentRoot, except =
     });
 
     answerInScope(except, async (request) => {
+        const started = start();
         let php;
         try {
-            php = await start();
+            php = await started;
         } catch (error) {
             console.error(error);
 
@@ -52,10 +53,18 @@ export function serveInServiceWorker(createApplication, { documentRoot, except =
 
         const cookies = await storedCookies();
         const phpRequest = await requestForPhp(request);
-        const response = await php.request(
-            { ...phpRequest, headers: [...withCookies(phpRequest.headers, cookies), ...new Headers(headers)] },
-            { documentRoot, basePath },
-        );
+        let response;
+        try {
+            response = await php.request(
+                { ...phpRequest, headers: [...withCookies(phpRequest.headers, cookies), ...new Headers(headers)] },
+                { documentRoot, basePath },
+            );
+        } catch (error) {
+            // PHP aborted, its stack overflowed…: what is in its memory can
+            // not be trusted anymore, the next request starts it again
+            start.forget(started);
+            throw error;
+        }
         // The browser drops the Set-Cookie of a response that a service worker
         // makes. Only when there is one: a page asks for many images
         if (response.headers.some(([name]) => 'set-cookie' === name.toLowerCase())) {
@@ -98,8 +107,9 @@ function serviceWorkers() {
 // Not navigator.serviceWorker.ready: it never resolves when the service worker
 // does not install, nor for a page out of its scope
 async function serviceWorkerActivated(registration) {
-    const worker = registration.installing ?? registration.waiting ?? registration.active;
-    if (null === worker) {
+    // One that does not install is redundant before the registration forgets it
+    const worker = [registration.installing, registration.waiting, registration.active].find((candidate) => null !== candidate && 'redundant' !== candidate.state);
+    if (undefined === worker) {
         throw new Error('The service worker does not install.');
     }
     if ('activated' === worker.state) {
@@ -116,12 +126,12 @@ async function serviceWorkerActivated(registration) {
 
 /**
  * What the requests wait for, made by the first one, and again by the next one
- * when it fails.
+ * when it fails, or once a request forgets it.
  */
 function madeOnce(make) {
     let made;
 
-    return () => {
+    const get = () => {
         if (undefined === made) {
             made = Promise.resolve().then(make);
             made.catch(() => {
@@ -131,4 +141,12 @@ function madeOnce(make) {
 
         return made;
     };
+    // Not one that another request made since
+    get.forget = (promise) => {
+        if (made === promise) {
+            made = undefined;
+        }
+    };
+
+    return get;
 }

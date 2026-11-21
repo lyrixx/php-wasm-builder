@@ -35,6 +35,25 @@ before(async () => {
     await ask('createPhp', [{}]);
 });
 
+webTest('the FS of createPhpInWorker() is not a promise, nor has symbols: it only calls the worker for its methods', async () => {
+    const calls = [];
+    globalThis.Worker = class {
+        addEventListener() {}
+
+        postMessage(message, [port]) {
+            calls.push(message.method);
+            port.postMessage({ result: undefined });
+        }
+    };
+    const { createPhpInWorker } = await import(build);
+    const { FS } = await createPhpInWorker();
+
+    assert.equal(FS.then, undefined);
+    assert.equal(FS[Symbol.toPrimitive], undefined);
+    assert.equal(typeof FS.writeFile, 'function');
+    assert.deepEqual(calls, ['createPhp']);
+});
+
 webTest('what creates a file gives nothing: its node can not be copied, and it worked', async () => {
     assert.deepEqual(await ask('FS', ['mkdir', ['/tmp/directory']]), { result: undefined });
     assert.deepEqual(await ask('FS', ['symlink', ['/tmp/directory', '/tmp/link']]), { result: undefined });

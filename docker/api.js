@@ -13,8 +13,10 @@
 
     // What a web server says a static file is, by its extension
     const MIME_TYPES = {
+        avif: 'image/avif',
         css: 'text/css',
         gif: 'image/gif',
+        htm: 'text/html',
         html: 'text/html',
         ico: 'image/vnd.microsoft.icon',
         jpeg: 'image/jpeg',
@@ -23,15 +25,25 @@
         json: 'application/json',
         map: 'application/json',
         mjs: 'text/javascript',
+        mp3: 'audio/mpeg',
+        mp4: 'video/mp4',
+        otf: 'font/otf',
+        pdf: 'application/pdf',
         png: 'image/png',
         svg: 'image/svg+xml',
+        ttf: 'font/ttf',
         txt: 'text/plain',
         wasm: 'application/wasm',
+        webm: 'video/webm',
+        webmanifest: 'application/manifest+json',
         webp: 'image/webp',
         woff: 'font/woff',
         woff2: 'font/woff2',
         xml: 'application/xml',
     };
+
+    // What a web server runs, or sends, for the URL of a directory
+    const DIRECTORY_INDEXES = ['index.php', 'index.html'];
 
     // The run in progress: what PHP reads on stdin, what it writes on stdout
     // and stderr, byte by byte, and the status and headers of a response
@@ -44,7 +56,8 @@
     // run.c calls it once PHP sends the headers, "Name: value" lines
     Module['sendResponseHead'] = (status, lines) => {
         stdio.status = status;
-        stdio.headers = utf8Decoder.decode(lines).split('\n').filter(Boolean).map((line) => {
+        // header() takes a line without a colon too, that no browser would
+        stdio.headers = utf8Decoder.decode(lines).split('\n').filter((line) => line.includes(':')).map((line) => {
             const colon = line.indexOf(':');
 
             return [line.slice(0, colon), line.slice(colon + 1).trim()];
@@ -71,21 +84,29 @@
 
     // An HTTP request, as a web server runs PHP for it: the file of
     // documentRoot that its URL asks for, at basePath
-    Module['request'] = ({ method = 'GET', url, headers = {}, body = '' }, { documentRoot, basePath = '' } = {}) => {
+    Module['request'] = async ({ method = 'GET', url, headers = {}, body = '' }, { documentRoot, basePath = '' } = {}) => {
         if (undefined === documentRoot) {
             throw new TypeError('request() needs the documentRoot option, the directory that the URLs are the files of.');
         }
+        if ('' !== basePath && !/^(\/[^/]+)+$/.test(basePath)) {
+            throw new TypeError(`The basePath option of request() must start with a slash, and not end with one, as "/app": "${basePath}" does not.`);
+        }
 
         url = new URL(url);
-        const path = findFile(url.pathname, documentRoot, basePath);
-        if (null === path) {
-            return Promise.resolve({ status: 404, headers: [['Content-Type', 'text/plain']], body: utf8Encoder.encode('Not Found'), stderr: '' });
+        const found = findFile(url.pathname, documentRoot, basePath);
+        if (null === found) {
+            return { status: 404, headers: [['Content-Type', 'text/plain']], body: utf8Encoder.encode('Not Found'), stderr: '' };
         }
+        // A directory, without its slash: the URLs of its index are relative to it
+        if (undefined !== found.redirect) {
+            return { status: 301, headers: [['Location', found.redirect + url.search]], body: new Uint8Array(), stderr: '' };
+        }
+        const { file: path, pathInfo } = found;
         // Not PHP: the file, as it is
         if (!path.endsWith('.php')) {
             const type = MIME_TYPES[path.slice(path.lastIndexOf('.') + 1).toLowerCase()] ?? 'application/octet-stream';
 
-            return Promise.resolve({ status: 200, headers: [['Content-Type', type]], body: FS.readFile(documentRoot + path), stderr: '' });
+            return { status: 200, headers: [['Content-Type', type]], body: FS.readFile(documentRoot + path), stderr: '' };
         }
 
         // What PHP reads on stdin, and its length
@@ -94,7 +115,7 @@
         } else {
             body = ArrayBuffer.isView(body) ? new Uint8Array(body.buffer, body.byteOffset, body.byteLength) : new Uint8Array(body);
         }
-        const variables = requestVariables(method, url, new Headers(headers), body.length, documentRoot, basePath, path);
+        const variables = requestVariables(method, url, new Headers(headers), body.length, documentRoot, basePath, path, pathInfo);
 
         return withPersistedFiles(() => {
             const { status, headers, stdout, stderr } = runPhp(Object.entries(variables).flat(), body, (count, pointers) => _run_request(count, pointers));
@@ -145,6 +166,13 @@
     const persist = Module['persist'];
     if (persist) {
         Module['preRun'] = [].concat(Module['preRun'] ?? [], () => {
+            // Only the build for the web has IDBFS
+            if ('undefined' === typeof IDBFS || 'undefined' === typeof indexedDB) {
+                throw new Error('The persist option needs IndexedDB: the build for the web has it, in a browser.');
+            }
+            if (undefined === globalThis.navigator?.locks) {
+                throw new Error('The persist option needs the Web Locks, that a browser only has on HTTPS, or localhost.');
+            }
             FS.mkdirTree(persist);
             FS.mount(IDBFS, {}, persist);
         });
@@ -216,9 +244,13 @@
     }
 
     /**
-     * The path of the file of documentRoot that a URL path asks for, as a web
-     * server finds it: the file of the path when there is one, index.php (the
-     * front controller) otherwise. Null when there is neither.
+     * The file of documentRoot that a URL path asks for, as a web server finds
+     * it: the file of the path, the index of a directory, a .php file and
+     * what follows it (PATH_INFO), or the front controller, index.php, when
+     * it is none of them. A directory without its slash is a redirection.
+     * Null when there is nothing.
+     *
+     * @return {{file: string, pathInfo?: string}|{redirect: string}|null} a path in documentRoot
      */
     function findFile(pathname, documentRoot, basePath) {
         if (!pathname.startsWith(basePath + '/')) {
@@ -232,19 +264,42 @@
             // A malformed URL: it is for the front controller to say
             path = '/';
         }
+        const segments = path.split('/');
         // Never out of documentRoot
-        if (!path.split('/').includes('..') && isFile(documentRoot + path)) {
-            return path;
+        if (!segments.includes('..')) {
+            // FS finds a file with a slash after it: /index.php/ is index.php,
+            // with / as PATH_INFO
+            if (!path.endsWith('/') && isFile(documentRoot + path)) {
+                return { file: path };
+            }
+            if (FS.isDir(modeOf(documentRoot + path))) {
+                const index = DIRECTORY_INDEXES.map((name) => path.replace(/\/?$/, '/') + name).find((file) => isFile(documentRoot + file));
+                if (undefined !== index) {
+                    return path.endsWith('/') ? { file: index } : { redirect: `${pathname}/` };
+                }
+            }
+            // /index.php/blog runs index.php, with /blog
+            for (let end = 2; end < segments.length; end++) {
+                const script = segments.slice(0, end).join('/');
+                if (script.endsWith('.php') && isFile(documentRoot + script)) {
+                    return { file: script, pathInfo: `/${segments.slice(end).join('/')}` };
+                }
+            }
         }
 
-        return isFile(documentRoot + '/index.php') ? '/index.php' : null;
+        return isFile(documentRoot + '/index.php') ? { file: '/index.php' } : null;
     }
 
     function isFile(path) {
+        return FS.isFile(modeOf(path));
+    }
+
+    // 0 for what does not exist: neither a file nor a directory
+    function modeOf(path) {
         try {
-            return FS.isFile(FS.stat(path).mode);
+            return FS.stat(path).mode;
         } catch {
-            return false;
+            return 0;
         }
     }
 
@@ -252,7 +307,7 @@
      * $_SERVER, as a web server gives it to PHP with CGI: what PHP fills
      * $_GET, $_POST, $_COOKIE and $_FILES from too.
      */
-    function requestVariables(method, url, headers, contentLength, documentRoot, basePath, path) {
+    function requestVariables(method, url, headers, contentLength, documentRoot, basePath, path, pathInfo) {
         const scriptName = basePath + path;
         const https = 'https:' === url.protocol;
         // A service worker does not see the Host header: the one of the URL
@@ -270,7 +325,8 @@
             DOCUMENT_ROOT: documentRoot,
             GATEWAY_INTERFACE: 'CGI/1.1',
             ...(https ? { HTTPS: 'on' } : {}),
-            PHP_SELF: scriptName,
+            ...(undefined !== pathInfo ? { PATH_INFO: pathInfo } : {}),
+            PHP_SELF: scriptName + (pathInfo ?? ''),
             QUERY_STRING: url.search.slice(1),
             REMOTE_ADDR: '127.0.0.1',
             REQUEST_METHOD: method.toUpperCase(),
