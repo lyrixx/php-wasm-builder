@@ -51,14 +51,22 @@ webTest('withCookies() replaces the cookies that the browser sends', () => {
     assert.deepEqual(withCookies(headers, new Map()), [['Accept', '*/*']]);
 });
 
+webTest('withCookies() takes the headers as request() does: an object, or Headers, too', () => {
+    const cookies = new Map([['a', '1']]);
+
+    assert.deepEqual(withCookies({ Accept: '*/*', Cookie: 'browser=1' }, cookies), [['accept', '*/*'], ['Cookie', 'a=1']]);
+    assert.deepEqual(withCookies(new Headers({ Accept: '*/*' }), cookies), [['accept', '*/*'], ['Cookie', 'a=1']]);
+});
+
 /**
  * Evaluates php-sw.js as a service worker of the directory, for the application
  * in app/, with these clients. fetch() is what the server answers for its
- * script.
+ * script. Its timers only run once expired.
  */
 async function serviceWorker({ pages = [], options = {}, scope = app, fetch = async () => new Response('', { headers: { 'Content-Type': 'text/javascript' } }) } = {}) {
     const listeners = {};
     const calls = [];
+    const timers = new Map();
     const self = {
         addEventListener: (type, listener) => {
             listeners[type] = listener;
@@ -70,15 +78,30 @@ async function serviceWorker({ pages = [], options = {}, scope = app, fetch = as
     // What the service worker needs of it, synchronous
     class MessageChannel {
         port1 = {};
-        port2 = { postMessage: (data) => this.port1.onmessage({ data }) };
+        port2 = { postMessage: (data) => this.port1.onmessage?.({ data }) };
     }
-    const context = vm.createContext({ AbortSignal, console, fetch, MessageChannel, Response, URL, self });
+    const setTimeout = (callback) => {
+        const timer = Symbol('timer');
+        timers.set(timer, callback);
+
+        return timer;
+    };
+    const clearTimeout = (timer) => timers.delete(timer);
+    const context = vm.createContext({ AbortSignal, clearTimeout, console, fetch, MessageChannel, Response, setTimeout, URL, self });
     vm.runInContext(await readFile(new URL('php-sw.js', build), 'utf8'), context);
-    context.forwardToPhp(options);
+    // Its only global
+    assert.deepEqual(Object.keys(context).filter((name) => !['AbortSignal', 'clearTimeout', 'console', 'fetch', 'MessageChannel', 'Response', 'setTimeout', 'URL', 'self'].includes(name)), []);
+    self.forwardToPhp(options);
 
     return {
         calls,
         listeners,
+        expire() {
+            for (const [timer, callback] of timers) {
+                timers.delete(timer);
+                callback();
+            }
+        },
         // What it responds with, undefined when it leaves it to the network
         fetch(request) {
             let response;
@@ -89,6 +112,8 @@ async function serviceWorker({ pages = [], options = {}, scope = app, fetch = as
     };
 }
 
+// A page of a version before 1.0.0, that answers without taking the request
+// first: the service worker of a new version still gets the answer
 function page(url, answer = () => ({ status: 200, headers: [], body: 'From PHP' })) {
     return {
         url,
@@ -96,6 +121,31 @@ function page(url, answer = () => ({ status: 200, headers: [], body: 'From PHP' 
         postMessage(request, [port]) {
             this.requests.push(structuredClone(request));
             port.postMessage(answer(request));
+        },
+    };
+}
+
+// A page that takes the request, and answers once respond() is called
+function takingPage(url) {
+    return {
+        url,
+        requests: [],
+        respond: undefined,
+        postMessage(request, [port, taken]) {
+            this.requests.push(structuredClone(request));
+            taken.postMessage(null);
+            this.respond = () => port.postMessage({ status: 200, headers: [], body: `From ${url}` });
+        },
+    };
+}
+
+// A page that does not take the request: it is still starting PHP
+function silentPage(url) {
+    return {
+        url,
+        requests: [],
+        postMessage(request) {
+            this.requests.push(structuredClone(request));
         },
     };
 }
@@ -134,6 +184,43 @@ webTest('forwardToPhp() only hands over to the page next to it: others are clien
     await (await serviceWorker({ pages: [...elsewhere, nextToIt] })).fetch(new Request(app));
     assert.equal(nextToIt.requests.length, 1);
     assert.deepEqual(elsewhere.flatMap(({ requests }) => requests), []);
+});
+
+webTest('forwardToPhp() waits for a page that took the request, however long PHP runs', async () => {
+    const receiver = takingPage(directory);
+    const sw = await serviceWorker({ pages: [receiver] });
+
+    const response = sw.fetch(new Request(app));
+    await new Promise(setImmediate);
+    sw.expire();
+    receiver.respond();
+
+    assert.equal(await (await response).text(), `From ${directory}`);
+});
+
+webTest('forwardToPhp() asks the next page when one does not take the request in time, and answers 503 without any', async (t) => {
+    const warn = t.mock.method(console, 'warn', () => {});
+    const starting = silentPage(directory);
+    const receiver = takingPage(`${directory}index.html`);
+    const sw = await serviceWorker({ pages: [starting, receiver] });
+
+    const response = sw.fetch(new Request(app));
+    await new Promise(setImmediate);
+    assert.equal(receiver.requests.length, 0);
+    sw.expire();
+    await new Promise(setImmediate);
+    receiver.respond();
+
+    assert.equal(await (await response).text(), `From ${directory}index.html`);
+    assert.equal(starting.requests.length, 1);
+    assert.match(warn.mock.calls[0].arguments[0], /does not take .*\/app\/ within 10 s: it is still starting PHP\./);
+
+    const alone = await serviceWorker({ pages: [silentPage(directory)] });
+    const unanswered = alone.fetch(new Request(app));
+    await new Promise(setImmediate);
+    alone.expire();
+    assert.equal((await unanswered).status, 503);
+    assert.match(await (await unanswered).text(), /still starting PHP/);
 });
 
 webTest('forwardToPhp() hands over the method, the URL, the headers and the body', async () => {
@@ -358,6 +445,16 @@ webTest('serveInFrame() adds the headers of the page to each request', async (t)
     const { hand } = await servedApplication({ headers: { 'X-Added': 'by the page' } });
 
     assert.equal(json(await hand(get(app))).added, 'by the page');
+});
+
+webTest('serveInFrame() takes a request before PHP runs it: the service worker waits for it then', async (t) => {
+    t.mock.method(console, 'warn', () => {});
+    const { listener } = await servedApplication();
+    const messages = [];
+
+    await listener({ data: get(app), ports: [{ postMessage: (answer) => messages.push(['answer', answer.status]) }, { postMessage: (data) => messages.push(['taken', data]) }] });
+
+    assert.deepEqual(messages, [['taken', null], ['answer', 200]]);
 });
 
 webTest('serveInFrame() leaves the messages that are not for it', async (t) => {

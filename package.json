@@ -1,0 +1,7 @@
+{
+    "private": true,
+    "description": "What the tests of the examples drive Chrome with, castor wasm:test-browser",
+    "devDependencies": {
+        "playwright-core": "1.65.0"
+    }
+}

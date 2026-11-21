@@ -14,7 +14,8 @@ use Symfony\Component\Filesystem\Path;
  * what it has. The directories are relative to the root of the project: the
  * directory of its castor.php.
  *
- * What is not set (null) is the default of the Dockerfile.
+ * What is not set (null) is the default of the Dockerfile, but the extensions:
+ * a stack has the ones it is given, none by default.
  */
 final readonly class Stack
 {
@@ -77,6 +78,11 @@ final readonly class Stack
 
     public function php(string $version): self
     {
+        // A tag of php-src is php-<version>
+        if (!preg_match('/^\d+\.\d+\.\d+((alpha|beta|RC)\d+)?$/', $version)) {
+            throw new \InvalidArgumentException(\sprintf('"%s" is not a version of PHP, use one as "8.6.0" or "8.6.0RC1".', $version));
+        }
+
         return $this->with(php: $version);
     }
 
@@ -133,11 +139,25 @@ final readonly class Stack
 
     public function targets(Target ...$targets): self
     {
+        if ([] === $targets) {
+            throw new \InvalidArgumentException('A stack builds at least one target: give Target::Web, Target::Node, or both.');
+        }
+
         return $this->with(targets: array_map(Target::from(...), array_values(array_unique(array_column($targets, 'value')))));
     }
 
+    /**
+     * The memory of the WASM module, as emcc takes it: "256mb".
+     */
     public function memory(string $memory): self
     {
+        $units = ['' => 1, 'kb' => 1024, 'mb' => 1024 ** 2, 'gb' => 1024 ** 3];
+        $bytes = preg_match('/^(\d+)(kb|mb|gb)?$/i', $memory, $matches) ? (int) $matches[1] * $units[strtolower($matches[2] ?? '')] : 0;
+        // WebAssembly counts it in pages of 64 KB, up to 4 GB
+        if (0 === $bytes || 0 !== $bytes % 65536 || $bytes > 4 * 1024 ** 3) {
+            throw new \InvalidArgumentException(\sprintf('"%s" is not a memory that WebAssembly takes, use a multiple of 64kb up to 4gb, as "256mb".', $memory));
+        }
+
         return $this->with(memory: $memory);
     }
 

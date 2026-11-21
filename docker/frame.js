@@ -25,11 +25,14 @@ export async function serveInFrame(php, { frame, documentRoot, under = 'app/', s
     // this one may run several requests at a time
     const storedCookies = () => new Map(JSON.parse(localStorage.getItem(cookiesKey) ?? '[]'));
 
-    const answer = async ({ data: request, ports: [port] }) => {
+    const answer = async ({ data: request, ports: [port, taken] }) => {
         // A message of the page, or of another application of the page
         if (!request?.url?.startsWith(app.href)) {
             return;
         }
+        // Before PHP runs: the service worker asks another page when this one
+        // does not take the request in time
+        taken?.postMessage(null);
 
         try {
             const response = await php.request(
@@ -108,13 +111,14 @@ export function keepCookies(cookies, headers) {
 
 /**
  * The headers of a request, with the cookies instead of the ones the browser
- * sends.
+ * sends, as a list of names and values.
  *
- * @param {Array<[string, string]>} headers
+ * @param {Array<[string, string]>|Headers|object} headers as request() takes them
  * @param {Map<string, string>} cookies
  */
 export function withCookies(headers, cookies) {
-    const withoutCookies = headers.filter(([name]) => 'cookie' !== name.toLowerCase());
+    // A list keeps its names and its order, as they are
+    const withoutCookies = (Array.isArray(headers) ? headers : [...new Headers(headers)]).filter(([name]) => 'cookie' !== name.toLowerCase());
 
     return 0 === cookies.size
         ? withoutCookies

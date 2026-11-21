@@ -39,7 +39,7 @@ To build PHP for a page of your own, with your code, from your project: see
 - `CHANGELOG.md`: what changes, that the website shows too;
 - `castor.php` and `src/`: the tasks that build, check and serve all of it, `castor list` lists
   them;
-- `node/` and `tests/`: what runs PHP in node, and tests it.
+- `node/`, `tests/` and `package.json`: what runs PHP in node, and tests it, in Chrome too.
 
 ## Credits
 

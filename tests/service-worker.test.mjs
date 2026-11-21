@@ -184,6 +184,30 @@ webTest('serveInServiceWorker() starts the application with the first request, o
     assert.equal(starts, 2);
 });
 
+webTest('serveInServiceWorker() starts the application again after a request that PHP does not get to the end of', async (t) => {
+    t.mock.method(console, 'warn', () => {});
+    t.mock.method(console, 'error', () => {});
+    let starts = 0;
+    const sw = served({
+        createApplication: async () => {
+            if (1 === ++starts) {
+                return { request: async () => {
+                    throw new RangeError('Maximum call stack size exceeded');
+                } };
+            }
+
+            return php;
+        },
+    });
+
+    const aborted = await sw.fetch(new Request(scope));
+    assert.equal(aborted.status, 500);
+    assert.match(await aborted.text(), /Maximum call stack size exceeded/);
+
+    assert.equal((await sw.fetch(new Request(scope))).status, 200);
+    assert.equal(starts, 2);
+});
+
 webTest('serveInServiceWorker() hands PHP the method, the headers, the body, and the headers of its options', async (t) => {
     t.mock.method(console, 'warn', () => {});
     const sw = served({ options: { headers: { 'X-Added': 'by the service worker' } } });
@@ -372,6 +396,12 @@ webTest('startServiceWorker() rejects when the service worker does not install',
     failed.become('redundant');
 
     await assert.rejects(started, /does not install/);
+});
+
+webTest('startServiceWorker() rejects when the service worker failed before the registration forgets it', async () => {
+    browser(container(registered({ installing: worker('redundant'), active: null })));
+
+    await assert.rejects(startServiceWorker(), /does not install/);
 });
 
 webTest('startServiceWorker() rejects when the browser has no service worker there', async () => {

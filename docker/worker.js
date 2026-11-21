@@ -49,7 +49,8 @@ export async function createPhpInWorker(options = {}) {
         runFile: (file, runOptions) => call('runFile', [file, runOptions]),
         runCode: (code, runOptions) => call('runCode', [code, runOptions]),
         request: (request, requestOptions) => call('request', [request, requestOptions]),
-        FS: new Proxy({}, { get: (target, name) => (...args) => call('FS', [name, args]) }),
+        // Not a promise, nor what inspects it: FS has neither then() nor symbols
+        FS: new Proxy({}, { get: (target, name) => ('string' !== typeof name || 'then' === name ? undefined : (...args) => call('FS', [name, args])) }),
         terminate() {
             terminated = true;
             worker.terminate();

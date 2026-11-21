@@ -67,8 +67,11 @@ The page must be `index.html`, next to `sw.js`: the service worker looks for it 
 the origin, that are all its clients. On GitHub Pages, the ones of every repository are.
 
 With several tabs of the page, each one runs its own PHP, and the service worker hands a request to
-one of them. A tab that is still starting PHP does not answer: what the frame of another tab asks
-for meanwhile gets no response.
+one of them. A tab takes the request before PHP runs it: one that does not take it within 10 s, as
+one that is still starting PHP, is left for the next one, and without any the response is a 503.
+Once taken, the service worker waits for the response however long PHP runs. A tab whose PHP runs
+in the main thread only takes a request once the run in progress is over: in a worker, it takes it
+at once.
 
 ## What it takes care of
 
@@ -115,4 +118,5 @@ const response = await php.request({ ...request, headers: withCookies(request.he
 keepCookies(cookies, response.headers);
 ```
 
-`withCookies()` takes a list of names and values, and replaces the cookies that the browser sends.
+`withCookies()` takes the headers as `request()` does, an object, a list of names and values, or
+`Headers`, and gives a list, where the cookies replace the ones that the browser sends.

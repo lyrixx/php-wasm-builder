@@ -224,6 +224,84 @@ test('request() serves the files of documentRoot, PHP or not, and nothing out of
     assert.equal((await get('/elsewhere/')).status, 404);
 });
 
+test('request() runs the index of a directory, and redirects to the directory without its slash', async () => {
+    writeSite();
+    php.FS.mkdirTree('/site/public/admin');
+    php.FS.writeFile('/site/public/admin/index.php', '<?php echo $_SERVER["SCRIPT_NAME"];');
+    php.FS.mkdirTree('/site/public/docs');
+    php.FS.writeFile('/site/public/docs/index.html', '<p>Docs</p>');
+    const get = async (path) => php.request({ url: `http://localhost${path}` }, site);
+
+    assert.equal(utf8Decoder.decode((await get('/site/admin/')).body), '/site/admin/index.php');
+    const docs = await get('/site/docs/');
+    assert.deepEqual(docs.headers, [['Content-Type', 'text/html']]);
+    assert.equal(utf8Decoder.decode(docs.body), '<p>Docs</p>');
+
+    // Its relative URLs are relative to the directory
+    const redirection = await get('/site/admin?page=2');
+    assert.equal(redirection.status, 301);
+    assert.deepEqual(redirection.headers, [['Location', '/site/admin/?page=2']]);
+
+    // A directory without an index is for the front controller
+    assert.equal(JSON.parse(utf8Decoder.decode((await get('/site/assets/')).body)).server.SCRIPT_NAME, '/site/index.php');
+});
+
+test('request() runs a PHP file of the path, with what follows it as PATH_INFO', async () => {
+    writeSite();
+    php.FS.writeFile('/site/public/other.php', '<?php echo json_encode([$_SERVER["SCRIPT_NAME"], $_SERVER["PATH_INFO"] ?? null, $_SERVER["PHP_SELF"]]);');
+    const get = async (path) => JSON.parse(utf8Decoder.decode((await php.request({ url: `http://localhost${path}` }, site)).body));
+
+    assert.deepEqual(await get('/site/other.php/blog/1'), ['/site/other.php', '/blog/1', '/site/other.php/blog/1']);
+    assert.deepEqual(await get('/site/other.php'), ['/site/other.php', null, '/site/other.php']);
+    // Not the file as it is: FS finds it with the slash
+    assert.deepEqual(await get('/site/other.php/'), ['/site/other.php', '/', '/site/other.php/']);
+});
+
+test('request() rejects what it can not run: no documentRoot, a basePath with its slash, a URL without its origin', async () => {
+    await assert.rejects(php.request({ url: 'http://localhost/' }), /needs the documentRoot option/);
+    await assert.rejects(php.request({ url: 'http://localhost/site/' }, { documentRoot: '/site/public', basePath: '/site/' }), /The basePath option of request\(\) must start with a slash, and not end with one, as "\/app": "\/site\/" does not\./);
+    await assert.rejects(php.request({ url: '/site/' }, site), TypeError);
+});
+
+test('request() answers a fatal error with a 500, and writes it on stderr: a php.ini displays it', async () => {
+    php.FS.mkdirTree('/site/public');
+    php.FS.writeFile('/site/public/index.php', '<?php undefined_function();');
+    const response = await php.request({ url: 'http://localhost/site/' }, site);
+
+    assert.equal(response.status, 500);
+    assert.equal(response.body.length, 0);
+    assert.match(response.stderr, /PHP Fatal error: {2}Uncaught Error: Call to undefined function undefined_function\(\)/);
+
+    const { default: createPhp } = await import(build);
+    const displayed = await createPhp();
+    displayed.FS.mkdirTree('/usr/local/lib');
+    displayed.FS.writeFile('/usr/local/lib/php.ini', 'display_errors=1\n');
+    displayed.FS.mkdirTree('/site/public');
+    displayed.FS.writeFile('/site/public/index.php', '<?php undefined_function();');
+    const page = await displayed.request({ url: 'http://localhost/site/' }, site);
+
+    assert.equal(page.status, 200);
+    assert.match(utf8Decoder.decode(page.body), /Fatal error: Uncaught Error: Call to undefined function/);
+});
+
+test('request() leaves out a header without a colon, that no browser takes', async () => {
+    php.FS.mkdirTree('/site/public');
+    php.FS.writeFile('/site/public/index.php', '<?php header("X-Without-Colon"); header("X-Answer: 42");');
+    const { headers } = await php.request({ url: 'http://localhost/site/' }, site);
+
+    assert.deepEqual(headers.map(([name]) => name).filter((name) => 'X-Powered-By' !== name), ['X-Answer', 'Content-type']);
+});
+
+test('$_SERVER and getenv() do not have what only the engine reads', async () => {
+    assert.equal((await php.runCode('var_dump(getenv("USE_ZEND_ALLOC"), isset($_SERVER["USE_ZEND_ALLOC"]));')).stdout, 'bool(false)\nbool(false)\n');
+});
+
+test('createPhp() says that persist needs IndexedDB, in a browser', async () => {
+    const { default: createPhp } = await import(build);
+
+    await assert.rejects(createPhp({ persist: '/kept' }), /The persist option needs IndexedDB: the build for the web has it, in a browser\./);
+});
+
 test('a run of the php command after a request is not a request', async () => {
     writeSite();
     await php.request({ url: 'http://localhost/site/?a=1' }, site);

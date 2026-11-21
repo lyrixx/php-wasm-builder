@@ -22,6 +22,7 @@ Everything that compiles PHP is in `docker/`, everything else drives it:
   (see [The examples](examples.md)).
 - `node/run.mjs` runs a PHP file, or some PHP code, with node, and `node/fetch-files.mjs` lets node
   run the modules of a page as a browser does, to test them (see
-  [Check it](../your-project/check.md)). `tests/` has the tests of the JavaScript API.
+  [Check it](../your-project/check.md)). `tests/` has the tests of the JavaScript API, and
+  `tests/browser/` the ones of the examples, in Chrome.
 - `docs/` is this documentation, in Markdown, and `zensical.toml` makes it a website, with the
   template of the home page in `docs/.overrides/` (see [The examples](examples.md#this-website)).

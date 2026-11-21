@@ -143,6 +143,10 @@ for target in $TARGETS; do
         *)    echo "Unknown target '$target', supported targets: web node" >&2; exit 1 ;;
     esac
 done
+if [ ! -s /plan/targets ]; then
+    echo "TARGETS is empty, supported targets: web node" >&2
+    exit 1
+fi
 
 # Where opcache keeps what it compiles, in the WASM filesystem: run.c defaults
 # to it. Keep in sync with the Opcache enum, in src/Opcache.php, and with the
@@ -190,14 +194,42 @@ RUN apt-get update && \
 # Create install directory
 RUN mkdir -p /local/install
 
+# verify <what> <expected> <actual>: what is downloaded is what the Dockerfile
+# expects, a SHA-256 for an archive, a commit for a tag of git. It only knows
+# its default versions: another one, given as a build argument, is built with
+# a warning.
+COPY --chmod=755 <<'EOF' /usr/local/bin/verify
+#!/bin/sh
+set -eu
+if [ -z "$2" ]; then
+    echo "warning: $1 is not verified, the Dockerfile does not know this version" >&2
+    exit 0
+fi
+if [ "$2" != "$3" ]; then
+    echo "$1 is not what the Dockerfile expects: $3 instead of $2" >&2
+    exit 1
+fi
+EOF
+
 # Download PHP and Set-Up Configure
 FROM base AS php-src
 # Keep in sync with the default stack, in stacks.php
 ARG PHP_VERSION=8.6.0
-RUN \
-    git clone https://github.com/php/php-src.git php-src --branch php-$PHP_VERSION --single-branch --depth 1 && \
-    cd php-src && \
-    ./buildconf --force
+RUN <<EOF
+set -eu
+# The default version, and the ones of stacks.php
+case $PHP_VERSION in
+    8.6.0)  commit=8aaada3f9605d81a38b8240f93c7389dfbc77ef9 ;;
+    8.5.13) commit=46bcb661df53d9ded93fef239e15707bf7cea2e9 ;;
+    8.4.28) commit=6c4c8ecd1c66f2eaa7cadc893bb303a0cdf896c1 ;;
+    8.3.37) commit=ab4b18847bcc7bd11eaafb557ad8ba43410a4dc8 ;;
+    *)      commit= ;;
+esac
+git clone https://github.com/php/php-src.git php-src --branch php-$PHP_VERSION --single-branch --depth 1
+verify "PHP $PHP_VERSION" "$commit" "$(git -C php-src rev-parse HEAD)"
+cd php-src
+./buildconf --force
+EOF
 
 # Compile mbstring regex library
 FROM base AS oniguruma
@@ -206,7 +238,9 @@ COPY --from=resolve /plan/oniguruma /plan/oniguruma
 RUN <<EOF
 set -eu
 [ "$(cat /plan/oniguruma)" = 1 ] || exit 0
+case $ONIGURUMA_VERSION in 6.9.10) commit=4ef89209a239c1aea328cf13c05a2807e5c146d1 ;; *) commit= ;; esac
 git clone https://github.com/kkos/oniguruma --branch v$ONIGURUMA_VERSION --single-branch --depth 1
+verify "Oniguruma $ONIGURUMA_VERSION" "$commit" "$(git -C oniguruma rev-parse HEAD)"
 cd oniguruma
 autoreconf -vfi
 emconfigure ./configure --prefix=/local/install --disable-shared
@@ -221,7 +255,9 @@ COPY --from=resolve /plan/libxml2 /plan/libxml2
 RUN <<EOF
 set -eu
 [ "$(cat /plan/libxml2)" = 1 ] || exit 0
+case $LIBXML_VERSION in 2.13.5) commit=de918d45e1b2276a28a4cd32bcf556bef65284e4 ;; *) commit= ;; esac
 git clone https://gitlab.gnome.org/GNOME/libxml2.git libxml2 --branch v$LIBXML_VERSION --single-branch --depth 1
+verify "libxml2 $LIBXML_VERSION" "$commit" "$(git -C libxml2 rev-parse HEAD)"
 cd libxml2
 emconfigure ./autogen.sh --prefix=/local/install --enable-static --disable-shared --with-python=no --with-threads=no
 emmake make -j`nproc`
@@ -236,8 +272,10 @@ RUN <<EOF
 set -eu
 [ "$(cat /plan/icu)" = 1 ] || exit 0
 # The data comes already built with the release sources only, not with git
+case $ICU_VERSION in 78.3) sha256=3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0 ;; *) sha256= ;; esac
 curl -fsSL --retry 3 --connect-timeout 30 -o icu.tgz \
     https://github.com/unicode-org/icu/releases/download/release-$ICU_VERSION/icu4c-$ICU_VERSION-sources.tgz
+verify "ICU $ICU_VERSION" "$sha256" "$(sha256sum icu.tgz | cut -d' ' -f1)"
 tar -xzf icu.tgz
 cd icu/source
 # -Os: ICU is big, and it is only in the builds that ask for intl
@@ -274,8 +312,10 @@ COPY --from=resolve /plan/libiconv /plan/libiconv
 RUN <<EOF
 set -eu
 [ "$(cat /plan/libiconv)" = 1 ] || exit 0
+case $LIBICONV_VERSION in 1.19) sha256=88dd96a8c0464eca144fc791ae60cd31cd8ee78321e67397e25fc095c4a19aa6 ;; *) sha256= ;; esac
 curl -fsSL --retry 3 --connect-timeout 30 -o libiconv.tgz \
     https://ftp.gnu.org/pub/gnu/libiconv/libiconv-$LIBICONV_VERSION.tar.gz
+verify "GNU libiconv $LIBICONV_VERSION" "$sha256" "$(sha256sum libiconv.tgz | cut -d' ' -f1)"
 tar -xzf libiconv.tgz
 cd libiconv-$LIBICONV_VERSION
 emconfigure ./configure --prefix=/local/install --enable-static --disable-shared --disable-nls
@@ -290,8 +330,10 @@ COPY --from=resolve /plan/openssl /plan/openssl
 RUN <<EOF
 set -eu
 [ "$(cat /plan/openssl)" = 1 ] || exit 0
+case $OPENSSL_VERSION in 3.5.9) sha256=603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a ;; *) sha256= ;; esac
 curl -fsSL --retry 3 --connect-timeout 30 -o openssl.tgz \
     https://github.com/openssl/openssl/releases/download/openssl-$OPENSSL_VERSION/openssl-$OPENSSL_VERSION.tar.gz
+verify "OpenSSL $OPENSSL_VERSION" "$sha256" "$(sha256sum openssl.tgz | cut -d' ' -f1)"
 tar -xzf openssl.tgz
 cd openssl-$OPENSSL_VERSION
 # The generic 32-bit target, without assembly: WASM is neither x86 nor ARM. No
@@ -322,8 +364,10 @@ set -eu
 [ "$(cat /plan/sqlite)" = 1 ] || exit 0
 # 3.54.1 is 3540100 in the name of the file
 release=$(printf '%d%02d%02d00' $(echo $SQLITE_VERSION | tr . ' '))
+case $SQLITE_VERSION in 3.54.1) sha256=0a9c8e34352dad46006aa82836d5383bff9dc6bc9ce5a60553c05aa30e6ad1f9 ;; *) sha256= ;; esac
 curl -fsSL --retry 3 --connect-timeout 30 -o sqlite.zip \
     https://www.sqlite.org/$SQLITE_YEAR/sqlite-amalgamation-$release.zip
+verify "SQLite $SQLITE_VERSION" "$sha256" "$(sha256sum sqlite.zip | cut -d' ' -f1)"
 unzip -q sqlite.zip
 cd sqlite-amalgamation-$release
 # No threads, and no extension to load: there is no dlopen() in a static build.
@@ -344,7 +388,9 @@ COPY --from=resolve /plan/zlib /plan/zlib
 RUN <<EOF
 set -eu
 [ "$(cat /plan/zlib)" = 1 ] || exit 0
+case $ZLIB_VERSION in 1.3.2) commit=da607da739fa6047df13e66a2af6b8bec7c2a498 ;; *) commit= ;; esac
 git clone https://github.com/madler/zlib --branch v$ZLIB_VERSION --single-branch --depth 1
+verify "zlib $ZLIB_VERSION" "$commit" "$(git -C zlib rev-parse HEAD)"
 cd zlib
 emconfigure ./configure --static --prefix=/local/install
 emmake make -j`nproc` libz.a
@@ -359,7 +405,9 @@ COPY --from=zlib /local/install /local/install
 RUN <<EOF
 set -eu
 [ "$(cat /plan/gd)" = 1 ] || exit 0
+case $LIBPNG_VERSION in 1.6.59) commit=cd952f49f95bb27154ae77dbb103032d95f6e580 ;; *) commit= ;; esac
 git clone https://github.com/pnggroup/libpng --branch v$LIBPNG_VERSION --single-branch --depth 1
+verify "libpng $LIBPNG_VERSION" "$commit" "$(git -C libpng rev-parse HEAD)"
 cd libpng
 # CMAKE_FIND_ROOT_PATH: emscripten only looks for zlib in its own directories
 emcmake cmake -S . -B out -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/local/install -DCMAKE_INSTALL_LIBDIR=lib \
@@ -375,7 +423,9 @@ COPY --from=resolve /plan/gd /plan/gd
 RUN <<EOF
 set -eu
 [ "$(cat /plan/gd)" = 1 ] || exit 0
+case $LIBJPEG_TURBO_VERSION in 3.2.1) commit=7b4993786d856cbccabfc0ed2f923ba000e326cc ;; *) commit= ;; esac
 git clone https://github.com/libjpeg-turbo/libjpeg-turbo --branch $LIBJPEG_TURBO_VERSION --single-branch --depth 1
+verify "libjpeg-turbo $LIBJPEG_TURBO_VERSION" "$commit" "$(git -C libjpeg-turbo rev-parse HEAD)"
 cd libjpeg-turbo
 # Its SIMD code is assembly, for x86 and ARM
 emcmake cmake -S . -B out -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/local/install -DCMAKE_INSTALL_LIBDIR=lib \
@@ -390,7 +440,9 @@ COPY --from=resolve /plan/gd /plan/gd
 RUN <<EOF
 set -eu
 [ "$(cat /plan/gd)" = 1 ] || exit 0
+case $LIBWEBP_VERSION in 1.6.0) commit=4fa21912338357f89e4fd51cf2368325b59e9bd9 ;; *) commit= ;; esac
 git clone https://github.com/webmproject/libwebp --branch v$LIBWEBP_VERSION --single-branch --depth 1
+verify "libwebp $LIBWEBP_VERSION" "$commit" "$(git -C libwebp rev-parse HEAD)"
 cd libwebp
 # No threads, and only the libraries: its tools need more of them. libwebpmux
 # and libwebpdemux too, for the animations, that gd needs since PHP 8.6
@@ -409,7 +461,9 @@ COPY --from=zlib /local/install /local/install
 RUN <<EOF
 set -eu
 [ "$(cat /plan/libzip)" = 1 ] || exit 0
+case $LIBZIP_VERSION in 1.12.1) commit=8e037534ccd62f444abbe4ce265443ee74bbfeb3 ;; *) commit= ;; esac
 git clone https://github.com/nih-at/libzip --branch v$LIBZIP_VERSION --single-branch --depth 1
+verify "libzip $LIBZIP_VERSION" "$commit" "$(git -C libzip rev-parse HEAD)"
 cd libzip
 # Only deflate: every other method, and AES encryption, need one more library
 emcmake cmake -S . -B out -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/local/install -DCMAKE_INSTALL_LIBDIR=lib \
@@ -427,8 +481,10 @@ COPY --from=resolve /plan/libsodium /plan/libsodium
 RUN <<EOF
 set -eu
 [ "$(cat /plan/libsodium)" = 1 ] || exit 0
+case $LIBSODIUM_VERSION in 1.0.22) sha256=adbdd8f16149e81ac6078a03aca6fc03b592b89ef7b5ed83841c086191be3349 ;; *) sha256= ;; esac
 curl -fsSL --retry 3 --connect-timeout 30 -o libsodium.tgz \
     https://github.com/jedisct1/libsodium/releases/download/$LIBSODIUM_VERSION-RELEASE/libsodium-$LIBSODIUM_VERSION.tar.gz
+verify "libsodium $LIBSODIUM_VERSION" "$sha256" "$(sha256sum libsodium.tgz | cut -d' ' -f1)"
 tar -xzf libsodium.tgz
 cd libsodium-$LIBSODIUM_VERSION
 # The flags of its dist-build/emscripten.sh: no assembly, no threads. Not its
@@ -596,8 +652,10 @@ while read -r output environment flags; do
     sh link.sh /build/$output.mjs $environment -O2 -s EXPORTED_RUNTIME_METHODS=FS $flags \
         ${EMBED_AT:+--embed-file "/embed@$EMBED_AT"} ${opcache:-} ${ini:-}
     # Keep in sync with Target::files(), in src/Target.php. It shares
-    # sw-common.js with php-web.mjs
-    [ "$output" != php-web ] || cat sw-common.js php-sw.js > /build/php-sw.js
+    # sw-common.js with php-web.mjs. A classic script: in a function, or what
+    # it declares would be globals of the sw.js of the project, but
+    # forwardToPhp(), that php-sw.js gives to self
+    [ "$output" != php-web ] || { echo '(() => {'; cat sw-common.js php-sw.js; echo '})();'; } > /build/php-sw.js
 done < /plan/targets
 EOF
 
