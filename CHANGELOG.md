@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+From this version, a minor or a patch version does not break what the
+[backward compatibility](https://lyrixx.github.io/php-wasm-builder/reference/backward-compatibility/)
+page covers.
+
 ### Features
 
 * BC break: `php.request()` answers a fatal error with a 500, and PHP writes
@@ -69,6 +73,8 @@
   emscripten. `createPhp()` takes `stdin`, `stdout` and `stderr` for itself.
 * The JavaScript API page gave `forwardToPhp()` an `under` option, that it does
   not have.
+* `castor release:create` publishes a version: the Unreleased section of the
+  changelog, its commit and its tag, then its GitHub release.
 
 ## 0.14.0 (2026-11-20)
 

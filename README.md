@@ -37,8 +37,8 @@ To build PHP for a page of your own, with your code, from your project: see
   would be: `stack.php`, `public/`, and `app/`;
 - `docs/` and `zensical.toml`: the documentation, and the website;
 - `CHANGELOG.md`: what changes, that the website shows too;
-- `castor.php` and `src/`: the tasks that build, check and serve all of it, `castor list` lists
-  them;
+- `castor.php` and `src/`: the tasks that build, check, serve and release all of it, `castor list`
+  lists them;
 - `node/`, `tests/` and `package.json`: what runs PHP in node, and tests it, in Chrome too.
 
 ## Credits

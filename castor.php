@@ -6,11 +6,14 @@ use Castor\Attribute\AsArgument;
 use Castor\Attribute\AsOption;
 use Castor\Attribute\AsTask;
 use Castor\Exception\ProblemException;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Filesystem\Path;
 use Symfony\Component\Finder\SplFileInfo;
 
+use function Castor\capture;
+use function Castor\check;
 use function Castor\context;
 use function Castor\finder;
 use function Castor\fs;
@@ -30,6 +33,9 @@ defined('CASTOR_USE_CHDIR') || define('CASTOR_USE_CHDIR', false);
 
 // Where GitHub Pages serves the website: the name of the repository
 const SITE_PATH = '/php-wasm-builder/';
+
+// A version, and its tag: v1.2.3
+const VERSION_PATTERN = '/^v\d+\.\d+\.\d+$/';
 
 // It renders the documentation, docs/, as zensical.toml says. Pinned, as
 // emsdk is.
@@ -459,6 +465,98 @@ function site_social_image_task(): void
     io()->success(relative($image));
 }
 
+#[AsTask(name: 'create', namespace: 'release', description: 'Publishes a version: the Unreleased section of CHANGELOG.md, its commit and its tag, then its GitHub release', aliases: ['release'])]
+function release_create_task(
+    #[AsArgument(description: 'The version to publish, as 1.2.0: what the Unreleased section says when none is given')]
+    ?string $version = null,
+): void {
+    io()->title('Publishing a version');
+
+    io()->section('Checking the repository');
+
+    $repository = context()->withWorkingDirectory(builder_root());
+    check(
+        'Check the current branch',
+        'A version is published from main only.',
+        static fn (): bool => 'main' === capture(['git', 'symbolic-ref', '--short', 'HEAD'], onFailure: '', context: $repository),
+    );
+    check(
+        'Check there are no uncommitted changes',
+        'There are uncommitted changes: commit or stash them before.',
+        static fn (): bool => '' === capture(['git', 'status', '--porcelain'], context: $repository),
+    );
+
+    run(['git', 'fetch', '--tags', 'origin', 'main'], context: $repository->withQuiet());
+
+    // It may be ahead: the push takes its commits with the tag
+    check(
+        'Check main has what origin/main has',
+        'main is behind origin/main: pull before.',
+        static fn (): bool => run(['git', 'merge-base', '--is-ancestor', 'origin/main', 'HEAD'], context: $repository->withQuiet()->withAllowFailure())->isSuccessful(),
+    );
+    // Before anything is pushed: the GitHub release comes last
+    $github = github_repository();
+    check(
+        'Check gh is logged in',
+        'gh is not logged in: run "gh auth login" before.',
+        static fn (): bool => run(['gh', 'auth', 'status'], context: $repository->withQuiet()->withAllowFailure())->isSuccessful(),
+    );
+
+    $changelogFile = builder_root() . '/CHANGELOG.md';
+    $changelog = fs()->readFile($changelogFile);
+    $entries = changelog_section($changelog, 'Unreleased')
+        ?? throw new ProblemException('Nothing to publish: CHANGELOG.md has no "## Unreleased" section, or it is empty.');
+
+    $previousTag = previous_tag();
+    io()->comment("Previous version: <comment>{$previousTag}</comment>");
+    $version ??= next_version($previousTag, $entries);
+    $tag = "v{$version}";
+    if (!preg_match(VERSION_PATTERN, $tag) || version_compare($version, substr($previousTag, 1), '<=')) {
+        throw new ProblemException(\sprintf('"%s" is not a version after %s, as "1.2.0".', $version, $previousTag));
+    }
+
+    io()->section('Writing the CHANGELOG');
+
+    $date = new \DateTimeImmutable()->format('Y-m-d');
+    fs()->dumpFile($changelogFile, preg_replace('/^## Unreleased$/m', "## {$version} ({$date})", $changelog, 1));
+    io()->writeln(OutputFormatter::escape("## {$version} ({$date})\n\n{$entries}"));
+    io()->newLine();
+
+    if (!io()->confirm("Publish {$version}? You can edit CHANGELOG.md before answering.", false)) {
+        fs()->dumpFile($changelogFile, $changelog);
+
+        throw new ProblemException("{$version} is not published: CHANGELOG.md is restored.");
+    }
+
+    // As CHANGELOG.md has it once edited
+    $notes = changelog_section(fs()->readFile($changelogFile), "{$version} ({$date})")
+        ?? throw new ProblemException("CHANGELOG.md has no \"## {$version} ({$date})\" section anymore: restore it, or run \"git checkout CHANGELOG.md\" to start again.");
+
+    io()->section("Publishing {$version}");
+
+    run(['git', 'add', 'CHANGELOG.md'], context: $repository);
+    run(['git', 'commit', '-m', "Prepare {$version}"], context: $repository);
+    run(['git', 'tag', '-a', $tag, '-m', $tag], context: $repository);
+
+    // The commit of the CHANGELOG goes with the tag: the next version starts from there
+    if (!run(['git', 'push', '--atomic', 'origin', 'main', $tag], context: $repository->withAllowFailure())->isSuccessful()) {
+        throw new ProblemException("The commit and the tag {$tag} only exist here. Once the problem is solved, push them with \"git push --atomic origin main {$tag}\", then run \"gh release create {$tag} --verify-tag --title {$tag}\" with the section of CHANGELOG.md as its notes.");
+    }
+
+    $release = run(
+        ['gh', 'release', 'create', $tag, '--repo', $github, '--verify-tag', '--title', $tag, '--notes-file', '-'],
+        context: $repository->withInput($notes)->withQuiet()->withAllowFailure(),
+    );
+    if (!$release->isSuccessful()) {
+        throw new ProblemException(\sprintf('%s is pushed, but its GitHub release is not created: %s. Create it with "gh release create %1$s --verify-tag --title %1$s", with the section of CHANGELOG.md as its notes.', $tag, trim($release->getErrorOutput())));
+    }
+
+    io()->success([
+        \sprintf('%s is published: %s', $tag, trim($release->getOutput())),
+        'Composer finds it from its tag, and GitHub Pages deploys the website from main.',
+    ]);
+}
+
 /**
  * Runs the tests of the JavaScript API, tests/api.test.mjs,
  * tests/frame.test.mjs, tests/service-worker.test.mjs and
@@ -512,6 +610,64 @@ function check_missing_functions(Stack $stack): void
     }
 
     io()->writeln(' ✅');
+}
+
+/**
+ * The version of the last tag, as v1.2.3.
+ */
+function previous_tag(): string
+{
+    foreach (explode("\n", capture(['git', 'tag', '--list', 'v*', '--sort=-v:refname'], context: context()->withWorkingDirectory(builder_root()))) as $tag) {
+        if (preg_match(VERSION_PATTERN, $tag)) {
+            return $tag;
+        }
+    }
+
+    throw new \LogicException('The repository has no tag of a version.');
+}
+
+/**
+ * What the entries of the Unreleased section ask for, as semver says, and the
+ * backward compatibility page: until 1.0.0, a BC break is a minor version.
+ */
+function next_version(string $previousTag, string $entries): string
+{
+    // Already checked by VERSION_PATTERN
+    [$major, $minor, $patch] = array_map(intval(...), explode('.', substr($previousTag, 1)));
+    $breaks = 1 === preg_match('/^\* BC break:/m', $entries);
+    $features = 1 === preg_match('/^### Features$/m', $entries);
+
+    return match (true) {
+        $breaks && 0 !== $major => \sprintf('%d.0.0', $major + 1),
+        $breaks || $features => \sprintf('%d.%d.0', $major, $minor + 1),
+        default => \sprintf('%d.%d.%d', $major, $minor, $patch + 1),
+    };
+}
+
+/**
+ * The entries of a section of the changelog, under its "## <title>" line, up to
+ * the next section. Null when it has none.
+ */
+function changelog_section(string $changelog, string $title): ?string
+{
+    if (!preg_match('/^## ' . preg_quote($title, '/') . '\n(.*?)(?=^## |\z)/ms', $changelog, $matches)) {
+        return null;
+    }
+
+    return '' === trim($matches[1]) ? null : trim($matches[1]);
+}
+
+/**
+ * The repository of origin on GitHub, as lyrixx/php-wasm-builder: gh would
+ * ask which one with upstream there too.
+ */
+function github_repository(): string
+{
+    $url = capture(['git', 'remote', 'get-url', 'origin'], context: context()->withWorkingDirectory(builder_root()));
+
+    return preg_match('{github\.com[:/](.+?)(?:\.git)?$}', $url, $matches)
+        ? $matches[1]
+        : throw new ProblemException(\sprintf('origin, %s, is not a repository of GitHub.', $url));
 }
 
 /**
