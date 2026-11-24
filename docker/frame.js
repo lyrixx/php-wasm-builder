@@ -26,8 +26,11 @@ export async function serveInFrame(php, { frame, documentRoot, under = 'app/', s
     const storedCookies = () => new Map(JSON.parse(localStorage.getItem(cookiesKey) ?? '[]'));
 
     const answer = async ({ data: request, ports: [port, taken] }) => {
-        // A message of the page, or of another application of the page
-        if (!request?.url?.startsWith(app.href)) {
+        // A message of the page, or of another application of the page. The
+        // URL of the application without its slash is for it too: PHP
+        // redirects it. Keep in sync with answerInScope(), in sw-common.js
+        const url = request?.url;
+        if ('string' !== typeof url || !(url.startsWith(app.href) || url.split('?')[0] === app.href.slice(0, -1))) {
             return;
         }
         // Before PHP runs: the service worker asks another page when this one
@@ -70,9 +73,11 @@ async function startFrameServiceWorker(under, answer) {
     const container = serviceWorkers();
     container.addEventListener('message', answer);
 
+    // Without its slash: a navigation to the URL of the application without
+    // it, as the url('/') of Laravel gives it, goes to the server otherwise.
     // Without updateViaCache, the browser takes an imported script, php-sw.js
     // once a project updates, from its HTTP cache
-    const registration = await container.register('sw.js', { scope: under, updateViaCache: 'none' });
+    const registration = await container.register('sw.js', { scope: under.slice(0, -1), updateViaCache: 'none' });
     // register() does not look for a new version: the browser does it after a
     // navigation in the scope, the frame would load with the old one
     if (null !== registration.active) {
@@ -81,6 +86,14 @@ async function startFrameServiceWorker(under, answer) {
 
     // The page is out of the scope
     await serviceWorkerActivated(registration);
+
+    // The registration of 1.0.0, whose scope has the slash: the browser keeps
+    // it, and its longer scope would answer the frame, with the version of the
+    // service worker that it has
+    const scopeWithSlash = new URL(under, document.baseURI).href;
+    for (const old of (await container.getRegistrations()).filter(({ scope }) => scope === scopeWithSlash)) {
+        await old.unregister();
+    }
 }
 
 // The cookies of the application: the browser drops the Set-Cookie of a

@@ -37,6 +37,7 @@ nav = [
   ] },
   { "Guides" = [
     "guides/cloudflare-worker.md",
+    "guides/laravel.md",
     "guides/symfony.md",
   ] },
   { "Reference" = [

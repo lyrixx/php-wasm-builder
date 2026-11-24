@@ -57,7 +57,10 @@ fails, the frame shows why, in a 500, and the error goes to the console.
 ## `forwardToPhp(options)`
 
 It must be called as the script is first evaluated: the browser ignores a listener added later. It
-takes what is in its scope, the `under` option of `serveInFrame()`, to the page.
+takes what is under the `under` option of `serveInFrame()` to the page, and its URL without the
+slash, `app`, that the `url('/')` of Laravel gives: PHP redirects it to `app/`. `serveInFrame()`
+registers it for `app`, without its slash, so that the browser hands it this URL too. What only
+starts like it, as `app.css`, goes to the server.
 
 | Option   | Default | What it is                                                                                                                                                  |
 |----------|---------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|

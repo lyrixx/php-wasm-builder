@@ -114,3 +114,13 @@ is deployed if the checks fail.
     ```
 
 In the settings of the repository, GitHub Pages must deploy from GitHub Actions.
+
+With several stacks, each one is a target of buildx, named after the stack. The cache of a scope is
+what its last build exported: stacks that compile another PHP, with other extensions or another
+version, need a scope each, or the cache of one pushes the other out. Stacks that only differ by
+what they embed can share one. A `--set` of a target adds to the one of `*.`, it does not replace
+it: give the cache target by target.
+
+```
+--set 'admin.cache-from=type=gha,scope=admin' --set 'admin.cache-to=type=gha,scope=admin,mode=max,ignore-error=true'
+```
