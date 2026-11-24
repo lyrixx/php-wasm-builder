@@ -40,6 +40,44 @@ test('the framed page signs the guestbook, and keeps the message, the session an
     await context.close();
 });
 
+test('the frame shows the URL of the application without its slash, that the url(\'/\') of Laravel gives: the server has no such file', async () => {
+    const context = await example.newContext();
+    const page = await context.newPage();
+    await page.goto(example.url());
+    await page.frameLocator('#frame').getByRole('heading', { name: 'Guestbook' }).waitFor();
+
+    const frame = await (await page.locator('#frame').elementHandle()).contentFrame();
+    await frame.goto(example.url('app'));
+
+    assert.equal(frame.url(), example.url('app/'));
+    await page.frameLocator('#frame').getByRole('heading', { name: 'Guestbook' }).waitFor();
+
+    await context.close();
+});
+
+test('the page unregisters the service worker of 1.0.0, whose scope has the slash: its longer scope would answer the frame', async () => {
+    const context = await example.newContext();
+    // What 1.0.0 registered, from a page of the directory
+    const visit = await context.newPage();
+    await visit.goto(example.url('sw.js'));
+    await visit.evaluate(async () => {
+        const registration = await navigator.serviceWorker.register('sw.js', { scope: 'app/' });
+        const worker = registration.installing ?? registration.waiting ?? registration.active;
+        if ('activated' !== worker.state) {
+            await new Promise((resolve) => worker.addEventListener('statechange', () => 'activated' === worker.state && resolve()));
+        }
+    });
+    await visit.close();
+
+    const page = await context.newPage();
+    await page.goto(example.url());
+    await page.frameLocator('#frame').getByRole('heading', { name: 'Guestbook' }).waitFor();
+
+    assert.deepEqual(await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).map(({ scope }) => scope)), [example.url('app')]);
+
+    await context.close();
+});
+
 test('the page of its own runs PHP in the service worker, and keeps the message, the session and its cookie across a reload', async () => {
     const context = await example.newContext();
     const page = await context.newPage();

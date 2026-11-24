@@ -246,6 +246,18 @@ test('request() runs the index of a directory, and redirects to the directory wi
     assert.equal(JSON.parse(utf8Decoder.decode((await get('/site/assets/')).body)).server.SCRIPT_NAME, '/site/index.php');
 });
 
+test('request() redirects basePath without its slash to it: the url(\'/\') of Laravel', async () => {
+    writeSite();
+    const get = async (path) => php.request({ url: `http://localhost${path}` }, site);
+
+    const redirection = await get('/site?page=2');
+    assert.equal(redirection.status, 301);
+    assert.deepEqual(redirection.headers, [['Location', '/site/?page=2']]);
+
+    // What only starts like it is not under basePath
+    assert.equal((await get('/sitemap.xml')).status, 404);
+});
+
 test('request() runs a PHP file of the path, with what follows it as PATH_INFO', async () => {
     writeSite();
     php.FS.writeFile('/site/public/other.php', '<?php echo json_encode([$_SERVER["SCRIPT_NAME"], $_SERVER["PATH_INFO"] ?? null, $_SERVER["PHP_SELF"]]);');

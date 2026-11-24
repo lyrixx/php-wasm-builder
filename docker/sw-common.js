@@ -43,7 +43,12 @@ const SERVICE_WORKER_SCRIPT_CHECK_TIMEOUT_IN_MS = 3000;
  * @param {(request: Request) => Promise<Response>} answer
  */
 function answerInScope(except, answer) {
-    const scope = self.registration.scope;
+    // serveInFrame() gives the application without its slash: its URL without
+    // it is in the scope, as the url('/') of Laravel gives it, and so is what
+    // only starts like it, as app.css, that is not for PHP. Keep in sync with
+    // serveInFrame(), in frame.js
+    const root = self.registration.scope.replace(/\/?$/, '/');
+    const inScope = (url) => url.startsWith(root) || url.split('?')[0] === root.slice(0, -1);
     const files = except.map((path) => new URL(path, self.location).href);
 
     self.addEventListener('install', () => self.skipWaiting());
@@ -52,7 +57,7 @@ function answerInScope(except, answer) {
     self.addEventListener('fetch', (event) => {
         // With the origin: what is asked for elsewhere is not for PHP
         const { url } = event.request;
-        if (url.startsWith(scope) && !files.some((file) => url.startsWith(file))) {
+        if (inScope(url) && !files.some((file) => url.startsWith(file))) {
             // A header that a Response refuses, PHP that aborts…
             event.respondWith(answerUnlessScriptIsGone(event.request, answer).catch((error) => {
                 console.error(error);

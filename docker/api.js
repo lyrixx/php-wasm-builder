@@ -253,7 +253,9 @@
      * @return {{file: string, pathInfo?: string}|{redirect: string}|null} a path in documentRoot
      */
     function findFile(pathname, documentRoot, basePath) {
-        if (!pathname.startsWith(basePath + '/')) {
+        // basePath itself is documentRoot without its slash, as the url('/') of
+        // Laravel gives it
+        if (pathname !== basePath && !pathname.startsWith(basePath + '/')) {
             return null;
         }
 

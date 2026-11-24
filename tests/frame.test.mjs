@@ -63,7 +63,7 @@ webTest('withCookies() takes the headers as request() does: an object, or Header
  * in app/, with these clients. fetch() is what the server answers for its
  * script. Its timers only run once expired.
  */
-async function serviceWorker({ pages = [], options = {}, scope = app, fetch = async () => new Response('', { headers: { 'Content-Type': 'text/javascript' } }) } = {}) {
+async function serviceWorker({ pages = [], options = {}, scope = app.slice(0, -1), fetch = async () => new Response('', { headers: { 'Content-Type': 'text/javascript' } }) } = {}) {
     const listeners = {};
     const calls = [];
     const timers = new Map();
@@ -167,10 +167,29 @@ webTest('forwardToPhp() takes what is under the application to the page, except 
 });
 
 webTest('forwardToPhp() takes what is in the scope that serveInFrame() gives it', async () => {
-    const sw = await serviceWorker({ pages: [page(directory)], scope: `${directory}site/` });
+    const sw = await serviceWorker({ pages: [page(directory)], scope: `${directory}site` });
 
     assert.equal(await (await sw.fetch(new Request(`${directory}site/admin`))).text(), 'From PHP');
     assert.equal(sw.fetch(new Request(`${app}admin`)), undefined);
+});
+
+webTest('forwardToPhp() takes the URL of the application without its slash, not what only starts like it', async () => {
+    const receiver = page(directory);
+    const sw = await serviceWorker({ pages: [receiver] });
+
+    assert.equal(await (await sw.fetch(new Request(`${directory}app`))).text(), 'From PHP');
+    assert.equal(await (await sw.fetch(new Request(`${directory}app?page=2`))).text(), 'From PHP');
+    assert.deepEqual(receiver.requests.map(({ url }) => url), [`${directory}app`, `${directory}app?page=2`]);
+    // Files of the website, that the scope has too
+    assert.equal(sw.fetch(new Request(`${directory}app.css`)), undefined);
+    assert.equal(sw.fetch(new Request(`${directory}apple/`)), undefined);
+});
+
+webTest('forwardToPhp() takes what is under the application with the scope that 1.0.0 registered, with its slash', async () => {
+    const sw = await serviceWorker({ pages: [page(directory)], scope: app });
+
+    assert.equal(await (await sw.fetch(new Request(`${app}admin`))).text(), 'From PHP');
+    assert.equal(sw.fetch(new Request(`${directory}app.css`)), undefined);
 });
 
 webTest('forwardToPhp() only hands over to the page next to it: others are clients too', async () => {
@@ -299,8 +318,24 @@ webTest('serveInFrame() registers sw.js for the application, without the HTTP ca
 
     await serveInFrame({}, { frame, documentRoot: '/app/public' });
 
-    assert.deepEqual(serviceWorkerContainer.calls, [['sw.js', { scope: 'app/', updateViaCache: 'none' }]]);
+    // Without its slash: its URL without it is in the scope
+    assert.deepEqual(serviceWorkerContainer.calls, [['sw.js', { scope: 'app', updateViaCache: 'none' }]]);
     assert.equal(String(frame.src), app);
+});
+
+webTest('serveInFrame() unregisters the service worker of 1.0.0, for the application with its slash, once the new one is activated', async () => {
+    const unregistered = [];
+    const registration = (scope) => ({ scope, unregister: async () => unregistered.push(scope) });
+    const installing = worker('installing');
+    browser(container(registered({ installing, active: null }), [registration(app), registration(`${directory}site/`), registration(`${origin}/other/app/`)]));
+
+    const served = serveInFrame({}, { frame: {}, documentRoot: '/app/public' });
+    await new Promise(setImmediate);
+    assert.deepEqual(unregistered, []);
+
+    installing.become('activated');
+    await served;
+    assert.deepEqual(unregistered, [app]);
 });
 
 webTest('serveInFrame() opens the frame at start, under another directory', async () => {
@@ -440,6 +475,16 @@ webTest('serveInFrame() runs what the service worker hands over at the path of t
     assert.match(warn.mock.calls[0].arguments[0], /A log\./);
 });
 
+webTest('serveInFrame() redirects the URL of the application without its slash to it, as the url(\'/\') of Laravel gives it', async (t) => {
+    t.mock.method(console, 'warn', () => {});
+    const { hand } = await servedApplication();
+
+    const redirection = await hand(get(`${directory}app?page=2`));
+
+    assert.equal(redirection.status, 301);
+    assert.deepEqual(redirection.headers, [['Location', '/repository/app/?page=2']]);
+});
+
 webTest('serveInFrame() adds the headers of the page to each request', async (t) => {
     t.mock.method(console, 'warn', () => {});
     const { hand } = await servedApplication({ headers: { 'X-Added': 'by the page' } });
@@ -461,7 +506,7 @@ webTest('serveInFrame() leaves the messages that are not for it', async (t) => {
     t.mock.method(console, 'warn', () => {});
     const { hand } = await servedApplication();
 
-    const answered = await Promise.race([hand(get(`${origin}/repository/other/`)), hand('Another message'), new Promise((resolve) => setImmediate(resolve, 'nothing'))]);
+    const answered = await Promise.race([hand(get(`${origin}/repository/other/`)), hand(get(`${directory}app.css`)), hand('Another message'), new Promise((resolve) => setImmediate(resolve, 'nothing'))]);
 
     assert.equal(answered, 'nothing');
 });

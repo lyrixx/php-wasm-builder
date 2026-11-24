@@ -43,12 +43,19 @@ export function worker(state) {
     });
 }
 
-export function container(registration) {
+/**
+ * The registrations are the ones of the origin, that register() does not
+ * give.
+ */
+export function container(registration, registrations = []) {
     return {
         calls: [],
         listeners: [],
         addEventListener(type, listener) {
             this.listeners.push(listener);
+        },
+        async getRegistrations() {
+            return registrations;
         },
         async register(...args) {
             this.calls.push(args);

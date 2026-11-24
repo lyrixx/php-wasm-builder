@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+* `serveInFrame()` shows the URL of the application without its slash, `app`,
+  that the `url('/')` of Laravel gives: the frame loaded it from the server, a
+  404 on GitHub Pages. `sw.js` is registered for `app`, without its slash, and
+  the registration of `app/`, that 1.0.0 made, is unregistered: its longer
+  scope would answer the frame with the version of the service worker it has.
+  What only starts like `app`, as `app.css`, still goes to the server.
+* `php.request()` answers `basePath` without its slash with a 301 to it, as the
+  URL of a directory: it was a 404.
+
+### Minor
+
+* Document how to run a Laravel application: its extensions, without intl, its
+  configuration, its migrations once per build, its path and its CSRF.
+
 ## 1.0.0 (2026-11-24)
 
 From this version, a minor or a patch version does not break what the

@@ -34,7 +34,8 @@ As with a web server too:
 
 - the URL of a directory runs its `index.php`, or is its `index.html`. Without its slash, it is a
   301 to the directory with its slash: the relative URLs of the index are relative to it. A
-  directory without an index is for the front controller;
+  directory without an index is for the front controller. `basePath` is `documentRoot` without its
+  slash: `/app`, that the `url('/')` of Laravel gives, is a 301 to `/app/`;
 - what follows a `.php` file in the URL is in `$_SERVER['PATH_INFO']`: `/app/index.php/blog` runs
   `index.php`, with `/blog`, and `$_SERVER['PHP_SELF']` is `/app/index.php/blog`;
 - `http_response_code()` is 200 until PHP sets another one.
