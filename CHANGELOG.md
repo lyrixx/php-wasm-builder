@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 (2026-11-24)
 
 From this version, a minor or a patch version does not break what the
 [backward compatibility](https://lyrixx.github.io/php-wasm-builder/reference/backward-compatibility/)
