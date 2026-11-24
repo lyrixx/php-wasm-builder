@@ -129,12 +129,17 @@ These pages run PHP in the browser, built with PHP WASM Builder.
 <p class="home-card__meta"><a href="https://github.com/jolicode/emoji-converter/blob/main/website/public/js/php.js">website/public/js/php.js</a> runs PHP</p>
 </div>
 <div class="home-card">
+<h3><a href="https://jolimarkdown.jolicode.com/">JoliMarkdown</a></h3>
+<p>Fixes Markdown, even mixed with raw HTML.</p>
+<p class="home-card__meta"><a href="https://github.com/jolicode/JoliMarkdown/blob/main/website/public/app.js">website/public/app.js</a> runs PHP</p>
+</div>
+<div class="home-card">
 <h3><a href="https://jolitypo.jolicode.com/">JoliTypo</a></h3>
 <p>Fixes the microtypography of an HTML text.</p>
 <p class="home-card__meta"><a href="https://github.com/jolicode/JoliTypo/blob/main/website/public/js/php.js">website/public/js/php.js</a> runs PHP</p>
 </div>
 <div class="home-card">
-<h3><a href="https://jolicode.github.io/structured-data/">structured-data</a></h3>
+<h3><a href="https://structured-data-validator.jolicode.com/">structured-data</a></h3>
 <p>Validates the structured data of a page against schema.org and the Google Rich Results requirements.</p>
 <p class="home-card__meta"><a href="https://github.com/jolicode/structured-data/blob/main/website/assets/php.js">website/assets/php.js</a> runs PHP</p>
 </div>
@@ -147,6 +152,11 @@ These pages run PHP in the browser, built with PHP WASM Builder.
 <h3><a href="https://lyrixx.github.io/php-wasm-demo/easyadmin/">EasyAdmin</a></h3>
 <p>The back office of a record shop that never existed: a sales dashboard, filters and batch actions.</p>
 <p class="home-card__meta"><a href="https://github.com/lyrixx/php-wasm-demo/blob/main/public/easyadmin/index.html">public/easyadmin/index.html</a> runs PHP</p>
+</div>
+<div class="home-card">
+<h3><a href="https://lyrixx.github.io/php-in-the-browser/">PHP in the browser</a></h3>
+<p>The slides of a talk about this builder, in French and in English, that run PHP live.</p>
+<p class="home-card__meta"><a href="https://github.com/lyrixx/php-in-the-browser/blob/main/public/js/php.js">public/js/php.js</a> runs PHP</p>
 </div>
 </div>
 
