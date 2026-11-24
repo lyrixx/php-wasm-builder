@@ -26,12 +26,9 @@ defaults:
     shell: bash
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -64,5 +61,15 @@ jobs:
         with:
           path: build/site
 
+  # A separate job: in the same job, deploy-pages listed the artifacts right
+  # after the upload and sometimes found none
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v5
