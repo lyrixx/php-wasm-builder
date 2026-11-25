@@ -5,6 +5,8 @@ ask for, and the code you embed.
 
 - **The documentation**: https://lyrixx.github.io/php-wasm-builder/, from `docs/`.
 - **The examples**, that run in your browser: https://lyrixx.github.io/php-wasm-builder/#examples.
+- **The announcement** of the 1.0: https://blog.lyrixx.info/posts/php-wasm-builder-1-0-is-out/.
+- **The slides** of the talk, that run PHP in the page: https://lyrixx.github.io/php-in-the-browser/.
 
 ## Try it
 
