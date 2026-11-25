@@ -154,6 +154,11 @@ These pages run PHP in the browser, built with PHP WASM Builder.
 <p class="home-card__meta"><a href="https://github.com/lyrixx/php-wasm-demo/blob/main/public/easyadmin/index.html">public/easyadmin/index.html</a> runs PHP</p>
 </div>
 <div class="home-card">
+<h3><a href="https://sylius.github.io/Stack/">Sylius Stack</a></h3>
+<p>The admin panel of the test application of the Sylius Stack: books, conferences, speakers and talks, with Doctrine and SQLite.</p>
+<p class="home-card__meta"><a href="https://github.com/Sylius/Stack/blob/main/wasm-demo/public/index.html">wasm-demo/public/index.html</a> runs PHP</p>
+</div>
+<div class="home-card">
 <h3><a href="https://lyrixx.github.io/php-in-the-browser/">PHP in the browser</a></h3>
 <p>The slides of a talk about this builder, in French and in English, that run PHP live.</p>
 <p class="home-card__meta"><a href="https://github.com/lyrixx/php-in-the-browser/blob/main/public/js/php.js">public/js/php.js</a> runs PHP</p>
